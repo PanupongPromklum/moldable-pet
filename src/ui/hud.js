@@ -1,21 +1,49 @@
 /**
- * Moldable Pet — in-game HUD (owner: glaze). Story S1-04.
+ * Moldable Pet — in-game HUD (owner: glaze). Stories S1-04, S2-01..04, S2-08.
  *
- * Implements the "HUD — glaze" contract in docs/architecture/module-contracts.md.
+ * Implements "HUD — glaze" + "Sprint 2 additions" in docs/architecture/module-contracts.md.
  * Display only: the HUD never changes game state; it reports intent through the
  * handlers passed to createHUD and shows what wire tells it to show.
  *
  * Needs `tokens.css` and `hud.css` to be loaded by the page.
  *
+ * ── Sprint 2 API changes (for wire) ─────────────────────────────────────────
+ * Removed   onSettings (the gear is gone). Transitional: if onCharacterChip is not
+ *           given, the chip falls back to onSettings so an old main.js keeps working.
+ * Handlers  onCharacterChip()            character chip (avatar + name, top-left)
+ *           onWardrobe()                 "แต่งตัว" button (living room)
+ *           onWardrobeClose()            optional: the sheet closed itself (X, Escape)
+ *           onEquip(slot, idOrNull)      tap an owned item / "ถอด"
+ *           onBuy(id)                    confirmed inside the sheet
+ *           onCameraView(hidden)         camera on: "ซ่อนภาพกล้อง / แสดงภาพกล้อง"
+ *           onMinigameExit(), onMinigameAgain()
+ *           onMinigameTick(n)            optional: countdown 3, 2, 1, then 0 = go (for sfx tick/go)
+ * Methods   setCameraView(hidden)        reflect the saved choice; the toggle waits for it
+ *           showWardrobe(data), hideWardrobe(), updateWardrobe(partial)
+ *           startMinigame({ title, durationSec, countdown = 3 }) → Promise resolved at "go"
+ *           updateMinigame({ score, timeLeft, streak, coins }), showMinigameResult({ score, best, coins }),
+ *           endMinigame()
+ *           setCoins(n) now counts up/down with a "+N"/"−N" float (instant with reduced motion).
+ *
+ * ── Toilet flow (S2-03) — one control at a time ─────────────────────────────
+ * Chosen rule: `setFlushVisible(true)` is the "sitting" stage. It clears the coach mark,
+ * hides room navigation and shows ONE centred primary "กดชักโครก" button. While it is
+ * visible, `coach(text)` calls are ignored, so a coach and the button never show together.
+ * `setFlushVisible(false)` returns to normal (coach stays cleared until the next coach()).
+ * Before sitting wire shows `coach('ลากตัวไปที่ชักโครก')` only (no button). No new method.
+ *
  * @module ui/hud
  */
-import { icon, foodIcon } from './icons.js';
+import { icon, foodIcon, accessoryIcon } from './icons.js';
 
 /** Room ids in swipe order (matches ROOM_IDS in src/rooms). */
 export const HUD_ROOMS = ['living', 'kitchen', 'bathroom'];
 
 /** Need ids in display order. */
 export const HUD_NEEDS = ['hunger', 'toilet', 'fun', 'social'];
+
+/** Wardrobe slots in display order (contract). */
+export const HUD_SLOTS = ['head', 'eyes', 'body'];
 
 /**
  * Default thresholds (story S1-04). Pass loop's `needs.json` as `options.needs`
@@ -27,11 +55,6 @@ export const DEFAULT_THRESHOLDS = { good: 0.7, low: 0.25, urgent: 0.1 };
 const PORTRAITS = {
   splat: 'char_mai.png', pill: 'char_two.png', gumdrop: 'char_min.png',
   diamond: 'char_ack.png', cloud: 'char_fah.png', flower: 'char_pai.png',
-};
-/** Soft card ground per character on the select screen. */
-const CARD_TINT = {
-  splat: '#FBF0F4', pill: '#F5F5F5', gumdrop: '#F2F1FB',
-  diamond: '#EDF4F6', cloud: '#E7EFF8', flower: '#F2F1FB',
 };
 
 /**
@@ -45,12 +68,13 @@ export const HUD_STRINGS = {
   low: 'ต่ำ',
   urgent: 'ด่วน',
   coins: (n) => `เหรียญ ${n}`,
-  settings: 'ตั้งค่า',
+  chip: (n) => `เปลี่ยนตัวละคร ตอนนี้คือ${n}`,
   prevRoom: 'ห้องก่อนหน้า',
   nextRoom: 'ห้องถัดไป',
   roomsGroup: 'ห้อง',
   keyHint: 'เปลี่ยนห้อง',
   play: 'เล่น',
+  wardrobe: 'แต่งตัว',
   tray: 'ถาดอาหาร',
   traySub: 'ลากไปที่ปาก',
   trayClose: 'ปิดถาดอาหาร',
@@ -68,10 +92,11 @@ export const HUD_STRINGS = {
     on: { aria: 'ปิดกล้อง', msg: 'ยกมือขึ้นมาหน้ากล้องได้เลย' },
     error: { aria: 'เปิดกล้องไม่ได้ แตะเพื่อลองใหม่', msg: 'เปิดกล้องไม่ได้' },
   },
+  cameraView: { hide: 'ซ่อนภาพกล้อง', show: 'แสดงภาพกล้อง' },
   select: {
     brand: 'Moldable Pet',
     title: 'เลือกเพื่อนก้อนนุ่ม',
-    sub: 'เลือกได้ 1 ตัว เปลี่ยนได้ทีหลังในตั้งค่า',
+    sub: 'เลือกได้ 1 ตัว เปลี่ยนทีหลังได้ที่มุมซ้ายบน',
     group: 'ตัวละคร',
     soon: 'เร็วๆ นี้',
     lockedRole: 'ยังไม่มีนิสัย',
@@ -79,9 +104,45 @@ export const HUD_STRINGS = {
     close: 'ปิด',
     current: 'เลือกอยู่',
   },
+  ward: {
+    title: 'แต่งตัว',
+    close: 'ปิดตู้เสื้อผ้า',
+    slots: { head: 'หัว', eyes: 'ตา', body: 'ตัว' },
+    none: 'ถอด',
+    noneEmpty: 'ว่างอยู่',
+    owned: 'มีแล้ว',
+    wearing: 'ใส่อยู่',
+    likes: (n) => `${n}ชอบ`,
+    price: (p) => `${p} เหรียญ`,
+    ask: (name) => `ซื้อ${name}เลยไหม`,
+    after: (left) => `ซื้อแล้วเหลือ ${left} เหรียญ`,
+    short: (need) => `เหรียญยังไม่พอ ขาดอีก ${need}`,
+    earn: 'เล่นฝนขนมเพื่อรับเหรียญเพิ่ม',
+    buy: 'ซื้อ',
+    cancel: 'ยกเลิก',
+    itemAria: (name, meta) => `${name} ${meta}`,
+  },
+  game: {
+    title: 'ฝนขนม',
+    exit: 'ออกจากเกม',
+    score: 'คะแนน',
+    streak: 'ติดกัน',
+    secs: (s) => `${s} วินาที`,
+    go: 'เริ่ม!',
+    hintTouch: 'ลากนิ้วซ้ายขวาเพื่อรับขนม',
+    hintMouse: 'ขยับเมาส์หรือกดลูกศรซ้ายขวาเพื่อรับขนม',
+    resultTitle: 'จบรอบแล้ว',
+    newBest: 'สถิติใหม่!',
+    best: 'สถิติสูงสุด',
+    coins: 'เหรียญที่ได้',
+    again: 'เล่นอีกครั้ง',
+    back: 'กลับห้อง',
+  },
 };
 
 const clamp01 = (v) => Math.max(0, Math.min(1, Number(v) || 0));
+const int0 = (v) => Math.max(0, Math.floor(Number(v) || 0));
+const fmt = (n) => Number(n).toLocaleString('en-US');
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 
 /**
@@ -116,18 +177,38 @@ export function clampBubble(x, y, w, h, box) {
 }
 
 /**
+ * State of one wardrobe item for display. Pure, unit-testable.
+ * @param {{id:string, slot:string, price?:number}} item
+ * @param {{owned:Set<string>|string[], outfit:object, coins:number}} w
+ * @returns {{owned:boolean, equipped:boolean, affordable:boolean}}
+ */
+export function wardrobeItemState(item, w) {
+  const owned = w.owned instanceof Set ? w.owned.has(item.id) : (w.owned || []).includes(item.id);
+  const equipped = !!w.outfit && w.outfit[item.slot] === item.id;
+  return { owned, equipped, affordable: owned || int0(w.coins) >= int0(item.price) };
+}
+
+/**
  * Create the HUD inside `root` (normally `<div id="hud">`).
  *
  * @param {HTMLElement} root container that covers the viewport
- * @param {object} handlers
+ * @param {object} handlers see the API list at the top of this file
  * @param {(dirOrId: -1|1|string) => void} [handlers.onRoom]
  * @param {(id: 'flush'|'play') => void} [handlers.onAction]
  * @param {() => void} [handlers.onMic]
  * @param {() => void} [handlers.onCamera]
- * @param {() => void} [handlers.onSettings]
+ * @param {(hidden: boolean) => void} [handlers.onCameraView]
+ * @param {() => void} [handlers.onCharacterChip]
  * @param {(charKey: string) => void} [handlers.onSelect]
  * @param {(foodId: string, ev: PointerEvent) => void} [handlers.onFoodPointerDown]
- * @param {object} [options] optional, not part of the v1.1 contract
+ * @param {() => void} [handlers.onWardrobe]
+ * @param {() => void} [handlers.onWardrobeClose]
+ * @param {(slot: string, id: string|null) => void} [handlers.onEquip]
+ * @param {(id: string) => void} [handlers.onBuy]
+ * @param {() => void} [handlers.onMinigameExit]
+ * @param {() => void} [handlers.onMinigameAgain]
+ * @param {(n: number) => void} [handlers.onMinigameTick]
+ * @param {object} [options] optional, not part of the contract
  * @param {object} [options.needs] `needs.json` → `needs` (labels, good/low/urgent per need)
  * @param {object} [options.strings] partial override of HUD_STRINGS
  * @returns {object} HUD API (see module-contracts.md)
@@ -139,12 +220,16 @@ export function createHUD(root, handlers = {}, options = {}) {
   const needLabel = (id) => (needCfg[id] && needCfg[id].label) || S.needs[id];
   const call = (name, ...args) => { try { handlers[name] && handlers[name](...args); } catch (err) { console.error('[hud]', name, err); } };
   const portrait = (key) => new URL(`../../assets/ui/characters/${PORTRAITS[key] || PORTRAITS.flower}`, import.meta.url).href;
+  const mq = (q) => (typeof matchMedia === 'function' ? matchMedia(q) : { matches: false });
+  const reducedMotion = mq('(prefers-reduced-motion: reduce)');
+  const finePointer = mq('(hover: hover) and (pointer: fine)');
+  const coinDot = '<span class="mp-coin-dot" aria-hidden="true"><span></span></span>';
 
   const state = {
-    room: 'living', char: { key: 'flower', name: 'ไผ่' }, mic: 'off', camera: 'off',
-    coins: null, flush: false, trayOpen: true, needs: {},
+    room: 'living', char: { key: 'flower', name: 'ไผ่' }, mic: 'off', camera: 'off', camHidden: false,
+    coins: null, coinShown: 0, coinRaf: 0, flush: false, trayOpen: true, needs: {}, coachText: null,
     bubble: { on: false, x: -1, y: -1, w: 0, h: 0, timer: 0 },
-    toastTimer: 0, camMsgTimer: 0, select: null,
+    toastTimer: 0, camMsgTimer: 0, select: null, ward: null, game: null,
   };
 
   root.classList.add('mp-hud');
@@ -153,18 +238,18 @@ export function createHUD(root, handlers = {}, options = {}) {
   <div class="mp-col">
     <div class="mp-top">
       <div class="mp-bar">
-        <div class="mp-who mp-hit">
+        <button type="button" class="mp-who">
           <span class="mp-who-ava"><img alt="" src="${portrait('flower')}"></span>
           <span class="mp-who-text"><span class="mp-who-name"></span><span class="mp-who-room"></span></span>
-        </div>
+          <span class="mp-who-more">${icon('chevron-down', 16)}</span>
+        </button>
         <div class="mp-bar-end">
           <div class="mp-coins mp-hit" role="group">
-            <span class="mp-coin-dot" aria-hidden="true"><span></span></span>
+            ${coinDot}
             <span class="mp-coin-n mp-num">0</span>
             <span class="mp-coin-plus mp-num" aria-hidden="true"></span>
           </div>
           <button type="button" class="mp-iconbtn mp-cam" data-state="off" aria-pressed="false">${icon('camera', 22)}<span class="mp-cam-spin" aria-hidden="true"></span></button>
-          <button type="button" class="mp-iconbtn mp-gear" aria-label="${esc(S.settings)}">${icon('gear', 22)}</button>
         </div>
       </div>
       <div class="mp-meters mp-hit">
@@ -172,14 +257,15 @@ export function createHUD(root, handlers = {}, options = {}) {
         <div class="mp-meter is-full" data-need="${id}" role="meter" aria-valuemin="0" aria-valuemax="100" aria-valuenow="100" aria-label="${esc(needLabel(id))}">
           <span class="mp-blob" style="--blob: var(--mp-blob-${i + 1})">
             <span class="mp-blob-ring" aria-hidden="true"></span>
-            <span class="mp-blob-cup"><span class="mp-blob-fill"></span></span>
-            <span class="mp-blob-ico">${icon(id, 24)}</span>
+            <span class="mp-blob-cup" aria-hidden="true"><span class="mp-blob-ico">${icon(id, 24)}</span></span>
+            <span class="mp-blob-fill" aria-hidden="true"><span class="mp-blob-ico">${icon(id, 24)}</span></span>
             <span class="mp-blob-badge mp-num" aria-hidden="true">!</span>
           </span>
           <span class="mp-meter-label">${esc(needLabel(id))}</span>
         </div>`).join('')}
       </div>
       <div class="mp-status" aria-live="polite">
+        <button type="button" class="mp-camview" hidden></button>
         <div class="mp-cam-msg" hidden></div>
         <div class="mp-toast mp-hit" role="status" hidden>
           <span class="mp-toast-ico" aria-hidden="true"></span>
@@ -191,6 +277,9 @@ export function createHUD(root, handlers = {}, options = {}) {
 
     <div class="mp-bottom">
       <div class="mp-coach" role="status" aria-live="polite" hidden>${icon('hand', 20)}<span class="mp-coach-text"></span></div>
+      <div class="mp-flush-row" hidden>
+        <button type="button" class="mp-btn-primary mp-flush">${icon('flush', 22)}<span>${esc(S.flush)}</span></button>
+      </div>
       <div class="mp-nav">
         <button type="button" class="mp-iconbtn mp-iconbtn--glass mp-prev" aria-label="${esc(S.prevRoom)}">${icon('arrow-left', 20)}</button>
         <div class="mp-dots" role="group" aria-label="${esc(S.roomsGroup)}">
@@ -200,7 +289,9 @@ export function createHUD(root, handlers = {}, options = {}) {
         <span class="mp-kbd" aria-hidden="true"><kbd>${icon('arrow-left', 14)}</kbd><kbd>${icon('arrow-right', 14)}</kbd><span>${esc(S.keyHint)}</span></span>
       </div>
       <div class="mp-actions">
-        <div class="mp-actions-start"></div>
+        <div class="mp-actions-start">
+          <button type="button" class="mp-ctx mp-ctx--outline mp-ward-btn" hidden>${icon('shirt', 22)}<span>${esc(S.wardrobe)}</span></button>
+        </div>
         <div class="mp-mic-wrap">
           <button type="button" class="mp-mic" data-state="off">
             <span class="mp-mic-ring" aria-hidden="true"></span>
@@ -224,20 +315,50 @@ export function createHUD(root, handlers = {}, options = {}) {
     </div>
   </div>
   <div class="mp-bubble" aria-live="polite" hidden><div class="mp-bubble-text"></div><span class="mp-bubble-tail" aria-hidden="true"></span></div>
+  <section class="mp-ward" role="dialog" aria-modal="false" aria-label="${esc(S.ward.title)}" hidden></section>
+  <div class="mp-game" hidden>
+    <div class="mp-game-col">
+      <div class="mp-game-top">
+        <button type="button" class="mp-iconbtn mp-game-x" aria-label="${esc(S.game.exit)}">${icon('close', 20)}</button>
+        <div class="mp-game-mid">
+          <div class="mp-game-title"></div>
+          <div class="mp-game-time" role="progressbar" aria-valuemin="0"><span class="mp-game-time-fill"></span></div>
+        </div>
+        <div class="mp-game-score"><span class="mp-game-score-l">${esc(S.game.score)}</span><span class="mp-game-score-n mp-num">0</span></div>
+      </div>
+      <div class="mp-game-sub">
+        <span class="mp-game-coins">${coinDot}<span class="mp-num mp-game-coins-n">+0</span></span>
+        <span class="mp-game-streak" hidden>${icon('star', 16)}<span></span></span>
+        <span class="mp-game-secs">${icon('timer', 16)}<span class="mp-num"></span></span>
+      </div>
+      <div class="mp-game-center">
+        <div class="mp-game-count" aria-live="assertive" hidden><span class="mp-num"></span></div>
+        <div class="mp-game-hint" hidden></div>
+      </div>
+      <section class="mp-result" role="dialog" aria-modal="true" hidden></section>
+    </div>
+  </div>
   <div class="mp-select" role="dialog" aria-modal="true" hidden></div>`;
 
   const $ = (sel) => root.querySelector(sel);
   const el = {
-    col: $('.mp-col'), top: $('.mp-top'),
-    name: $('.mp-who-name'), roomName: $('.mp-who-room'), ava: $('.mp-who-ava img'),
+    col: $('.mp-col'), top: $('.mp-top'), bottom: $('.mp-bottom'),
+    who: $('.mp-who'), name: $('.mp-who-name'), roomName: $('.mp-who-room'), ava: $('.mp-who-ava img'),
     coins: $('.mp-coins'), coinN: $('.mp-coin-n'), coinPlus: $('.mp-coin-plus'),
-    cam: $('.mp-cam'), gear: $('.mp-gear'), camMsg: $('.mp-cam-msg'),
+    cam: $('.mp-cam'), camView: $('.mp-camview'), camMsg: $('.mp-cam-msg'),
     toast: $('.mp-toast'), toastIco: $('.mp-toast-ico'), toastText: $('.mp-toast-text'), toastX: $('.mp-toast-x'),
     coach: $('.mp-coach'), coachText: $('.mp-coach-text'),
+    flushRow: $('.mp-flush-row'), flush: $('.mp-flush'),
     prev: $('.mp-prev'), next: $('.mp-next'), dots: [...root.querySelectorAll('.mp-dot')],
     actions: $('.mp-actions'), mic: $('.mp-mic'), micIco: $('.mp-mic-ico'), micLabel: $('.mp-mic-label'),
-    ctx: $('.mp-ctx'), tray: $('.mp-tray'), trayGrid: $('.mp-tray-grid'), trayX: $('.mp-tray-x'),
+    ctx: $('.mp-ctx[data-ctx]'), wardBtn: $('.mp-ward-btn'),
+    tray: $('.mp-tray'), trayGrid: $('.mp-tray-grid'), trayX: $('.mp-tray-x'),
     bubble: $('.mp-bubble'), bubbleText: $('.mp-bubble-text'), bubbleTail: $('.mp-bubble-tail'),
+    ward: $('.mp-ward'),
+    game: $('.mp-game'), gameX: $('.mp-game-x'), gameTitle: $('.mp-game-title'), gameTime: $('.mp-game-time'),
+    gameTimeFill: $('.mp-game-time-fill'), gameScore: $('.mp-game-score-n'), gameCoins: $('.mp-game-coins-n'),
+    gameStreak: $('.mp-game-streak'), gameSecs: $('.mp-game-secs .mp-num'), gameCount: $('.mp-game-count'),
+    gameHint: $('.mp-game-hint'), result: $('.mp-result'),
     select: $('.mp-select'),
     meters: Object.fromEntries(HUD_NEEDS.map((id) => [id, root.querySelector(`.mp-meter[data-need="${id}"]`)])),
   };
@@ -246,10 +367,16 @@ export function createHUD(root, handlers = {}, options = {}) {
   el.prev.addEventListener('click', () => call('onRoom', -1));
   el.next.addEventListener('click', () => call('onRoom', 1));
   el.dots.forEach((d) => d.addEventListener('click', () => call('onRoom', d.dataset.room)));
-  el.gear.addEventListener('click', () => call('onSettings'));
+  el.who.addEventListener('click', () => {
+    if (handlers.onCharacterChip) call('onCharacterChip');
+    else call('onSettings'); // transitional fallback for a Sprint 1 main.js
+  });
   el.cam.addEventListener('click', () => call('onCamera'));
+  el.camView.addEventListener('click', () => call('onCameraView', !state.camHidden));
   el.mic.addEventListener('click', () => call('onMic'));
   el.toastX.addEventListener('click', () => hideToast());
+  el.flush.addEventListener('click', () => call('onAction', 'flush'));
+  el.wardBtn.addEventListener('click', () => call('onWardrobe'));
   el.trayX.addEventListener('click', () => { state.trayOpen = false; renderRoom(); el.ctx.focus({ preventScroll: true }); });
   el.ctx.addEventListener('click', () => {
     const c = el.ctx.dataset.ctx;
@@ -269,12 +396,13 @@ export function createHUD(root, handlers = {}, options = {}) {
     window.addEventListener('pointercancel', done);
     call('onFoodPointerDown', btn.dataset.foodId, ev);
   });
+  el.gameX.addEventListener('click', () => call('onMinigameExit'));
 
   // Cached geometry for placeBubble (no layout reads per frame).
   const geo = { vw: window.innerWidth, vh: window.innerHeight, minTop: 0 };
   const measure = () => {
     geo.vw = window.innerWidth; geo.vh = window.innerHeight;
-    const r = el.top.getBoundingClientRect();
+    const r = (state.game ? $('.mp-game-top') : el.top).getBoundingClientRect();
     geo.minTop = Math.min(r.bottom + 8, geo.vh * 0.4);
     if (state.bubble.on) sizeBubble();
   };
@@ -294,16 +422,26 @@ export function createHUD(root, handlers = {}, options = {}) {
     const trayShown = room === 'kitchen' && state.trayOpen;
     el.tray.hidden = !trayShown;
     el.actions.hidden = trayShown;
+    const sitting = room === 'bathroom' && state.flush;
+    root.classList.toggle('is-flush', sitting);
+    el.flushRow.hidden = !sitting;
+    el.wardBtn.hidden = room !== 'living';
     let ctx = null;
     if (room === 'living') ctx = { id: 'play', ico: 'fun', text: S.play, kind: 'outline' };
     else if (room === 'kitchen') ctx = { id: 'tray', ico: 'hunger', text: S.tray, kind: 'outline' };
-    else if (room === 'bathroom' && state.flush) ctx = { id: 'flush', ico: 'flush', text: S.flush, kind: 'primary' };
     el.ctx.hidden = !ctx;
     if (ctx) {
       el.ctx.dataset.ctx = ctx.id;
       el.ctx.className = `mp-ctx mp-ctx--${ctx.kind}`;
       el.ctx.innerHTML = `${icon(ctx.ico, 22)}<span>${esc(ctx.text)}</span>`;
     }
+    renderCoach();
+  }
+
+  function renderCoach() {
+    const text = root.classList.contains('is-flush') ? null : state.coachText;
+    el.coachText.textContent = text || '';
+    el.coach.hidden = !text;
   }
 
   function renderMic() {
@@ -314,6 +452,15 @@ export function createHUD(root, handlers = {}, options = {}) {
     el.micLabel.textContent = m.label;
     const ico = state.mic === 'recording' ? 'stop' : state.mic === 'playing' ? 'wave' : 'mic';
     el.micIco.innerHTML = icon(ico, state.mic === 'recording' ? 30 : 32);
+  }
+
+  function renderCamView() {
+    const on = state.camera === 'on';
+    el.camView.hidden = !on;
+    if (!on) return;
+    const text = state.camHidden ? S.cameraView.show : S.cameraView.hide;
+    el.camView.dataset.hidden = String(state.camHidden);
+    el.camView.innerHTML = `${icon(state.camHidden ? 'eye' : 'eye-off', 20)}<span>${esc(text)}</span>`;
   }
 
   function setCamMsg(text, autoHideMs) {
@@ -343,6 +490,26 @@ export function createHUD(root, handlers = {}, options = {}) {
     el.bubbleTail.style.left = `${Math.round(p.tail)}px`;
   }
 
+  /** Re-trigger a CSS animation class. */
+  function bump(node, cls) { node.classList.remove(cls); void node.offsetWidth; node.classList.add(cls); }
+
+  function paintCoins(n) { el.coinN.textContent = fmt(Math.round(n)); }
+  function animateCoins(from, to) {
+    cancelAnimationFrame(state.coinRaf);
+    if (reducedMotion.matches || typeof requestAnimationFrame !== 'function') { state.coinShown = to; paintCoins(to); return; }
+    const t0 = performance.now();
+    const dur = Math.min(900, 380 + Math.abs(to - from) * 12);
+    const step = (now) => {
+      const k = Math.min(1, (now - t0) / dur);
+      const e = 1 - (1 - k) ** 3;
+      state.coinShown = from + (to - from) * e;
+      paintCoins(state.coinShown);
+      if (k < 1) state.coinRaf = requestAnimationFrame(step);
+    };
+    state.coinRaf = requestAnimationFrame(step);
+  }
+
+  // ---------- character select ----------
   function renderSelect(chars, currentKey) {
     const sel = state.select;
     const s = S.select;
@@ -353,7 +520,7 @@ export function createHUD(root, handlers = {}, options = {}) {
       const label = locked ? `${c.name} ${s.soon}` : `${c.name} ${role} ${c.mbti || ''}${c.key === currentKey ? ' ' + s.current : ''}`;
       return `
       <button type="button" class="mp-card${on ? ' is-on' : ''}${locked ? ' is-locked' : ''}" role="radio" aria-checked="${on}" ${locked ? 'aria-disabled="true"' : ''} data-key="${esc(c.key)}" aria-label="${esc(label.trim())}">
-        <span class="mp-card-pic" style="background:${CARD_TINT[c.key] || '#F2F1FB'}">
+        <span class="mp-card-pic" style="background:var(--mp-tint-${esc(c.key)}, var(--mp-bg-light))">
           <img alt="" src="${portrait(c.key)}">
           ${locked ? `<span class="mp-card-soon">${icon('lock', 14)}${esc(s.soon)}</span>` : ''}
           ${on ? `<span class="mp-card-check" aria-hidden="true">${icon('check', 16)}</span>` : ''}
@@ -393,11 +560,164 @@ export function createHUD(root, handlers = {}, options = {}) {
     const again = el.select.querySelector(`.mp-card[data-key="${CSS.escape(sel.chosen)}"]`);
     if (again) again.focus({ preventScroll: true });
   }
-  function onSelectKey(ev) {
-    if (ev.key === 'Escape' && state.select && state.select.closable) api.hideSelect();
-  }
   el.select.addEventListener('click', onSelectClick);
-  el.select.addEventListener('keydown', onSelectKey);
+  el.select.addEventListener('keydown', (ev) => {
+    if (ev.key === 'Escape' && state.select && state.select.closable) api.hideSelect();
+  });
+
+  // ---------- wardrobe (S2-08) ----------
+  function slotLabel(slot) {
+    const w = state.ward;
+    return (w.slots && w.slots[slot] && w.slots[slot].label) || S.ward.slots[slot] || slot;
+  }
+  function slotOrder() {
+    const w = state.ward;
+    const keys = w.slots ? Object.keys(w.slots) : [];
+    return keys.length ? keys : HUD_SLOTS;
+  }
+
+  function renderWardrobe(focusSel) {
+    const w = state.ward;
+    if (!w) return;
+    const s = S.ward;
+    const slots = slotOrder();
+    if (!slots.includes(w.tab)) w.tab = slots[0];
+    const items = (w.items || []).filter((it) => it.slot === w.tab);
+    const equippedId = w.outfit ? w.outfit[w.tab] || null : null;
+    const charName = state.char.name;
+
+    const tabs = slots.map((slot) => {
+      const on = slot === w.tab;
+      const worn = w.outfit && w.outfit[slot];
+      return `<button type="button" class="mp-ward-tab${on ? ' is-on' : ''}" role="tab" id="mp-ward-tab-${slot}" aria-controls="mp-ward-panel" aria-selected="${on}" tabindex="${on ? 0 : -1}" data-slot="${esc(slot)}">
+        <span>${esc(slotLabel(slot))}</span>${worn ? '<span class="mp-ward-tab-dot" aria-hidden="true"></span>' : ''}</button>`;
+    }).join('');
+
+    let body;
+    const confirmItem = w.confirm && (w.items || []).find((it) => it.id === w.confirm);
+    if (confirmItem) {
+      const price = int0(confirmItem.price);
+      const coins = int0(w.coins);
+      const ok = coins >= price;
+      body = `
+        <div class="mp-buy" role="group" aria-labelledby="mp-buy-q">
+          <span class="mp-buy-pic">${accessoryIcon(confirmItem.id, 56)}</span>
+          <div class="mp-buy-text">
+            <p class="mp-buy-q" id="mp-buy-q">${esc(s.ask(confirmItem.name))}</p>
+            <p class="mp-buy-price">${coinDot}<span class="mp-num">${fmt(price)}</span></p>
+            ${ok ? `<p class="mp-buy-sub">${esc(s.after(fmt(coins - price)))}</p>`
+              : `<p class="mp-buy-sub is-short">${esc(s.short(fmt(price - coins)))}</p><p class="mp-buy-sub">${esc(s.earn)}</p>`}
+          </div>
+          <div class="mp-buy-actions">
+            <button type="button" class="mp-btn-outline mp-buy-no">${esc(s.cancel)}</button>
+            <button type="button" class="mp-btn-primary mp-buy-yes" ${ok ? '' : 'disabled'}>${esc(s.buy)} <span class="mp-num">${fmt(price)}</span></button>
+          </div>
+        </div>`;
+    } else {
+      const tiles = [`
+        <button type="button" class="mp-item mp-item--none${equippedId ? '' : ' is-on'}" data-id="" aria-pressed="${!equippedId}" aria-label="${esc(s.itemAria(s.none, equippedId ? '' : s.noneEmpty))}">
+          <span class="mp-item-pic">${icon('none', 28)}</span>
+          <span class="mp-item-name">${esc(s.none)}</span>
+          <span class="mp-item-meta">${equippedId ? '&nbsp;' : esc(s.noneEmpty)}</span>
+        </button>`];
+      for (const it of items) {
+        const st = wardrobeItemState(it, w);
+        const liked = Array.isArray(it.likes) && it.likes.includes(w.charKey);
+        const metaText = st.equipped ? s.wearing : st.owned ? s.owned : s.price(fmt(int0(it.price)));
+        const meta = st.equipped ? `${icon('check', 14)}<span>${esc(s.wearing)}</span>`
+          : st.owned ? `<span>${esc(s.owned)}</span>`
+          : `${coinDot}<span class="mp-num">${fmt(int0(it.price))}</span>`;
+        tiles.push(`
+        <button type="button" class="mp-item${st.equipped ? ' is-on' : ''}${st.owned ? ' is-owned' : ''}${st.affordable ? '' : ' is-short'}" data-id="${esc(it.id)}" aria-pressed="${st.equipped}" aria-label="${esc(s.itemAria(it.name, metaText + (liked ? ' ' + s.likes(charName) : '')))}">
+          <span class="mp-item-pic">${accessoryIcon(it.id, 40)}${liked ? `<span class="mp-item-like" title="${esc(s.likes(charName))}">${icon('heart', 12)}</span>` : ''}</span>
+          <span class="mp-item-name">${esc(it.name)}</span>
+          <span class="mp-item-meta">${meta}</span>
+        </button>`);
+      }
+      body = `<div class="mp-items">${tiles.join('')}</div>`;
+    }
+
+    el.ward.innerHTML = `
+      <div class="mp-ward-panel">
+        <div class="mp-ward-head">
+          <h2 class="mp-ward-title">${esc(s.title)}</h2>
+          <span class="mp-ward-coins" aria-label="${esc(S.coins(fmt(int0(w.coins))))}">${coinDot}<span class="mp-num">${fmt(int0(w.coins))}</span></span>
+          <button type="button" class="mp-iconbtn mp-iconbtn--soft mp-ward-x" aria-label="${esc(s.close)}">${icon('close', 20)}</button>
+        </div>
+        <div class="mp-ward-tabs" role="tablist" aria-label="${esc(s.title)}">${tabs}</div>
+        <div class="mp-ward-body" id="mp-ward-panel" role="tabpanel" aria-labelledby="mp-ward-tab-${esc(w.tab)}">${body}</div>
+      </div>`;
+    if (focusSel) {
+      const f = el.ward.querySelector(focusSel);
+      if (f) f.focus({ preventScroll: true });
+    }
+  }
+
+  el.ward.addEventListener('click', (ev) => {
+    const w = state.ward;
+    if (!w) return;
+    if (ev.target.closest('.mp-ward-x')) { api.hideWardrobe(); call('onWardrobeClose'); return; }
+    const tab = ev.target.closest('.mp-ward-tab');
+    if (tab) { w.tab = tab.dataset.slot; w.confirm = null; renderWardrobe(`.mp-ward-tab[data-slot="${CSS.escape(w.tab)}"]`); return; }
+    if (ev.target.closest('.mp-buy-no')) {
+      const id = w.confirm; w.confirm = null;
+      renderWardrobe(`.mp-item[data-id="${CSS.escape(id || '')}"]`); return;
+    }
+    if (ev.target.closest('.mp-buy-yes')) { if (w.confirm) call('onBuy', w.confirm); return; }
+    const tile = ev.target.closest('.mp-item');
+    if (!tile) return;
+    const id = tile.dataset.id || null;
+    if (!id) { call('onEquip', w.tab, null); return; }
+    const it = (w.items || []).find((x) => x.id === id);
+    if (!it) return;
+    const st = wardrobeItemState(it, w);
+    if (st.equipped) call('onEquip', it.slot, null);      // tap again = take off
+    else if (st.owned) call('onEquip', it.slot, it.id);
+    else { w.confirm = it.id; renderWardrobe(st.affordable ? '.mp-buy-yes' : '.mp-buy-no'); }
+  });
+  el.ward.addEventListener('keydown', (ev) => {
+    const w = state.ward;
+    if (!w) return;
+    if (ev.key === 'Escape') {
+      ev.stopPropagation();
+      if (w.confirm) { const id = w.confirm; w.confirm = null; renderWardrobe(`.mp-item[data-id="${CSS.escape(id)}"]`); }
+      else { api.hideWardrobe(); call('onWardrobeClose'); }
+      return;
+    }
+    if ((ev.key === 'ArrowLeft' || ev.key === 'ArrowRight') && ev.target.closest('.mp-ward-tab')) {
+      ev.preventDefault(); ev.stopPropagation();
+      const slots = slotOrder();
+      const i = slots.indexOf(w.tab);
+      w.tab = slots[(i + (ev.key === 'ArrowRight' ? 1 : slots.length - 1)) % slots.length];
+      w.confirm = null;
+      renderWardrobe(`.mp-ward-tab[data-slot="${CSS.escape(w.tab)}"]`);
+    }
+  });
+
+  // ---------- minigame (S2-08) ----------
+  function renderGameNumbers() {
+    const g = state.game;
+    if (!g) return;
+    el.gameScore.textContent = fmt(g.score);
+    el.gameCoins.textContent = `+${fmt(g.coins)}`;
+    const left = Math.max(0, Math.ceil(g.timeLeft));
+    el.gameSecs.textContent = String(left);
+    el.gameSecs.parentElement.setAttribute('aria-label', S.game.secs(left));
+    const k = g.durationSec > 0 ? clamp01(g.timeLeft / g.durationSec) : 0;
+    el.gameTimeFill.style.transform = `scaleX(${k})`;
+    el.gameTime.setAttribute('aria-valuemax', String(g.durationSec));
+    el.gameTime.setAttribute('aria-valuenow', String(left));
+    el.gameTime.setAttribute('aria-valuetext', S.game.secs(left));
+    el.game.classList.toggle('is-late', g.started && g.timeLeft <= 5);
+    el.gameStreak.hidden = !(g.streak >= 2);
+    el.gameStreak.querySelector('span').textContent = `${S.game.streak} ×${g.streak}`;
+  }
+
+  function clearCountdown() {
+    const g = state.game;
+    if (g) { g.countTimers.forEach(clearTimeout); g.countTimers = []; }
+    el.gameCount.hidden = true;
+  }
 
   // ---------- public API ----------
   const api = {
@@ -417,18 +737,24 @@ export function createHUD(root, handlers = {}, options = {}) {
       }
     },
 
-    /** @param {number} n coin count */
+    /**
+     * Set the coin count. Counts up/down to the new value with a "+N"/"−N" float
+     * (instant when the player prefers reduced motion). The first call paints directly.
+     * @param {number} n coin count
+     */
     setCoins(n) {
-      const v = Math.max(0, Math.floor(Number(n) || 0));
+      const v = int0(n);
       const prev = state.coins;
       state.coins = v;
-      const txt = v.toLocaleString('en-US');
-      el.coinN.textContent = txt;
-      el.coins.setAttribute('aria-label', S.coins(txt));
-      if (prev !== null && v > prev) {
-        el.coinPlus.textContent = `+${(v - prev).toLocaleString('en-US')}`;
-        el.coinPlus.classList.remove('is-up'); void el.coinPlus.offsetWidth; el.coinPlus.classList.add('is-up');
-      }
+      el.coins.setAttribute('aria-label', S.coins(fmt(v)));
+      if (state.ward) { state.ward.coins = v; renderWardrobe(); }
+      if (prev === null || prev === v) { cancelAnimationFrame(state.coinRaf); state.coinShown = v; paintCoins(v); return; }
+      const d = v - prev;
+      el.coinPlus.textContent = d > 0 ? `+${fmt(d)}` : `−${fmt(-d)}`;
+      el.coinPlus.classList.toggle('is-minus', d < 0);
+      bump(el.coinPlus, 'is-up');
+      bump(el.coins, 'is-bump');
+      animateCoins(state.coinShown, v);
     },
 
     /** @param {'living'|'kitchen'|'bathroom'} id */
@@ -436,6 +762,7 @@ export function createHUD(root, handlers = {}, options = {}) {
       if (!HUD_ROOMS.includes(id)) return;
       if (id !== state.room && id === 'kitchen') state.trayOpen = true;
       state.room = id;
+      if (id !== 'living' && state.ward) api.hideWardrobe();
       renderRoom();
     },
 
@@ -444,7 +771,9 @@ export function createHUD(root, handlers = {}, options = {}) {
       state.char = { key: c.key || state.char.key, name: c.name || state.char.name };
       el.name.textContent = state.char.name;
       el.ava.src = portrait(state.char.key);
+      el.who.setAttribute('aria-label', S.chip(state.char.name));
       renderMic();
+      if (state.ward) { state.ward.charKey = state.char.key; renderWardrobe(); }
     },
 
     /**
@@ -458,7 +787,7 @@ export function createHUD(root, handlers = {}, options = {}) {
       if (!text) { el.bubble.hidden = true; b.on = false; return; }
       el.bubbleText.textContent = text;
       el.bubble.hidden = false;
-      el.bubble.classList.remove('is-in'); void el.bubble.offsetWidth; el.bubble.classList.add('is-in');
+      bump(el.bubble, 'is-in');
       b.on = true;
       sizeBubble();
       const dur = ms ?? Math.max(1800, 1500 + String(text).length * 70);
@@ -486,14 +815,18 @@ export function createHUD(root, handlers = {}, options = {}) {
       el.toastIco.hidden = !opts.icon;
       el.toastText.textContent = text;
       el.toast.hidden = false;
-      el.toast.classList.remove('is-in'); void el.toast.offsetWidth; el.toast.classList.add('is-in');
+      bump(el.toast, 'is-in');
       state.toastTimer = setTimeout(hideToast, ms);
     },
 
-    /** @param {string|null} text coach mark, null hides it */
+    /**
+     * Coach mark above the room nav. Ignored while the flush button is visible (S2-03).
+     * @param {string|null} text null hides it
+     */
     coach(text) {
-      el.coachText.textContent = text || '';
-      el.coach.hidden = !text;
+      if (root.classList.contains('is-flush')) return;
+      state.coachText = text || null;
+      renderCoach();
     },
 
     /** @param {'off'|'listening'|'recording'|'playing'} s */
@@ -516,6 +849,17 @@ export function createHUD(root, handlers = {}, options = {}) {
       el.cam.querySelector('.mp-ico').outerHTML = icon(state.camera === 'error' ? 'camera-off' : 'camera', 22);
       const msg = message ?? c.msg;
       setCamMsg(msg, state.camera === 'on' ? 4000 : state.camera === 'off' ? 2500 : 0);
+      renderCamView();
+    },
+
+    /**
+     * Reflect the camera view choice (S2-04). The toggle shows only while the camera is 'on'.
+     * Tapping it calls onCameraView(!hidden); call this back to flip the label.
+     * @param {boolean} hidden true = video hidden, stylized hands only
+     */
+    setCameraView(hidden) {
+      state.camHidden = !!hidden;
+      renderCamView();
     },
 
     /** @param {{id:string, name:string}[]} foods kitchen tray contents */
@@ -527,10 +871,17 @@ export function createHUD(root, handlers = {}, options = {}) {
         </button>`).join('');
     },
 
-    /** @param {boolean} on show the flush button (bathroom, pet seated) */
+    /**
+     * Toilet "sitting" stage (S2-03): true clears the coach, hides room nav and shows
+     * one centred "กดชักโครก" button (bathroom only). false returns to normal.
+     * @param {boolean} on
+     */
     setFlushVisible(on) {
+      const was = state.flush;
       state.flush = !!on;
+      if (state.flush) state.coachText = null;
       renderRoom();
+      if (state.flush && !was && state.room === 'bathroom' && el.col.contains(document.activeElement)) el.flush.focus({ preventScroll: true });
     },
 
     /**
@@ -567,12 +918,170 @@ export function createHUD(root, handlers = {}, options = {}) {
     },
 
     /**
+     * Wardrobe sheet (S2-08). Covers at most the bottom 45 % so the pet stays visible.
+     * Room nav, mic and contextual buttons hide while it is open; needs and coins stay.
+     * @param {{slots?:object, items:{id:string, slot:string, name:string, price?:number, likes?:string[]}[],
+     *          owned:string[], outfit:{head?:string|null, eyes?:string|null, body?:string|null},
+     *          coins:number, charKey?:string}} data wardrobe.json + save state
+     */
+    showWardrobe(data = {}) {
+      const firstOpen = !state.ward;
+      state.ward = {
+        slots: data.slots || null, items: data.items || [], owned: new Set(data.owned || []),
+        outfit: { ...(data.outfit || {}) }, coins: data.coins ?? state.coins ?? 0,
+        charKey: data.charKey || state.char.key, tab: firstOpen ? null : state.ward.tab, confirm: null,
+        returnFocus: firstOpen ? document.activeElement : state.ward.returnFocus,
+      };
+      if (!state.ward.tab) state.ward.tab = slotOrder()[0];
+      root.classList.add('is-wardrobe');
+      el.ward.hidden = false;
+      renderWardrobe(firstOpen ? '.mp-ward-tab.is-on' : null);
+    },
+
+    /**
+     * Patch the open wardrobe; any of the showWardrobe fields. A pending buy confirmation
+     * closes once its item appears in `owned`.
+     * @param {object} partial
+     */
+    updateWardrobe(partial = {}) {
+      const w = state.ward;
+      if (!w) return;
+      if (partial.items) w.items = partial.items;
+      if (partial.slots) w.slots = partial.slots;
+      if (partial.owned) w.owned = new Set(partial.owned);
+      if (partial.outfit) w.outfit = { ...w.outfit, ...partial.outfit };
+      if (partial.coins != null) w.coins = partial.coins;
+      if (partial.charKey) w.charKey = partial.charKey;
+      const active = document.activeElement;
+      const activeId = active && el.ward.contains(active) && active.closest('.mp-item') ? active.dataset.id : undefined;
+      let focus = activeId !== undefined ? `.mp-item[data-id="${CSS.escape(activeId)}"]` : null;
+      if (w.confirm && w.owned.has(w.confirm)) { focus = `.mp-item[data-id="${CSS.escape(w.confirm)}"]`; w.confirm = null; }
+      renderWardrobe(focus);
+    },
+
+    hideWardrobe() {
+      if (!state.ward) return;
+      const rf = state.ward.returnFocus;
+      state.ward = null;
+      el.ward.hidden = true;
+      el.ward.innerHTML = '';
+      root.classList.remove('is-wardrobe');
+      if (rf && rf.focus && document.contains(rf) && !rf.closest('[hidden]')) rf.focus({ preventScroll: true });
+    },
+
+    /**
+     * Start the minigame HUD: hides the normal HUD, runs a 3-2-1 countdown.
+     * Calls onMinigameTick(3), (2), (1), (0 = go) for sfx.
+     * @param {{title?:string, durationSec:number, countdown?:number}} opts
+     * @returns {Promise<void>} resolves when "go" shows — start the round then
+     */
+    startMinigame(opts = {}) {
+      if (state.game) clearCountdown();
+      if (state.ward) api.hideWardrobe();
+      const durationSec = Math.max(1, Number(opts.durationSec) || 45);
+      const count = Math.max(0, Math.floor(opts.countdown ?? 3));
+      state.game = { durationSec, timeLeft: durationSec, score: 0, coins: 0, streak: 0, started: false, countTimers: [] };
+      const g = state.game;
+      el.gameTitle.textContent = opts.title || S.game.title;
+      el.result.hidden = true; el.result.innerHTML = '';
+      el.game.hidden = false;
+      el.game.classList.remove('is-late', 'is-result');
+      root.classList.add('is-game');
+      el.col.inert = true; el.col.setAttribute('aria-hidden', 'true');
+      el.gameHint.textContent = finePointer.matches ? S.game.hintMouse : S.game.hintTouch;
+      el.gameHint.hidden = false;
+      renderGameNumbers();
+      measure();
+      const show = (n) => {
+        el.gameCount.hidden = false;
+        el.gameCount.classList.toggle('is-go', n === 0);
+        el.gameCount.querySelector('span').textContent = n === 0 ? S.game.go : String(n);
+        bump(el.gameCount, 'is-tick');
+        call('onMinigameTick', n);
+      };
+      return new Promise((resolve) => {
+        for (let i = 0; i <= count; i++) {
+          g.countTimers.push(setTimeout(() => {
+            if (state.game !== g) return;
+            const n = count - i;
+            show(n);
+            if (n === 0) {
+              g.started = true;
+              g.countTimers.push(setTimeout(() => { if (state.game === g) { el.gameCount.hidden = true; el.gameHint.hidden = true; } }, 700));
+              resolve();
+            }
+          }, i * 1000));
+        }
+      });
+    },
+
+    /** @param {{score?:number, timeLeft?:number, streak?:number, coins?:number}} u */
+    updateMinigame(u = {}) {
+      const g = state.game;
+      if (!g) return;
+      if (u.score != null && int0(u.score) !== g.score) {
+        if (int0(u.score) > g.score) bump(el.gameScore, 'is-pop');
+        g.score = int0(u.score);
+      }
+      if (u.timeLeft != null) g.timeLeft = Math.max(0, Number(u.timeLeft) || 0);
+      if (u.streak != null) g.streak = int0(u.streak);
+      if (u.coins != null) {
+        if (int0(u.coins) > g.coins) bump(el.gameCoins.parentElement, 'is-pop');
+        g.coins = int0(u.coins);
+      }
+      renderGameNumbers();
+    },
+
+    /** Result card with "เล่นอีกครั้ง" (onMinigameAgain) and "กลับห้อง" (onMinigameExit). */
+    showMinigameResult(r = {}) {
+      const g = state.game;
+      if (!g) return;
+      clearCountdown();
+      el.gameHint.hidden = true;
+      const score = int0(r.score ?? g.score);
+      const best = int0(r.best);
+      const coins = int0(r.coins ?? g.coins);
+      const isBest = score > 0 && score >= best;
+      const s = S.game;
+      el.game.classList.add('is-result');
+      el.result.setAttribute('aria-labelledby', 'mp-result-title');
+      el.result.innerHTML = `
+        <div class="mp-result-card">
+          ${isBest ? `<span class="mp-result-badge">${icon('star', 16)}<span>${esc(s.newBest)}</span></span>` : ''}
+          <h2 class="mp-result-title" id="mp-result-title">${esc(s.resultTitle)}</h2>
+          <div class="mp-result-score"><span class="mp-num">${fmt(score)}</span><span class="mp-result-l">${esc(s.score)}</span></div>
+          <div class="mp-result-row">
+            <div class="mp-result-cell"><span class="mp-result-l">${esc(s.best)}</span><span class="mp-num mp-result-v">${fmt(Math.max(best, score))}</span></div>
+            <div class="mp-result-cell"><span class="mp-result-l">${esc(s.coins)}</span><span class="mp-result-v">${coinDot}<span class="mp-num">+${fmt(coins)}</span></span></div>
+          </div>
+          <div class="mp-result-actions">
+            <button type="button" class="mp-btn-outline mp-result-back">${esc(s.back)}</button>
+            <button type="button" class="mp-btn-primary mp-result-again">${esc(s.again)}</button>
+          </div>
+        </div>`;
+      el.result.hidden = false;
+      el.result.querySelector('.mp-result-again').focus({ preventScroll: true });
+    },
+
+    /** Leave the minigame HUD and restore the normal HUD. */
+    endMinigame() {
+      if (!state.game) return;
+      clearCountdown();
+      state.game = null;
+      el.game.hidden = true;
+      el.result.hidden = true; el.result.innerHTML = '';
+      root.classList.remove('is-game');
+      el.col.inert = false; el.col.removeAttribute('aria-hidden');
+      measure();
+    },
+
+    /**
      * Food under a screen point (used by hand tracking). Rect based, so it works
      * even when another layer sits above the HUD.
      * @returns {string|null} food id
      */
     foodElementAt(x, y) {
-      if (el.tray.hidden || state.select) return null;
+      if (el.tray.hidden || state.select || state.ward || state.game) return null;
       for (const b of el.trayGrid.querySelectorAll('[data-food-id]')) {
         const r = b.getBoundingClientRect();
         if (x >= r.left && x <= r.right && y >= r.top && y <= r.bottom) return b.dataset.foodId;
@@ -583,17 +1092,24 @@ export function createHUD(root, handlers = {}, options = {}) {
     /** @returns {boolean} true when (x, y) is over an interactive HUD element */
     isHudPoint(x, y) {
       const t = document.elementFromPoint(x, y);
-      return !!t && t !== root && root.contains(t);
+      return !!t && t !== root && root.contains(t) && !t.classList.contains('mp-game') && !t.classList.contains('mp-game-col');
     },
 
     /** Remove listeners and DOM. */
     dispose() {
       window.removeEventListener('resize', measure);
       clearTimeout(state.toastTimer); clearTimeout(state.camMsgTimer); clearTimeout(state.bubble.timer);
+      cancelAnimationFrame(state.coinRaf);
+      clearCountdown();
       root.innerHTML = '';
-      root.classList.remove('mp-hud', 'is-selecting');
+      root.classList.remove('mp-hud', 'is-selecting', 'is-wardrobe', 'is-game', 'is-flush');
     },
   };
+
+  el.result.addEventListener('click', (ev) => {
+    if (ev.target.closest('.mp-result-again')) call('onMinigameAgain');
+    else if (ev.target.closest('.mp-result-back')) call('onMinigameExit');
+  });
 
   // initial paint
   api.setCharacter(state.char);

@@ -42,6 +42,16 @@ export const LINE_ICONS = {
   check: '<path d="M5.5 12.5l4 4 9-9"/>',
   lock: '<rect x="5" y="10.5" width="14" height="10" rx="2.5"/><path d="M8 10.5V8a4 4 0 0 1 8 0v2.5"/><path d="M12 14.5v2"/>',
   close: '<path d="M7 7l10 10M17 7L7 17"/>',
+  /** S2-04 camera view toggle. */
+  eye: '<path d="M2.5 12S6 5.5 12 5.5 21.5 12 21.5 12 18 18.5 12 18.5 2.5 12 2.5 12z"/><circle cx="12" cy="12" r="3"/>',
+  'eye-off': '<path d="M9.9 5.7A9.6 9.6 0 0 1 12 5.5c6 0 9.5 6.5 9.5 6.5a17 17 0 0 1-2.4 3.2M6.3 7.4C3.9 9.1 2.5 12 2.5 12S6 18.5 12 18.5c1.6 0 3-.4 4.2-1.1"/><path d="M9.9 9.9a3 3 0 0 0 4.2 4.2"/><path d="M3.5 3.5l17 17"/>',
+  /** S2-08 แต่งตัว — a T-shirt. */
+  shirt: '<path d="M9 4.5L4 7l1.5 4.5 2.5-1v9h8v-9l2.5 1L20 7l-5-2.5c-.4 1.4-1.6 2.3-3 2.3S9.4 5.9 9 4.5z"/>',
+  /** ถอด — empty slot. */
+  none: '<circle cx="12" cy="12" r="8.5"/><path d="M6 18L18 6"/>',
+  heart: '<path d="M12 19s-7-4.3-7-9.2A3.8 3.8 0 0 1 12 7.6a3.8 3.8 0 0 1 7 2.2c0 4.9-7 9.2-7 9.2z"/>',
+  star: '<path d="M12 3.5l2.3 5.3 5.8.6-4.4 3.8 1.3 5.7-5-3-5 3 1.3-5.7-4.4-3.8 5.8-.6z"/>',
+  timer: '<circle cx="12" cy="13" r="7.5"/><path d="M12 9.5V13l2.5 1.5M10 3.5h4"/>',
 };
 LINE_ICONS.bowl = LINE_ICONS.hunger;
 LINE_ICONS.ball = LINE_ICONS.fun;
@@ -81,5 +91,37 @@ export function foodIcon(id, size = 44) {
   return `<svg class="mp-food-ico" width="${size}" height="${size}" viewBox="0 0 48 48" aria-hidden="true" focusable="false">${body}</svg>`;
 }
 
+/**
+ * Accessory thumbnails for the wardrobe (S2-08). 24 px grid, stroke 1.5, round caps,
+ * `currentColor` outline plus a soft fill from the DS gradient stops (tokens
+ * --mp-acc-a..d, --mp-acc-fill-opacity). NEW drawings by glaze, waiting for owner approval.
+ * Fills use inline style so they can read CSS custom properties (dark theme).
+ */
+const F = (v, op = 'var(--mp-acc-fill-opacity)') => `style="fill:var(--mp-acc-${v});fill-opacity:${op}"`;
+export const ACCESSORY_ICONS = {
+  'hat-beanie': `<path d="M5 15.5a7 7 0 0 1 14 0z" ${F('b')}/><rect x="4" y="15.5" width="16" height="3.5" rx="1.75" ${F('c')}/><circle cx="12" cy="6.4" r="1.9" ${F('a')}/><path d="M9.5 10.8v4.7M14.5 10.8v4.7"/>`,
+  'hat-party': `<path d="M12 5.5L6.5 19.5h11z" ${F('c')}/><path d="M9.9 11h4.2M8.1 15.5h7.8"/><circle cx="12" cy="4" r="1.5" ${F('a')}/><path d="M5.5 19.5h13"/>`,
+  'bow-ribbon': `<path d="M12 12C9 8 4.5 7.5 4.5 10v4c0 2.5 4.5 2 7.5-2z" ${F('a')}/><path d="M12 12c3-4 7.5-4.5 7.5-2v4c0 2.5-4.5 2-7.5-2z" ${F('a')}/><path d="M10.8 14l-1.8 5M13.2 14l1.8 5"/><rect x="10.5" y="10" width="3" height="4" rx="1.2" ${F('c', 1)}/>`,
+  'crown-flower': `<path d="M3.5 17c5.3-2.2 11.7-2.2 17 0"/><circle cx="6.8" cy="13.6" r="2.6" ${F('a')}/><circle cx="12" cy="12.2" r="3" ${F('c')}/><circle cx="17.2" cy="13.6" r="2.6" ${F('b')}/><circle cx="12" cy="12.2" r=".6"/>`,
+  'glasses-round': `<circle cx="7.3" cy="13" r="3.6" ${F('b')}/><circle cx="16.7" cy="13" r="3.6" ${F('b')}/><path d="M10.9 12.6c.7-.6 1.5-.6 2.2 0M3.7 12.4L2.5 10.3M20.3 12.4l1.2-2.1"/>`,
+  'glasses-sun': `<path d="M3.5 10.5h6.5V13a3 3 0 0 1-3 3h-.5a3 3 0 0 1-3-3z" ${F('lens', 0.85)}/><path d="M14 10.5h6.5V13a3 3 0 0 1-3 3H17a3 3 0 0 1-3-3z" ${F('lens', 0.85)}/><path d="M10 11.6c1.3-.9 2.7-.9 4 0M3.5 10.5l-1-1.2M20.5 10.5l1-1.2"/>`,
+  'glasses-star': `<path d="M7 8.6l1.12 2.66 2.87.24-2.18 1.89.66 2.81L7 14.7l-2.47 1.5.66-2.81-2.18-1.89 2.87-.24z" ${F('a')}/><path d="M17 8.6l1.12 2.66 2.87.24-2.18 1.89.66 2.81L17 14.7l-2.47 1.5.66-2.81-2.18-1.89 2.87-.24z" ${F('a')}/><path d="M10.9 12.4c.7-.5 1.5-.5 2.2 0"/>`,
+  'tie-neck': `<path d="M7 4.5l3 1M17 4.5l-3 1"/><path d="M10 5.5h4l-.8 3h-2.4z" ${F('a')}/><path d="M10.8 8.5L9 16.5l3 3.5 3-3.5-1.8-8z" ${F('c')}/><path d="M10.2 13.6l3.8-2"/>`,
+  'tie-bow': `<path d="M10.5 12L5.5 8.6A1 1 0 0 0 4 9.4v5.2a1 1 0 0 0 1.5.8z" ${F('a')}/><path d="M13.5 12l5-3.4a1 1 0 0 1 1.5.8v5.2a1 1 0 0 1-1.5.8z" ${F('a')}/><rect x="10.5" y="10.5" width="3" height="3" rx="1" ${F('c', 1)}/>`,
+  scarf: `<path d="M5 9.5c4 2 10 2 14 0v3c-4 2-10 2-14 0z" ${F('a')}/><path d="M14.4 13.6l1.6 5.9h-3.5l-.4-5.5" ${F('b')}/><path d="M13 19.5V21M14.4 19.5V21M15.8 19.5V21M9.2 11.3v2.9"/>`,
+  'badge-star': `<circle cx="12" cy="12" r="7.5" ${F('b')}/><path d="M12 8.7l.94 2.31 2.48.18-1.9 1.6.6 2.42L12 13.9l-2.12 1.31.6-2.42-1.9-1.6 2.48-.18z" ${F('a', 1)}/>`,
+};
+
+/**
+ * Build an accessory thumbnail as an SVG string.
+ * @param {string} id accessory id (see module-contracts.md, Outfits)
+ * @param {number} [size=40]
+ * @returns {string} `<svg>` markup, decorative; a soft blob for unknown ids
+ */
+export function accessoryIcon(id, size = 40) {
+  const body = ACCESSORY_ICONS[id] || `<circle cx="12" cy="12" r="7" ${F('b')}/>`;
+  return `<svg class="mp-acc-ico" width="${size}" height="${size}" viewBox="0 0 24 24" ${LINE_ATTR} aria-hidden="true" focusable="false">${body}</svg>`;
+}
+
 /** Names of all new line icons (for the icon sheet / demo). */
-export const NEW_ICON_NAMES = ['hunger', 'toilet', 'fun', 'social', 'coin', 'gear', 'mic', 'stop', 'wave', 'camera', 'camera-off', 'arrow-left', 'arrow-right', 'chevron-down', 'flush', 'hand', 'check', 'lock', 'close'];
+export const NEW_ICON_NAMES = ['hunger', 'toilet', 'fun', 'social', 'coin', 'gear', 'mic', 'stop', 'wave', 'camera', 'camera-off', 'arrow-left', 'arrow-right', 'chevron-down', 'flush', 'hand', 'check', 'lock', 'close', 'eye', 'eye-off', 'shirt', 'none', 'heart', 'star', 'timer'];
