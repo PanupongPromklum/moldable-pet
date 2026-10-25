@@ -6,7 +6,8 @@
 <title>Character Demo</title>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Prompt:wght@400;500&family=Poppins:wght@400;500&display=swap">
 <style>
-/* Visual test bench for src/characters (story S1-02). Not shipped. */
+/* Visual test bench for src/characters (stories S1-02, S2-06 outfits). Not shipped.
+   ?sheet=head,eyes,body renders a 3×2 contact sheet of all six characters wearing that outfit. */
 :root { --bg: #f4f3f9; --ink: #1f2130; --muted: #6b6e85; --chip: #ffffff; --line: #e3e2ee; --primary: #5A68B5; }
 * { box-sizing: border-box; }
 html, body { margin: 0; height: 100%; background: var(--bg); color: var(--ink); font-family: "Prompt", "Poppins", system-ui, sans-serif; }
@@ -36,6 +37,9 @@ label { font-size: 13px; display: flex; align-items: center; gap: 6px; }
     <label>mouth <input id="mouth" type="range" min="-0.05" max="1" step="0.05" value="-0.05"></label>
     <label>squish <input id="squish" type="range" min="0" max="0.45" step="0.01" value="0"></label>
   </div>
+  <div class="row" id="slot-head"><b>หัว (head)</b></div>
+  <div class="row" id="slot-eyes"><b>ตา (eyes)</b></div>
+  <div class="row" id="slot-body"><b>ตัว (body)</b></div>
 </div>
 
 <script type="importmap">
@@ -47,7 +51,7 @@ label { font-size: 13px; display: flex; align-items: center; gap: 6px; }
 <script type="module">
 import * as THREE from 'three';
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
-import { createCharacter, CHARACTER_KEYS, EXPRESSION_KEYS, ACTION_KEYS } from '../../src/characters/character.js';
+import { createCharacter, CHARACTER_KEYS, EXPRESSION_KEYS, ACTION_KEYS, ACCESSORY_IDS, SLOT_OF, SLOTS, ACCESSORY_TH } from '../../src/characters/character.js';
 
 const stageEl = document.getElementById('stage');
 const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true, preserveDrawingBuffer: true });
@@ -70,14 +74,17 @@ const rim = new THREE.DirectionalLight(0xffffff, 1.3); rim.position.set(-2.6, 1.
 const floor = new THREE.Mesh(new THREE.CircleGeometry(3.2, 64), new THREE.MeshStandardMaterial({ color: 0xeceaf6, roughness: 1 }));
 floor.rotation.x = -Math.PI / 2; scene.add(floor);
 
+const sheetQ = new URLSearchParams(location.search).get('sheet');
 let pet = null, carried = false, sitting = false, talking = false;
+let outfit = { head: null, eyes: null, body: null };
+const slotBtns = { head: {}, eyes: {}, body: {} };
 const btn = (parent, label, on) => { const b = document.createElement('button'); b.type = 'button'; b.textContent = label; b.onclick = on; document.getElementById(parent).appendChild(b); return b; };
 const charBtns = {}, exprBtns = {};
 function setChar(k) {
   if (pet) pet.dispose();
   pet = createCharacter(k); scene.add(pet.object3d);
   hemi.color.copy(pet.lightTint.sky); hemi.groundColor.copy(pet.lightTint.ground);
-  pet.setCarried(carried); pet.setSitting(sitting);
+  pet.setCarried(carried); pet.setSitting(sitting); pet.setOutfit(outfit);
   for (const [kk, b] of Object.entries(charBtns)) b.setAttribute('aria-pressed', kk === k);
   for (const [kk, b] of Object.entries(exprBtns)) b.setAttribute('aria-pressed', kk === 'original');
   window.pet = pet;
@@ -85,6 +92,15 @@ function setChar(k) {
 for (const k of CHARACTER_KEYS) charBtns[k] = btn('chars', k, () => setChar(k));
 for (const k of EXPRESSION_KEYS) exprBtns[k] = btn('exprs', k, () => { pet.setExpression(k); for (const [kk, b] of Object.entries(exprBtns)) b.setAttribute('aria-pressed', kk === k); });
 for (const a of ACTION_KEYS) btn('acts', a, () => pet.play(a));
+function markSlots() { for (const s of SLOTS) for (const [id, b] of Object.entries(slotBtns[s])) b.setAttribute('aria-pressed', String(id === String(outfit[s]))); }
+for (const s of SLOTS) {
+  slotBtns[s].null = btn('slot-' + s, '—', () => { outfit[s] = null; pet.setOutfit({ [s]: null }); markSlots(); });
+  for (const id of ACCESSORY_IDS.filter(i => SLOT_OF[i] === s)) {
+    slotBtns[s][id] = btn('slot-' + s, ACCESSORY_TH[id], () => { outfit[s] = id; pet.setOutfit({ [s]: id }); markSlots(); });
+    slotBtns[s][id].title = id;
+  }
+}
+markSlots();
 const toggle = (id, fn) => { const b = document.getElementById(id); b.onclick = () => { const on = b.getAttribute('aria-pressed') !== 'true'; b.setAttribute('aria-pressed', on); fn(on); }; };
 toggle('sit', on => { sitting = on; pet.setSitting(on); });
 toggle('carry', on => { carried = on; pet.setCarried(on); pet.object3d.position.y = on ? .5 : 0; });
@@ -128,17 +144,42 @@ function resize() {
 }
 addEventListener('resize', resize); resize();
 
+/** Contact sheet: all six characters wearing one outfit, 3 × 2 cells (screenshot evidence). */
+function runSheet(q) {
+  document.getElementById('ui').style.display = 'none'; info.style.display = 'none';
+  const [head, eyes, body] = q.split(',').map(x => x || null);
+  floor.visible = false;
+  const pets = CHARACTER_KEYS.map(k => { const p = createCharacter(k, { idle: false }); p.setOutfit({ head, eyes, body }); scene.add(p.object3d); p.update(0, 0); return p; });
+  const pose = new URLSearchParams(location.search).get('pose');
+  pets.forEach(p => { if (pose === 'sit') p.setSitting(true); if (pose === 'carry') p.setCarried(true); if (pose === 'squish') p.setSquish(.2, .3); if (pose === 'expr') p.setExpression('joy'); });
+  for (let i = 0; i < 90; i++) pets.forEach(p => p.update(1 / 60, i / 60));
+  const W = innerWidth, H = innerHeight, cw = W / 3, ch = H / 2;
+  renderer.setSize(W, H, false); renderer.setScissorTest(true);
+  const cam = new THREE.PerspectiveCamera(30, cw / ch, .1, 60);
+  cam.position.set(0, 1.15, 7.4); cam.lookAt(0, 1.0, 0);
+  pets.forEach((p, i) => {
+    pets.forEach(o => { o.object3d.visible = o === p; });
+    hemi.color.copy(p.lightTint.sky); hemi.groundColor.copy(p.lightTint.ground);
+    const x = (i % 3) * cw, y = (1 - Math.floor(i / 3)) * ch;
+    renderer.setViewport(x, y, cw, ch); renderer.setScissor(x, y, cw, ch);
+    renderer.render(scene, cam);
+  });
+  window.__sheet = { outfits: pets.map(p => p.getOutfit()) };
+  window.__ready = true;
+}
+
 const clock = new THREE.Clock();
-setChar('flower');
-renderer.setAnimationLoop(() => {
+if (sheetQ !== null) runSheet(sheetQ);
+else { setChar('flower'); renderer.setAnimationLoop(loop); }
+function loop() {
   const dt = clock.getDelta(), t = clock.elapsedTime;
   if (talking) pet.setTalkLevel(Math.max(0, Math.sin(t * 11) * .5 + Math.sin(t * 4.3) * .4));
   if (carried) pet.object3d.position.x = Math.sin(t * .9) * .6;
   else pet.object3d.position.x = 0;
   pet.update(dt, t);
   renderer.render(scene, camera);
-});
-window.__ready = true;
+}
+if (sheetQ === null) window.__ready = true;
 </script>
 </body>
 </html>

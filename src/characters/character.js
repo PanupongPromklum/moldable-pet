@@ -13,7 +13,11 @@
  *            └ hang (pivot at head top: dangling sway while carried)
  *               └ rig (hop / shift offsets)
  *                  └ squash (scale, pivot at feet)
- *                     └ turn (rotation, pivot at body centre) ─ body + face decals
+ *                     └ turn (rotation, pivot at body centre) ─ body + face decals + outfit
+ *
+ * Outfit items (story S2-06, src/characters/accessories.js) live in `turn`, so they share the
+ * body's squash/stretch, carry sway, sitting pose and head turn; each item also rides the
+ * soft-body dent (poke / grab / cheek puff) measured at its anchor.
  */
 import * as THREE from 'three';
 import { mergeVertices } from 'three/addons/utils/BufferGeometryUtils.js';
@@ -22,10 +26,13 @@ import { SHAPES } from './shapes.js';
 import { GENERIC, LOOK_AWAY, exprFor } from './expressions.js';
 import { ACTIONS, resetFrame } from './actions.js';
 import { drawEye, drawMouth, superD } from './face.js';
+import { buildAccessory, disposeAccessory, SLOT_OF, SLOTS } from './accessories.js';
+import { createFit } from './fit.js';
 
 export { EXPRESSION_KEYS } from './expressions.js';
 export { EXPRESSION_ACTION, EXPRESSION_TH } from './expressions.js';
 export { ACTION_KEYS } from './actions.js';
+export { ACCESSORY_IDS, SLOT_OF, SLOTS, ACCESSORY_TH } from './accessories.js';
 
 /** Character keys in roster order (`pill` is "coming soon" in Sprint 1). */
 export const CHARACTER_KEYS = Object.freeze(['splat', 'pill', 'gumdrop', 'diamond', 'cloud', 'flower']);
@@ -184,6 +191,16 @@ export function createCharacter(key, opts = {}) {
   const mouthLocal = new THREE.Vector3(C.mouth.x, C.mouth.y, dFront * .9);
   decal(C.mouth.x, C.mouth.y, MBOX, mouthMat, mouthLocal);
   const eyeLineY = Math.max(E.pos[0][1], E.pos[1][1]);
+
+  /* ---------- outfit (S2-06) ---------- */
+  const outfitG = new THREE.Group(); outfitG.name = 'outfit'; turn.add(outfitG);
+  const outfit = { head: null, eyes: null, body: null };
+  const worn = { head: null, eyes: null, body: null };      // { group, anchor }
+  let fit = null;
+  const getFit = () => fit || (fit = createFit({
+    profile: prof, positions: flatGeo.attributes.position.array, bbox: bb, eye: E, eyeScale: S,
+    mouth: C.mouth, mScale, top: bb.max.y, bottom: bb.min.y,
+  }));
   const headMinY = Math.min(eyeLineY - E.h * S * 1.6, geo.top * .3);
 
   /* ---------- soft-body deformers ---------- */
@@ -225,10 +242,23 @@ export function createCharacter(key, opts = {}) {
       dst[i] = x + dx; dst[i + 1] = y + dy; dst[i + 2] = z + dz;
     }
   }
+  /** Outfit items ride the soft-body displacement at their anchor (same falloff as `warp`). */
+  function rideItems() {
+    for (const s of SLOTS) {
+      const w = worn[s]; if (!w) continue;
+      const p = w.group.position; p.set(0, 0, 0);
+      for (let j = 0; j < active.length; j++) {
+        const f = active[j], ex2 = w.anchor.x - f.a.x, ey = w.anchor.y - f.a.y, ez = w.anchor.z - f.a.z;
+        const q = (ex2 * ex2 + ey * ey + ez * ez) * f.invR2; if (q > 9) continue;
+        p.addScaledVector(f.d, Math.exp(-q));
+      }
+    }
+  }
   function applyDeform() {
     active.length = 0;
     for (let j = 0; j < defs.length; j++) if (defs[j].d.lengthSq() > 1e-8) active.push(defs[j]);
     if (Math.abs(puff.x) > 1e-3) for (const c of cheeks) { c.d.copy(c.dir).multiplyScalar(.075 * puff.x); active.push(c); }
+    rideItems();
     const ip = insetGeo.attributes.position;
     if (!active.length) {
       if (!deformDirty) return;
@@ -501,9 +531,30 @@ export function createCharacter(key, opts = {}) {
     /** World position of the top of the head. */
     getHeadTopWorld(out) { object3d.updateWorldMatrix(true, true); return turn.localToWorld(out.set(0, geo.top + .02, 0)); },
 
+    /**
+     * Dress the character. One item per slot; `null` empties a slot, a missing key keeps it.
+     * Unknown ids and ids in the wrong slot are ignored. Only changed slots are rebuilt.
+     * @param {{ head?: string|null, eyes?: string|null, body?: string|null }} o
+     */
+    setOutfit(o = {}) {
+      for (const s of SLOTS) {
+        if (!(s in o)) continue;
+        const id = o[s] ?? null;
+        if (id !== null && SLOT_OF[id] !== s) continue;
+        if (id === outfit[s]) continue;
+        if (worn[s]) { disposeAccessory(worn[s].group); worn[s] = null; }
+        outfit[s] = id;
+        if (id) { const it = buildAccessory(id, getFit()); outfitG.add(it.group); worn[s] = it; }
+      }
+      rideItems();
+    },
+    /** Current outfit `{ head, eyes, body }` (ids or null). */
+    getOutfit() { return { ...outfit }; },
+
     /** Free all GPU resources and detach from the scene. */
     dispose() {
       object3d.removeFromParent();
+      for (const s of SLOTS) { if (worn[s]) disposeAccessory(worn[s].group); worn[s] = null; outfit[s] = null; }
       for (const m of faceMeshes) m.geometry.dispose();
       faceMeshes.length = 0; defs.length = 0; active.length = 0;
       flatGeo.dispose(); insetGeo.dispose(); shadowGeo.dispose();
