@@ -138,5 +138,11 @@ Input (mouse, touch and webcam hands share one gesture layer):
 - Bathroom: carry the pet onto the toilet zone → pet sits → "กดชักโครก" → flush → toilet = 1.
 - Camera (HUD button): video behind the room (mirrored, semi-transparent), hand skeleton overlay. Point = poke, pinch = grab/stretch, pinch-hold still 0.6 s on the pet = carry, open palm rub over head = pet, palm press from above = squish, two palms = side squish, fast swipe = startle, pinch over a tray food = pick it up.
 
+## Owner decisions (2026-10-25, after Loop's questions)
+- **Needs are per character.** `state.js` keeps a needs set for every character key; switching characters shows that character's own needs. Every character's needs keep decaying in real time, playable or not on screen.
+- **Return after absence** (gap ≥ `needs.json backAfterMinutes`): pick a reaction style at random using `personas.json <key>.returnStyles` weights — `gentle` (smile + `back` line), `dramatic` (persona `hurtExpr` + `lonely` then `back` line, a short shake), `sleepy` (`sleepy` expression + yawn + `sleepy` line, then `back`).
+- ไผ่'s loneliness timing and the toilet warning thresholds stay as Loop set them.
+
 ## Change log
 - 2026-10-25 v1 — kiln.
+- 2026-10-25 v1.1 — per-character needs, random return style (owner decisions).
