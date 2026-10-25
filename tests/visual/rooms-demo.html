@@ -1,0 +1,114 @@
+<!doctype html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Rooms demo — S1-03</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Prompt:wght@400;500&family=Poppins:wght@400;500&display=swap">
+<style>
+  :root { --ink: #252941; --primary: #5A68B5; --panel: rgba(255, 255, 255, 0.86); }
+  html, body { margin: 0; height: 100%; overflow: hidden; background: #F2F1FB; color: var(--ink); font-family: 'Prompt', 'Poppins', sans-serif; }
+  canvas { display: block; width: 100vw; height: 100vh; touch-action: none; }
+  .bar { position: fixed; left: 50%; transform: translateX(-50%); display: flex; gap: 6px; padding: 6px; border-radius: 999px; background: var(--panel); }
+  .top { top: 12px; } .bottom { bottom: 16px; }
+  button { font: inherit; font-size: 14px; border: 0; border-radius: 999px; padding: 8px 14px; background: transparent; color: var(--ink); cursor: pointer; }
+  button[aria-pressed="true"] { background: var(--primary); color: #fff; }
+  #info { position: fixed; left: 12px; top: 70px; font: 12px 'Poppins', sans-serif; background: var(--panel); padding: 4px 10px; border-radius: 999px; }
+  .hud-band { position: fixed; left: 0; right: 0; pointer-events: none; outline: 1px dashed rgba(90, 104, 181, 0.35); display: none; }
+  body.bands .hud-band { display: block; }
+</style>
+<script type="importmap">
+{ "imports": {
+  "three": "https://cdn.jsdelivr.net/npm/three@0.162.0/build/three.module.js",
+  "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.162.0/examples/jsm/"
+} }
+</script>
+</head>
+<body>
+<div class="bar top" id="rooms"></div>
+<div id="info">—</div>
+<div class="bar bottom">
+  <button id="flush" type="button">กดชักโครก</button>
+  <button id="foods" type="button" aria-pressed="true">อาหาร</button>
+  <button id="bands" type="button" aria-pressed="false">HUD bands</button>
+</div>
+<div class="hud-band" style="top:0;height:120px"></div>
+<div class="hud-band" style="bottom:0;height:160px"></div>
+<script type="module">
+import * as THREE from 'three';
+import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
+import { createRoom, ROOM_IDS, ROOM_NAMES_TH } from '../../src/rooms/index.js';
+import { createFoodMesh, FOOD_IDS } from '../../src/props/foods.js';
+import { ClayBuilder, roundedBox, capsule, countDrawCalls } from '../../src/props/clay.js';
+
+const params = new URLSearchParams(location.search);
+const renderer = new THREE.WebGLRenderer({ antialias: true });
+renderer.setPixelRatio(Math.min(devicePixelRatio || 1, 2));
+renderer.outputColorSpace = THREE.SRGBColorSpace;
+renderer.toneMapping = THREE.NeutralToneMapping;
+document.body.prepend(renderer.domElement);
+
+const scene = new THREE.Scene();
+scene.background = new THREE.Color('#F2F1FB');
+scene.environment = new THREE.PMREMGenerator(renderer).fromScene(new RoomEnvironment(), 0.04).texture;
+scene.add(new THREE.HemisphereLight(0xfff1f8, 0xc9d2f0, 1.6));
+const key = new THREE.DirectionalLight(0xfff7fb, 1.1); key.position.set(1.6, 4, 3.4); scene.add(key);
+
+const camera = new THREE.PerspectiveCamera(30, 1, 0.1, 80);
+camera.position.set(0, 1.2, 8); camera.lookAt(0, 1, 0);
+
+// placeholder pet: capsule about 2 units tall, body radius ~0.85
+const pet = new THREE.Mesh(capsule(0.85, 0.3, 8, 24), new THREE.MeshStandardMaterial({ color: '#C8CBE8', roughness: 0.85 }));
+pet.name = 'placeholder-pet';
+scene.add(pet);
+
+// six foods on a demo shelf (demo only, not part of any room)
+const shelf = new THREE.Group();
+const sb = new ClayBuilder(); sb.add(roundedBox(3.3, 0.08, 0.5, 0.04), '#FFFFFF'); shelf.add(sb.buildMesh('demo:shelf'));
+FOOD_IDS.forEach((id, i) => { const f = createFoodMesh(id); f.position.set(-1.35 + i * 0.54, 0.27, 0); shelf.add(f); });
+shelf.position.set(0, 2.62, 0.9);
+scene.add(shelf);
+
+let room = null;
+const roomBar = document.getElementById('rooms');
+for (const id of ROOM_IDS) {
+  const btn = document.createElement('button'); btn.type = 'button'; btn.textContent = ROOM_NAMES_TH[id]; btn.dataset.id = id;
+  btn.onclick = () => setRoom(id); roomBar.append(btn);
+}
+function setRoom(id) {
+  if (room) room.dispose();
+  room = createRoom(id);
+  scene.add(room.group);
+  pet.position.copy(room.petSpot).add(new THREE.Vector3(0, 1.0, 0));
+  for (const b of roomBar.children) b.setAttribute('aria-pressed', String(b.dataset.id === id));
+  document.getElementById('flush').style.display = room.flush ? '' : 'none';
+  window.__demo.room = room;
+}
+document.getElementById('flush').onclick = () => room.flush && room.flush();
+document.getElementById('foods').onclick = (e) => { shelf.visible = !shelf.visible; e.currentTarget.setAttribute('aria-pressed', String(shelf.visible)); };
+document.getElementById('bands').onclick = (e) => { const on = document.body.classList.toggle('bands'); e.currentTarget.setAttribute('aria-pressed', String(on)); };
+
+function resize() {
+  renderer.setSize(innerWidth, innerHeight, false);
+  camera.aspect = innerWidth / innerHeight; camera.updateProjectionMatrix();
+}
+addEventListener('resize', resize); resize();
+
+window.__demo = { setRoom, scene, renderer, countRoomCalls: () => countDrawCalls(room.group), calls: 0, frames: 0 };
+setRoom(ROOM_IDS.includes(params.get('room')) ? params.get('room') : 'living');
+if (params.get('foods') === '0') document.getElementById('foods').click();
+if (params.get('bands') === '1') document.getElementById('bands').click();
+if (params.get('ui') === '0') for (const el of document.querySelectorAll('.bar,#info')) el.style.display = 'none';
+
+const clock = new THREE.Clock();
+const info = document.getElementById('info');
+renderer.setAnimationLoop(() => {
+  const dt = Math.min(0.05, clock.getDelta()), t = clock.elapsedTime;
+  room.update(dt, t);
+  renderer.render(scene, camera);
+  window.__demo.calls = renderer.info.render.calls; window.__demo.frames++;
+  if (window.__demo.frames % 15 === 1) info.textContent = `${room.id} · room draw calls ${countDrawCalls(room.group)} · frame ${renderer.info.render.calls}`;
+});
+</script>
+</body>
+</html>
