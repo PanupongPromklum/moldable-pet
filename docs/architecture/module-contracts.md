@@ -173,7 +173,16 @@ HUD: `hud.startMinigame({ title, durationSec })`, `hud.updateMinigame({ score, t
 Echo sfx names added: `coin`, `catch`, `bonk`, `tick`, `go`, `win`, `equip`, `buy`.
 Coins: `hud.setCoins(n)` animates the change.
 
+## Sprint 3 additions (2026-10-26, kiln — owner playtest on phone)
+1. **Character chip** shows only the avatar and the pet's name (no room line). Tap → select (unchanged).
+2. **Manual light/dark.** The system theme no longer decides. A lamp button next to the camera button toggles "ปิดไฟ" (dark) / "เปิดไฟ" (light). Default for a new save: light. Saved in the save file (`settings.theme`). CSS themes switch on `:root[data-theme="dark"]` / `[data-theme="light"]` only (no `prefers-color-scheme` media query). HUD: `hud.setTheme(theme)` updates the button state; handler `onThemeToggle()`. Wire applies `document.documentElement.dataset.theme`, `<meta name="color-scheme">` and `<meta name="theme-color">`, `room.setTheme`, stage lights.
+3. **Minigame control choice — head tilt.** Before a Snack Rain round, a small intro card lets the player pick the control: "นิ้ว / เมาส์" (`touch`, default) or "เอียงหัว" (`head`, uses the camera). Hand tracking is no longer a minigame control. HUD: `hud.showMinigameIntro({ controls: [{id, label, hint}], selected })` → handlers `onMinigameControl(id)` and `onMinigameReady()`; `hud.hideMinigameIntro()`; during the round a small chip shows the active control (`hud.updateMinigame({ control })`). Wire: head control with MediaPipe Face Landmarker (same tasks-vision 0.10.14 package, loaded only when chosen): head roll (tilt left/right) maps to pet movement, with a short calibration of the neutral pose at countdown, dead-zone and smoothing; fall back to touch with a Thai message if the camera is denied/unavailable. The choice is saved (`settings.minigameControl`).
+4. **Soft hands** (camera image hidden): thinner fingers, smaller palm, rounded tips — cute, not bulky (about 60–70% of the current visual weight).
+5. **Petting on phones.** A slow stroke over the pet's head counts as petting: a drag that starts on the head region (upper part of the body) strokes and pets instead of stretching; dragging from lower on the body still stretches. Gentle strokes must raise ใกล้ชิด clearly (loop retunes `actions.petPerSecond` etc.). The head gives a soft, small dent following the finger while stroking.
+6. **Performance** (next sprint): phones stutter; profile and optimise after the features above, then consider a graphics quality setting.
+
 ## Change log
 - 2026-10-25 v1 — kiln.
 - 2026-10-25 v1.1 — per-character needs, random return style (owner decisions).
+- 2026-10-26 v3 — Sprint 3: chip name only, manual light/dark, head-tilt minigame control, slimmer soft hands, head-stroke petting.
 - 2026-10-25 v2 — Sprint 2: contrast + dark theme, character chip instead of settings, one-control toilet flow, hidden-camera hands, outfits, Snack Rain minigame + coins.
