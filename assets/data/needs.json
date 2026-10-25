@@ -1,0 +1,69 @@
+{
+  "_meta": {
+    "owner": "loop",
+    "story": "S1-01",
+    "version": 1,
+    "doc": "design/gdd/needs-system.md",
+    "units": {
+      "level": "0..1, 1 = satisfied",
+      "decayPerHour": "level lost per real-time hour, before persona needRates",
+      "PerSecond": "level gained per second of the gesture, before persona gains",
+      "offlineCapHours": "hours",
+      "Seconds": "seconds"
+    }
+  },
+  "needs": {
+    "hunger": { "label": "อิ่ม",     "start": 0.55, "decayPerHour": 0.14,  "low": 0.3, "urgent": 0.12, "good": 0.75 },
+    "toilet": { "label": "ห้องน้ำ",  "start": 0.75, "decayPerHour": 0.11,  "low": 0.3, "urgent": 0.12, "good": 0.75 },
+    "fun":    { "label": "สนุก",     "start": 0.7,  "decayPerHour": 0.175, "low": 0.3, "urgent": 0.12, "good": 0.75 },
+    "social": { "label": "ใกล้ชิด",  "start": 0.6,  "decayPerHour": 0.23,  "low": 0.3, "urgent": 0.12, "good": 0.75 }
+  },
+  "actions": {
+    "petPerSecond": { "social": 0.04, "fun": 0.02 },
+    "pokeFun": 0.01,
+    "pokeSpam": { "count": 5, "windowSeconds": 2, "fun": 0 },
+    "stretchFunPerSecond": 0.02,
+    "squishFunPerSecond": 0.02,
+    "boingFun": 0.03,
+    "boingMinStretch": 0.5,
+    "stretchBigThreshold": 0.8,
+    "squishHardThreshold": 0.22,
+    "hardFunScale": 0.25,
+    "carriedSocialPerSecond": 0.01,
+    "talkSocial": 0.04,
+    "cameraHelloSocial": 0.05,
+    "flush": { "toilet": 1 },
+    "flushReliefFun": 0.05,
+    "toiletNoNeedAbove": 0.7,
+    "eatToiletCost": 0.08,
+    "eat": { "fullThreshold": 0.95, "cooldownSeconds": 1.5 }
+  },
+  "offlineCapHours": 12,
+  "offlineFloor": 0.15,
+  "offlineGapSeconds": 60,
+  "backAfterMinutes": 20,
+  "moods": {
+    "priority": ["toilet", "hunger", "social", "fun"],
+    "states": {
+      "hunger": {
+        "low":    { "expr": "hungry",    "idle": "jelly",  "idleEverySeconds": 12, "line": "hungry" },
+        "urgent": { "expr": "hungry",    "idle": "jelly",  "idleEverySeconds": 6,  "line": "hungry" }
+      },
+      "toilet": {
+        "low":    { "expr": "shy",       "idle": "wiggle", "idleEverySeconds": 10, "line": "toiletNeed" },
+        "urgent": { "expr": "surprised", "idle": "shiver", "idleEverySeconds": 5,  "line": "toiletNeed" }
+      },
+      "fun": {
+        "low":    { "expr": "sleepy",    "idle": "yawn",   "idleEverySeconds": 14, "line": "sleepy" },
+        "urgent": { "expr": "sad",       "idle": "sway",   "idleEverySeconds": 8,  "line": "sleepy" }
+      },
+      "social": {
+        "low":    { "expr": "sad",       "idle": "tilt",   "idleEverySeconds": 12, "line": "lonely" },
+        "urgent": { "expr": "sad",       "idle": "sway",   "idleEverySeconds": 7,  "line": "lonely" }
+      }
+    },
+    "allGood": { "expr": "smile" },
+    "neutral": { "expr": "original" },
+    "lineCooldownSeconds": 45
+  }
+}

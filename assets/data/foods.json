@@ -1,0 +1,38 @@
+{
+  "_meta": {
+    "owner": "loop",
+    "story": "S1-01",
+    "version": 1,
+    "doc": "design/gdd/needs-system.md",
+    "units": "hunger/fun/toilet are level deltas (0..1 scale) applied once on eating; toilet is negative = more need to go"
+  },
+  "foods": [
+    { "id": "onigiri", "name": "ข้าวปั้น",  "hunger": 0.35, "fun": 0.0,  "toilet": -0.08, "note": "อิ่มท้อง หนึบๆ ห่อสาหร่าย" },
+    { "id": "banana",  "name": "กล้วย",     "hunger": 0.2,  "fun": 0.02, "toilet": -0.04, "note": "หวานหอม พลังงานไว" },
+    { "id": "cupcake", "name": "คัพเค้ก",   "hunger": 0.15, "fun": 0.1,  "toilet": -0.05, "note": "ขนมหวาน ครีมนุ่มฟู" },
+    { "id": "apple",   "name": "แอปเปิล",   "hunger": 0.18, "fun": 0.02, "toilet": -0.04, "note": "กรอบ ฉ่ำ สดชื่น" },
+    { "id": "bun",     "name": "ซาลาเปา",   "hunger": 0.4,  "fun": 0.03, "toilet": -0.1,  "note": "อุ่นๆ ไส้แน่น อิ่มนาน" },
+    { "id": "milk",    "name": "นม",        "hunger": 0.12, "fun": 0.0,  "toilet": -0.12, "note": "ดื่มง่าย แต่ปวดห้องน้ำไว" }
+  ],
+  "likes": {
+    "splat":   ["bun", "cupcake"],
+    "gumdrop": ["onigiri", "bun"],
+    "diamond": ["cupcake", "apple"],
+    "cloud":   ["onigiri", "apple"],
+    "flower":  ["cupcake", "banana"],
+    "pill":    []
+  },
+  "dislikes": {
+    "splat":   ["apple"],
+    "gumdrop": [],
+    "diamond": ["banana"],
+    "cloud":   ["cupcake"],
+    "flower":  ["milk"],
+    "pill":    []
+  },
+  "reactions": {
+    "like":    { "hungerScale": 1.0, "funBonus": 0.08, "line": "eatLike" },
+    "ok":      { "hungerScale": 1.0, "funBonus": 0.0,  "line": "eatOk" },
+    "dislike": { "hungerScale": 0.8, "funBonus": -0.03, "line": "eatDislike" }
+  }
+}

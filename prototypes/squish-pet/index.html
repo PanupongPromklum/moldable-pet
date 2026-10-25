@@ -1,0 +1,1049 @@
+<!doctype html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Moldable Squish Pet</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Thai:wght@400;500;600&family=Poppins:wght@400;500;600&display=swap">
+<style>
+/* Layout: one-screen play room — big 3D stage with your own camera feed behind the pet (AR), control rail on the right; stacks on phones */
+:root {
+  --bg: #f3f2f8; --surface: #ffffff; --ink: #1f2130; --muted: #6b6e85; --line: #e3e2ee;
+  --accent: #5a62c4; --accent-ink: #ffffff; --chip: #f1f0f8; --warm: #e0709a; --calm: #6aa7c9;
+  --stage-a: #faf5fb; --stage-b: #e7eaf8; --veil: rgba(243,242,248,.42);
+  --font-ui: "Poppins", "IBM Plex Sans Thai", system-ui, sans-serif;
+  --font-th: "IBM Plex Sans Thai", "Poppins", system-ui, sans-serif;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #121219; --surface: #1b1b25; --ink: #ecebf6; --muted: #9c9db5; --line: #2c2c3b;
+    --accent: #9ea6f4; --accent-ink: #15162a; --chip: #23232f; --warm: #f19bbd; --calm: #8cc4e2;
+    --stage-a: #24212f; --stage-b: #161823; --veil: rgba(18,18,25,.45);
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #121219; --surface: #1b1b25; --ink: #ecebf6; --muted: #9c9db5; --line: #2c2c3b;
+  --accent: #9ea6f4; --accent-ink: #15162a; --chip: #23232f; --warm: #f19bbd; --calm: #8cc4e2;
+  --stage-a: #24212f; --stage-b: #161823; --veil: rgba(18,18,25,.45);
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+html, body { height: 100%; }
+body {
+  background: var(--bg); color: var(--ink); font-family: var(--font-th);
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-block: 16px;
+}
+.app { display: grid; grid-template-columns: minmax(0, 1fr) 360px; gap: 16px; height: 100%; max-width: 1440px; margin: 0 auto; }
+.stage { position: relative; border-radius: 22px; overflow: hidden; min-height: 420px;
+  background: radial-gradient(120% 90% at 50% 20%, var(--stage-a), var(--stage-b)); }
+.stage > video { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; opacity: 0; transition: opacity .4s; filter: saturate(.75); pointer-events: none; }
+.stage > video.mirror { transform: scaleX(-1); }
+.stage.ar > video { opacity: .62; }
+.veil { position: absolute; inset: 0; background: var(--veil); opacity: 0; transition: opacity .4s; pointer-events: none; }
+.stage.ar .veil { opacity: 1; }
+.stage canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; touch-action: none; }
+.stage canvas.gl { cursor: grab; }
+.stage canvas.gl:active { cursor: grabbing; }
+.stage canvas.ov { pointer-events: none; }
+.tag { position: absolute; left: 20px; top: 18px; pointer-events: none; display: grid; gap: 2px; }
+.tag .brand { font-family: var(--font-ui); font-size: 12px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+.tag .name { font-weight: 600; font-size: 26px; letter-spacing: -.01em; }
+.tag .name span { font-family: var(--font-ui); font-weight: 500; color: var(--muted); font-size: 15px; margin-left: 8px; }
+.now { position: absolute; left: 20px; bottom: 16px; pointer-events: none; font-size: 13px; color: var(--muted); max-width: calc(100% - 140px); }
+.now b { font-weight: 600; color: var(--ink); }
+.fsbtn { position: absolute; right: 16px; bottom: 12px; font: inherit; font-size: 12px; color: var(--muted); background: var(--surface); border: 1px solid var(--line); border-radius: 999px; padding: 6px 12px; cursor: pointer; }
+.stage:fullscreen .tag, .stage:fullscreen .fsbtn { display: none; }
+.fcam { display: none; position: absolute; right: 14px; top: 14px; font: inherit; font-size: 14px; font-weight: 600; border: 0; border-radius: 999px; padding: 9px 16px; cursor: pointer; background: var(--accent); color: var(--accent-ink); box-shadow: 0 4px 16px rgba(40,40,90,.18); }
+.fcam.off { background: var(--surface); color: var(--ink); }
+.fcam:disabled { opacity: .6; }
+.bubble { position: absolute; left: 50%; top: 20%; transform: translate(-50%, calc(-100% - 10px)) scale(.92); transform-origin: 50% 100%;
+  background: var(--surface); color: var(--ink); border: 1px solid var(--line); border-radius: 18px; padding: 9px 15px; font-size: 16px; font-weight: 500;
+  white-space: nowrap; pointer-events: none; opacity: 0; transition: opacity .18s, transform .18s; box-shadow: 0 6px 22px rgba(40,40,90,.12); max-width: 80%; }
+.bubble::after { content: ""; position: absolute; left: 50%; bottom: -7px; width: 12px; height: 12px; background: var(--surface); border-right: 1px solid var(--line); border-bottom: 1px solid var(--line); transform: translateX(-50%) rotate(45deg); }
+.bubble.show { opacity: 1; transform: translate(-50%, calc(-100% - 10px)) scale(1); }
+
+.rail { background: var(--surface); border: 1px solid var(--line); border-radius: 22px; padding: 18px; overflow-y: auto; display: flex; flex-direction: column; gap: 20px; min-width: 0; }
+.sec { display: flex; flex-direction: column; gap: 10px; }
+.sec h2 { margin: 0; font-size: 13px; font-weight: 600; display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
+.sec h2 small { font-family: var(--font-ui); font-weight: 400; font-size: 11px; color: var(--muted); letter-spacing: .06em; text-transform: uppercase; }
+.cambtn { font: inherit; font-size: 14px; font-weight: 600; border: 0; border-radius: 12px; padding: 12px 14px; cursor: pointer; background: var(--accent); color: var(--accent-ink); width: 100%; }
+.cambtn.off { background: var(--chip); color: var(--ink); }
+.cambtn:disabled { opacity: .6; cursor: progress; }
+.camstatus { font-size: 12.5px; color: var(--muted); line-height: 1.55; margin: 0; }
+.camsel { font: inherit; font-size: 13px; width: 100%; padding: 8px 10px; border-radius: 10px; border: 1px solid var(--line); background: var(--chip); color: var(--ink); }
+.grid3 { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; }
+button.chip { font: inherit; font-size: 13px; color: var(--ink); background: var(--chip); border: 1px solid transparent; border-radius: 12px; padding: 8px 6px; cursor: pointer;
+  display: grid; gap: 1px; justify-items: center; line-height: 1.25; transition: background .15s, border-color .15s, transform .1s; }
+button.chip small { font-family: var(--font-ui); font-size: 10px; color: var(--muted); letter-spacing: .02em; }
+button.chip:hover { border-color: var(--line); }
+button.chip:active { transform: scale(.97); }
+button.chip[aria-pressed="true"] { background: var(--accent); color: var(--accent-ink); }
+button.chip[aria-pressed="true"] small { color: var(--accent-ink); opacity: .8; }
+button.chip:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+button.char { padding: 10px 6px 8px; gap: 4px; }
+button.char i { width: 22px; height: 22px; border-radius: 50%; display: block; border: 1px solid rgba(0,0,0,.06); }
+.persona { display: grid; gap: 6px; padding: 12px 14px; border-radius: 14px; background: var(--chip); }
+.persona .top { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; }
+.persona b { font-size: 17px; }
+.persona .role { font-family: var(--font-ui); font-size: 12px; color: var(--muted); }
+.persona .mbti { font-family: var(--font-ui); font-size: 11px; font-weight: 600; letter-spacing: .06em; padding: 2px 8px; border-radius: 999px; background: var(--surface); color: var(--accent); margin-left: auto; }
+.persona p { margin: 0; font-size: 12.5px; line-height: 1.5; color: var(--muted); }
+.persona p em { font-style: normal; color: var(--ink); }
+.moodnow { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
+.moodnow b { font-size: 20px; font-weight: 600; }
+.moodnow span { font-size: 12px; color: var(--muted); }
+.meters { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px 12px; }
+.meter { font-size: 12px; color: var(--muted); display: grid; gap: 4px; }
+.meter div { display: flex; justify-content: space-between; }
+.meter output { font-family: var(--font-ui); font-size: 11px; font-variant-numeric: tabular-nums; }
+.meter i { display: block; height: 6px; border-radius: 6px; background: var(--chip); overflow: hidden; }
+.meter i b { display: block; height: 100%; width: 0; border-radius: 6px; background: var(--accent); transition: width .15s linear; }
+.meter.joy i b { background: var(--warm); }
+.meter.lonely i b { background: var(--calm); }
+.meter.annoy i b { background: #d9824a; }
+.howto { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+.howto li { display: grid; grid-template-columns: 28px minmax(0, 1fr); gap: 8px; align-items: start; font-size: 13px; line-height: 1.45; }
+.howto li .g { font-size: 18px; line-height: 1.2; text-align: center; }
+.howto li small { display: block; color: var(--muted); font-size: 11.5px; }
+.toggles { display: grid; gap: 8px; }
+.toggle { display: flex; justify-content: space-between; align-items: center; font-size: 13px; gap: 10px; }
+.toggle input { width: 36px; height: 20px; appearance: none; background: var(--line); border-radius: 999px; position: relative; cursor: pointer; flex: none; margin: 0; transition: background .15s; }
+.toggle input::after { content: ""; position: absolute; top: 2px; left: 2px; width: 16px; height: 16px; border-radius: 50%; background: var(--surface); transition: left .15s; }
+.toggle input:checked { background: var(--accent); }
+.toggle input:checked::after { left: 18px; }
+
+@media (max-width: 900px) {
+  html, body { height: auto; }
+  .app { grid-template-columns: minmax(0, 1fr); height: auto; }
+  .stage { height: 62vh; min-height: 380px; }
+  .rail { overflow: visible; }
+  .fcam { display: block; }
+  .now { max-width: calc(100% - 110px); }
+}
+@media (prefers-reduced-motion: reduce) { .bubble, .meter i b { transition: none; } }
+</style>
+</head>
+<body>
+<div class="app">
+  <div class="stage" id="stage">
+    <video id="cam" class="mirror" playsinline muted></video>
+    <div class="veil"></div>
+    <canvas class="ov" id="ov"></canvas>
+    <div class="tag"><div class="brand">Moldable · Squish Pet</div><div class="name" id="charName">ไผ่<span>UX / CX</span></div></div>
+    <div class="bubble" id="bubble"></div>
+    <div class="now" id="now"></div>
+    <button class="fsbtn" id="fsBtn" type="button">เต็มจอ</button>
+    <button class="fcam" id="camBtn2" type="button">เปิดกล้อง</button>
+  </div>
+
+  <aside class="rail">
+    <section class="sec">
+      <h2>กล้องจับมือ <small>Hand tracking</small></h2>
+      <button class="cambtn" id="camBtn" type="button">เปิดกล้อง</button>
+      <p class="camstatus" id="camStatus">ยังไม่เปิดกล้องก็เล่นด้วยเมาส์ได้ กดเปิดกล้องเพื่อใช้มือจิ้ม หยิบยืด บี้ และลูบหัว ภาพจากกล้องประมวลผลในเครื่องนี้เท่านั้น</p>
+      <select class="camsel" id="camSel" hidden aria-label="เลือกกล้อง"></select>
+    </section>
+
+    <section class="sec">
+      <h2>ตัวละคร <small>Characters</small></h2>
+      <div class="grid3" id="chars"></div>
+      <div class="persona" id="persona"></div>
+    </section>
+
+    <section class="sec">
+      <h2>อารมณ์ตอนนี้ <small>Mood</small></h2>
+      <div class="moodnow"><b id="moodName">ปกติ</b><span id="moodWhy"></span></div>
+      <div class="meters">
+        <div class="meter joy"><div>มีความสุข<output id="oJoy">0</output></div><i><b id="mJoy"></b></i></div>
+        <div class="meter annoy"><div>หงุดหงิด<output id="oAnnoy">0</output></div><i><b id="mAnnoy"></b></i></div>
+        <div class="meter"><div>เขิน<output id="oShy">0</output></div><i><b id="mShy"></b></i></div>
+        <div class="meter lonely"><div>เหงา<output id="oLonely">0</output></div><i><b id="mLonely"></b></i></div>
+      </div>
+    </section>
+
+    <section class="sec">
+      <h2>วิธีเล่น <small>Gestures</small></h2>
+      <ul class="howto">
+        <li><span class="g">☝️</span><span>ชี้นิ้วจิ้มที่ตัว ตัวจะยุบตามนิ้ว<small>เมาส์: คลิก</small></span></li>
+        <li><span class="g">🤏</span><span>จีบนิ้วโป้งกับนิ้วชี้ที่ตัว แล้วดึงออกเพื่อยืด ปล่อยแล้วเด้งกลับ<small>เมาส์: กดค้างแล้วลาก</small></span></li>
+        <li><span class="g">✋</span><span>แบมือลูบไปมาเหนือหัว<small>เมาส์: ขยับผ่านหัวไปมา</small></span></li>
+        <li><span class="g">🫳</span><span>แบมือจากด้านบนแล้วกดลง เพื่อบี้ให้แบน<small>เมาส์: หมุนลูกกลิ้งบนตัว</small></span></li>
+        <li><span class="g">🙌</span><span>สองมือประกบข้างตัวแล้วบีบเข้าหากัน</span></li>
+        <li><span class="g">💨</span><span>ปัดมือผ่านตัวเร็วๆ จะตกใจ</span></li>
+        <li><span class="g">📱</span><span>บนมือถือใช้นิ้วได้ด้วย<small>แตะ = จิ้ม · ลาก = ยืด · สองนิ้วหนีบ = บี้ · ลากจากนอกตัวมาถูเหนือหัว = ลูบ</small></span></li>
+        <li><span class="g">⏳</span><span>ปล่อยทิ้งไว้ จะเหงาหรือง่วงตามนิสัยของแต่ละตัว</span></li>
+      </ul>
+    </section>
+
+    <section class="sec">
+      <h2>ลองอารมณ์ <small>Preview</small></h2>
+      <div class="grid3" id="exprs"></div>
+    </section>
+
+    <section class="sec">
+      <h2>ตัวเลือก <small>Options</small></h2>
+      <div class="toggles">
+        <label class="toggle">เห็นตัวเองในฉาก <input type="checkbox" id="optAr" checked></label>
+        <label class="toggle">แสดงโครงมือ <input type="checkbox" id="optSkel" checked></label>
+        <label class="toggle">เสียงเอฟเฟกต์ <input type="checkbox" id="optSfx" checked></label>
+        <label class="toggle">คำพูดตามอารมณ์ <input type="checkbox" id="optTalk" checked></label>
+        <label class="toggle">หายใจ / ขยับเบาๆ ตอนอยู่นิ่ง <input type="checkbox" id="optIdle" checked></label>
+      </div>
+    </section>
+  </aside>
+</div>
+
+<script type="importmap">
+{ "imports": {
+  "three": "https://cdn.jsdelivr.net/npm/three@0.162.0/build/three.module.js",
+  "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.162.0/examples/jsm/"
+} }
+</script>
+<script type="module">
+import * as THREE from 'three';
+import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
+import { mergeVertices } from 'three/addons/utils/BufferGeometryUtils.js';
+import { DecalGeometry } from 'three/addons/geometries/DecalGeometry.js';
+
+/* Character silhouettes, colours and faces traced from the Moldable brand book. */
+const DATA = {"splat": {"profile": [0.8161, 0.833, 0.8512, 0.8701, 0.8889, 0.9071, 0.9241, 0.9393, 0.9526, 0.9637, 0.9726, 0.9792, 0.9835, 0.9855, 0.985, 0.9817, 0.9755, 0.9661, 0.9534, 0.9375, 0.9187, 0.8976, 0.8749, 0.8517, 0.829, 0.808, 0.7896, 0.7745, 0.7633, 0.756, 0.7525, 0.7525, 0.7553, 0.7606, 0.7676, 0.7761, 0.7857, 0.7964, 0.8081, 0.8209, 0.8347, 0.8494, 0.8648, 0.8804, 0.8955, 0.9096, 0.9218, 0.9315, 0.9383, 0.9419, 0.9421, 0.9391, 0.9333, 0.925, 0.9146, 0.9025, 0.889, 0.8744, 0.8586, 0.8419, 0.8242, 0.8057, 0.7867, 0.7673, 0.7483, 0.73, 0.7133, 0.6987, 0.6868, 0.6779, 0.6723, 0.6699, 0.6707, 0.6744, 0.6805, 0.6887, 0.6986, 0.7099, 0.7224, 0.7359, 0.7503, 0.7655, 0.7813, 0.7976, 0.8141, 0.8306, 0.8466, 0.8619, 0.876, 0.8887, 0.8999, 0.9094, 0.9171, 0.9232, 0.9276, 0.9306, 0.9321, 0.9323, 0.9312, 0.9288, 0.9251, 0.9202, 0.9139, 0.9065, 0.8981, 0.8887, 0.8786, 0.868, 0.857, 0.8459, 0.8347, 0.8235, 0.8125, 0.8017, 0.7913, 0.7814, 0.7723, 0.764, 0.7569, 0.7513, 0.7473, 0.745, 0.7447, 0.7461, 0.7494, 0.7542, 0.7603, 0.7675, 0.7756, 0.7842, 0.7931, 0.8023, 0.8116, 0.8209, 0.8303, 0.8398, 0.8493, 0.8589, 0.8685, 0.8783, 0.8883, 0.8984, 0.9087, 0.9191, 0.9296, 0.9401, 0.9504, 0.9602, 0.9694, 0.9773, 0.9836, 0.9879, 0.9896, 0.9886, 0.9845, 0.9773, 0.9672, 0.9544, 0.9396, 0.9231, 0.9058, 0.8884, 0.8714, 0.8554, 0.8409, 0.8282, 0.8173, 0.8083, 0.8011, 0.7954, 0.7909, 0.7876, 0.7851, 0.7834, 0.7824, 0.7823, 0.783, 0.7848, 0.7878, 0.7923, 0.7982, 0.8058, 0.8148, 0.8252, 0.8366, 0.8486, 0.861, 0.8733, 0.8851, 0.8961, 0.9061, 0.9151, 0.9231, 0.9301, 0.9365, 0.9422, 0.9476, 0.9525, 0.957, 0.9607, 0.9635, 0.9647, 0.9641, 0.9611, 0.9555, 0.947, 0.9357, 0.9218, 0.9057, 0.888, 0.8694, 0.8506, 0.8324, 0.8154, 0.8001, 0.7871, 0.7765, 0.7685, 0.7631, 0.7603, 0.76, 0.762, 0.7663, 0.7726, 0.7808, 0.7906, 0.8017, 0.8138, 0.8265, 0.8395, 0.8524, 0.8649, 0.8768, 0.8878, 0.898, 0.9071, 0.9154, 0.9228, 0.9293, 0.9351, 0.9398, 0.9435, 0.9459, 0.9467, 0.9457, 0.9426, 0.9373, 0.9296, 0.9197, 0.9075, 0.8935, 0.8777, 0.8607, 0.8428, 0.8243, 0.8057, 0.7873, 0.7693, 0.7522, 0.7361, 0.7212, 0.7078, 0.6959, 0.6856, 0.677, 0.6699, 0.6643, 0.6601, 0.6572, 0.6557, 0.6555, 0.6567, 0.6595, 0.6642, 0.671, 0.6801, 0.6916, 0.7056, 0.7217, 0.7396, 0.7589, 0.7788, 0.7987, 0.818, 0.836, 0.8524, 0.867, 0.8797, 0.8906, 0.9001, 0.9082, 0.9151, 0.921, 0.9256, 0.9288, 0.9303, 0.9297, 0.9268, 0.9214, 0.9135, 0.9034, 0.8915, 0.8785, 0.8651, 0.852, 0.8399, 0.8291, 0.82, 0.8124, 0.8064, 0.8015, 0.7974, 0.794, 0.7909, 0.7884, 0.7866, 0.7859, 0.7868, 0.7897, 0.7951, 0.8031, 0.8138, 0.827, 0.8422, 0.859, 0.8765, 0.8943, 0.9116, 0.928, 0.9433, 0.957, 0.9691, 0.9795, 0.988, 0.9944, 0.9985, 1.0, 0.9986, 0.9939, 0.986, 0.9747, 0.9602, 0.9431, 0.9238, 0.9032, 0.882, 0.861, 0.841, 0.8227, 0.8065, 0.7929, 0.7819, 0.7739, 0.7688, 0.7667, 0.7676, 0.7716, 0.7786, 0.7885, 0.8011], "req": 0.85, "aspect": 1.051, "colors": {"top": "#e5c7de", "mid": "#dda2bf", "bottom": "#e09ab5"}, "eye": {"pos": [[-0.2169, 0.2823], [0.142, 0.2823]], "w": 0.0987, "h": 0.0987, "p": 2.0, "rot": 0, "pw": 0.568, "ph": 0.568, "prot": 0, "pdx": 0.47, "pdy": 0.0, "clip": true, "lidU": 0}, "mouth": {"x": -0.0308, "y": 0.1202, "w": 0.048, "up": 0.0, "down": 0.0395, "curve": 0.0, "skew": 0.0, "t": 0.0016, "q": 1.6}}, "pill": {"profile": [0.6061, 0.6053, 0.6045, 0.6039, 0.6034, 0.603, 0.6029, 0.6031, 0.6035, 0.6042, 0.6051, 0.6062, 0.6075, 0.6089, 0.6103, 0.6118, 0.6134, 0.6151, 0.617, 0.6191, 0.6215, 0.6243, 0.6274, 0.6308, 0.6344, 0.6384, 0.6424, 0.6466, 0.6508, 0.6552, 0.6596, 0.6643, 0.6691, 0.6743, 0.6799, 0.6858, 0.6922, 0.6991, 0.7062, 0.7137, 0.7214, 0.7294, 0.7375, 0.7459, 0.7545, 0.7635, 0.773, 0.783, 0.7936, 0.8048, 0.8167, 0.829, 0.8417, 0.8546, 0.8675, 0.8804, 0.893, 0.9052, 0.917, 0.9284, 0.9392, 0.9494, 0.9591, 0.968, 0.9761, 0.9833, 0.9894, 0.9942, 0.9976, 0.9995, 1.0, 0.9991, 0.997, 0.9938, 0.99, 0.9856, 0.9811, 0.9767, 0.9725, 0.9688, 0.9655, 0.9626, 0.9602, 0.9582, 0.9565, 0.955, 0.9537, 0.9527, 0.9518, 0.9512, 0.9509, 0.9509, 0.9513, 0.952, 0.9532, 0.9547, 0.9566, 0.9587, 0.9611, 0.9637, 0.9663, 0.9691, 0.9719, 0.9748, 0.9776, 0.9805, 0.9832, 0.9858, 0.9883, 0.9906, 0.9926, 0.9944, 0.9957, 0.9967, 0.9972, 0.9971, 0.9963, 0.9949, 0.9926, 0.9895, 0.9854, 0.9803, 0.9741, 0.9669, 0.9586, 0.9493, 0.939, 0.9278, 0.9157, 0.9028, 0.8893, 0.8753, 0.8608, 0.846, 0.8311, 0.8161, 0.8012, 0.7867, 0.7727, 0.7592, 0.7464, 0.7344, 0.7232, 0.7128, 0.7032, 0.6943, 0.6859, 0.6781, 0.6707, 0.6636, 0.6569, 0.6504, 0.6442, 0.6383, 0.6328, 0.6275, 0.6226, 0.618, 0.6137, 0.6096, 0.6057, 0.602, 0.5985, 0.5951, 0.5919, 0.5889, 0.5862, 0.5838, 0.5816, 0.5799, 0.5784, 0.5773, 0.5764, 0.5758, 0.5754, 0.5751, 0.5749, 0.5748, 0.5749, 0.5751, 0.5755, 0.5761, 0.5769, 0.5779, 0.5792, 0.5807, 0.5823, 0.5842, 0.5862, 0.5884, 0.5908, 0.5934, 0.5963, 0.5994, 0.6029, 0.6067, 0.6107, 0.615, 0.6196, 0.6243, 0.6292, 0.6344, 0.6397, 0.6453, 0.6513, 0.6577, 0.6645, 0.6719, 0.6798, 0.6881, 0.6967, 0.7057, 0.7147, 0.7239, 0.733, 0.7422, 0.7515, 0.761, 0.7709, 0.7815, 0.7928, 0.805, 0.8181, 0.832, 0.8464, 0.8612, 0.8758, 0.8899, 0.9032, 0.9152, 0.9257, 0.9346, 0.9418, 0.9476, 0.952, 0.9553, 0.9577, 0.9595, 0.9609, 0.962, 0.9628, 0.9633, 0.9635, 0.9633, 0.9627, 0.9615, 0.9599, 0.9579, 0.9557, 0.9532, 0.9507, 0.9483, 0.9461, 0.9441, 0.9424, 0.9409, 0.9395, 0.9381, 0.9367, 0.9352, 0.9336, 0.9319, 0.93, 0.9282, 0.9264, 0.9247, 0.9233, 0.9222, 0.9214, 0.921, 0.9209, 0.9212, 0.9218, 0.9226, 0.9238, 0.9251, 0.9267, 0.9284, 0.9303, 0.9323, 0.9344, 0.9366, 0.9387, 0.9409, 0.9429, 0.9448, 0.9467, 0.9483, 0.9499, 0.9513, 0.9525, 0.9536, 0.9546, 0.9554, 0.9562, 0.9568, 0.9572, 0.9575, 0.9575, 0.9572, 0.9566, 0.9556, 0.9541, 0.952, 0.9492, 0.9457, 0.9415, 0.9364, 0.9305, 0.9238, 0.9163, 0.908, 0.8991, 0.8896, 0.8796, 0.8691, 0.8583, 0.8472, 0.836, 0.8246, 0.8132, 0.802, 0.7909, 0.7801, 0.7697, 0.7598, 0.7504, 0.7415, 0.7333, 0.7256, 0.7184, 0.7117, 0.7053, 0.6993, 0.6935, 0.6878, 0.6824, 0.677, 0.6718, 0.6668, 0.6619, 0.6572, 0.6527, 0.6484, 0.6443, 0.6404, 0.6366, 0.633, 0.6296, 0.6264, 0.6234, 0.6205, 0.618, 0.6157, 0.6137, 0.6119, 0.6104, 0.6091, 0.608, 0.607], "req": 0.8139, "aspect": 0.656, "colors": {"top": "#eebad1", "mid": "#d59fc5", "bottom": "#c696c2"}, "eye": {"pos": [[-0.1227, 0.6006], [0.0987, 0.6006]], "w": 0.0881, "h": 0.0859, "p": 2.0, "rot": 0, "pw": 0.525, "ph": 0.552, "prot": 0, "pdx": 0.158, "pdy": -0.162, "clip": true, "lidU": 0}, "mouth": {"x": -0.0122, "y": 0.3998, "w": 0.0781, "up": 0.0, "down": 0.0, "curve": 0.0357, "skew": 0.0, "t": 0.0053, "q": 2}}, "gumdrop": {"profile": [0.9137, 0.9105, 0.9072, 0.9038, 0.9004, 0.897, 0.8936, 0.8904, 0.8873, 0.8843, 0.8815, 0.8787, 0.876, 0.8734, 0.8708, 0.8682, 0.8657, 0.8633, 0.861, 0.8588, 0.8568, 0.8548, 0.853, 0.8513, 0.8497, 0.8481, 0.8465, 0.8449, 0.8433, 0.8417, 0.8401, 0.8387, 0.8373, 0.836, 0.8349, 0.834, 0.8332, 0.8325, 0.832, 0.8314, 0.8309, 0.8305, 0.83, 0.8296, 0.8293, 0.8292, 0.8292, 0.8294, 0.8297, 0.8302, 0.8308, 0.8315, 0.8321, 0.8327, 0.8332, 0.8336, 0.8339, 0.8341, 0.8344, 0.8347, 0.8352, 0.8359, 0.8368, 0.8379, 0.8391, 0.8405, 0.8419, 0.8433, 0.8447, 0.846, 0.8473, 0.8486, 0.85, 0.8513, 0.8528, 0.8543, 0.8559, 0.8574, 0.8588, 0.8599, 0.8607, 0.8611, 0.861, 0.8604, 0.8595, 0.8582, 0.8569, 0.8556, 0.8545, 0.8538, 0.8535, 0.8537, 0.8544, 0.8554, 0.8567, 0.8581, 0.8594, 0.8605, 0.8613, 0.8616, 0.8615, 0.8609, 0.86, 0.8587, 0.8572, 0.8557, 0.854, 0.8523, 0.8507, 0.8491, 0.8476, 0.8461, 0.8446, 0.8431, 0.8415, 0.84, 0.8385, 0.837, 0.8355, 0.834, 0.8326, 0.8312, 0.8298, 0.8284, 0.8271, 0.8257, 0.8244, 0.823, 0.8216, 0.8203, 0.819, 0.8179, 0.8169, 0.8161, 0.8155, 0.8152, 0.8152, 0.8154, 0.8159, 0.8166, 0.8175, 0.8185, 0.8196, 0.8208, 0.8219, 0.823, 0.8242, 0.8253, 0.8264, 0.8275, 0.8288, 0.8302, 0.8318, 0.8336, 0.8357, 0.8379, 0.8403, 0.8429, 0.8455, 0.8483, 0.8511, 0.8538, 0.8566, 0.8594, 0.8623, 0.8651, 0.868, 0.8711, 0.8742, 0.8775, 0.8809, 0.8845, 0.8883, 0.8923, 0.8964, 0.9006, 0.9049, 0.9093, 0.9137, 0.9181, 0.9223, 0.9263, 0.93, 0.9334, 0.9364, 0.939, 0.9414, 0.9436, 0.9457, 0.9479, 0.9503, 0.9532, 0.9565, 0.9604, 0.9647, 0.9694, 0.9744, 0.9794, 0.9843, 0.9887, 0.9926, 0.9957, 0.9979, 0.9994, 1.0, 0.9999, 0.9993, 0.9982, 0.9968, 0.9951, 0.9932, 0.9912, 0.989, 0.9865, 0.9838, 0.9806, 0.977, 0.973, 0.9686, 0.9637, 0.9584, 0.9528, 0.9469, 0.9406, 0.934, 0.9272, 0.92, 0.9125, 0.9047, 0.8966, 0.8882, 0.8796, 0.8708, 0.8619, 0.853, 0.8442, 0.8355, 0.827, 0.8187, 0.8106, 0.8027, 0.7951, 0.7877, 0.7806, 0.7737, 0.7672, 0.761, 0.7551, 0.7495, 0.7444, 0.7396, 0.7351, 0.7309, 0.727, 0.7233, 0.7199, 0.7166, 0.7136, 0.7108, 0.7082, 0.7059, 0.7039, 0.7021, 0.7006, 0.6993, 0.6983, 0.6975, 0.6968, 0.6962, 0.6959, 0.6957, 0.6956, 0.6958, 0.6963, 0.697, 0.698, 0.6992, 0.7007, 0.7025, 0.7044, 0.7064, 0.7086, 0.711, 0.7135, 0.7163, 0.7194, 0.7227, 0.7265, 0.7306, 0.735, 0.7398, 0.7449, 0.7502, 0.7558, 0.7615, 0.7674, 0.7735, 0.7799, 0.7867, 0.794, 0.8018, 0.8103, 0.8193, 0.829, 0.839, 0.8494, 0.8599, 0.8703, 0.8804, 0.8901, 0.8993, 0.908, 0.916, 0.9235, 0.9306, 0.9373, 0.9437, 0.9498, 0.9557, 0.9613, 0.9666, 0.9715, 0.976, 0.9798, 0.9832, 0.9859, 0.988, 0.9897, 0.9909, 0.9918, 0.9923, 0.9926, 0.9927, 0.9925, 0.9919, 0.991, 0.9895, 0.9875, 0.9849, 0.9816, 0.9778, 0.9734, 0.9686, 0.9637, 0.9586, 0.9537, 0.949, 0.9447, 0.9409, 0.9376, 0.9348, 0.9324, 0.9304, 0.9287, 0.927, 0.9253, 0.9235, 0.9214, 0.9191, 0.9165], "req": 0.8615, "aspect": 1.2, "colors": {"top": "#decbe5", "mid": "#b4add9", "bottom": "#a0a1d3"}, "eye": {"pos": [[-0.2724, 0.502], [-0.0787, 0.502]], "w": 0.0756, "h": 0.084, "p": 2.0, "rot": 0, "pw": 0.667, "ph": 0.6, "prot": 0, "pdx": -0.25, "pdy": -0.38, "clip": true, "lidU": 0}, "mouth": {"x": -0.1655, "y": 0.3844, "w": 0.0235, "up": 0.0235, "down": 0.0235, "curve": 0.0, "skew": 0.0, "t": 0.0, "q": 2}}, "diamond": {"profile": [0.5787, 0.5777, 0.5765, 0.5751, 0.5736, 0.572, 0.5704, 0.5688, 0.5673, 0.566, 0.5648, 0.5637, 0.5628, 0.5619, 0.5611, 0.5603, 0.5595, 0.5588, 0.5581, 0.5575, 0.5571, 0.5569, 0.5568, 0.557, 0.5574, 0.558, 0.5587, 0.5595, 0.5605, 0.5615, 0.5627, 0.5639, 0.5654, 0.5671, 0.569, 0.5711, 0.5736, 0.5763, 0.5793, 0.5825, 0.586, 0.5897, 0.5936, 0.5977, 0.6021, 0.6067, 0.6116, 0.6167, 0.6221, 0.6277, 0.6336, 0.6397, 0.6461, 0.6527, 0.6597, 0.6669, 0.6745, 0.6826, 0.6911, 0.7, 0.7094, 0.7193, 0.7296, 0.7403, 0.7514, 0.7629, 0.7747, 0.787, 0.7998, 0.8131, 0.8271, 0.8417, 0.8568, 0.8724, 0.8882, 0.904, 0.9194, 0.934, 0.9476, 0.9597, 0.9702, 0.979, 0.986, 0.9913, 0.995, 0.9976, 0.9991, 0.9998, 1.0, 0.9997, 0.9991, 0.9979, 0.9962, 0.9938, 0.9905, 0.9861, 0.9804, 0.9734, 0.9651, 0.9555, 0.9447, 0.9327, 0.9197, 0.9059, 0.8915, 0.8767, 0.8615, 0.8463, 0.8311, 0.8161, 0.8015, 0.7875, 0.7741, 0.7614, 0.7495, 0.7383, 0.7278, 0.7178, 0.7084, 0.6993, 0.6905, 0.6819, 0.6736, 0.6655, 0.6577, 0.6503, 0.6433, 0.6369, 0.631, 0.6257, 0.6209, 0.6165, 0.6125, 0.6088, 0.6051, 0.6015, 0.5979, 0.5944, 0.5909, 0.5875, 0.5843, 0.5814, 0.5788, 0.5766, 0.5748, 0.5733, 0.5721, 0.5711, 0.5702, 0.5694, 0.5686, 0.5678, 0.5671, 0.5664, 0.5658, 0.5654, 0.5652, 0.5651, 0.5653, 0.5656, 0.5661, 0.5667, 0.5674, 0.5682, 0.569, 0.5699, 0.5709, 0.572, 0.5733, 0.5746, 0.5762, 0.5778, 0.5794, 0.581, 0.5826, 0.584, 0.5852, 0.5862, 0.587, 0.5877, 0.5881, 0.5885, 0.5889, 0.5893, 0.5899, 0.5905, 0.5913, 0.5923, 0.5932, 0.5942, 0.5952, 0.596, 0.5966, 0.597, 0.5972, 0.5971, 0.5968, 0.5964, 0.5959, 0.5954, 0.595, 0.5947, 0.5946, 0.5947, 0.5949, 0.5953, 0.5959, 0.5964, 0.597, 0.5976, 0.5982, 0.5987, 0.5993, 0.6001, 0.601, 0.6022, 0.6038, 0.6058, 0.6081, 0.6109, 0.6139, 0.6172, 0.6207, 0.6242, 0.6277, 0.6312, 0.6346, 0.6381, 0.6416, 0.6452, 0.6491, 0.6532, 0.6577, 0.6625, 0.6677, 0.6732, 0.679, 0.6851, 0.6915, 0.6981, 0.705, 0.7123, 0.72, 0.7282, 0.737, 0.7463, 0.7563, 0.7669, 0.7781, 0.7899, 0.8021, 0.8148, 0.8279, 0.8413, 0.855, 0.8688, 0.8828, 0.8966, 0.9102, 0.9234, 0.9358, 0.9472, 0.9574, 0.9662, 0.9735, 0.9794, 0.9838, 0.9869, 0.9891, 0.9905, 0.9913, 0.9918, 0.9919, 0.9916, 0.9907, 0.9889, 0.9858, 0.981, 0.9743, 0.9656, 0.9546, 0.9416, 0.9269, 0.9108, 0.894, 0.8768, 0.8599, 0.8436, 0.8282, 0.814, 0.8009, 0.7888, 0.7775, 0.767, 0.7569, 0.7471, 0.7375, 0.7281, 0.719, 0.7103, 0.702, 0.6943, 0.6871, 0.6805, 0.6743, 0.6686, 0.6631, 0.6578, 0.6526, 0.6474, 0.6423, 0.6373, 0.6324, 0.6279, 0.6237, 0.62, 0.6167, 0.614, 0.6116, 0.6095, 0.6076, 0.6059, 0.6041, 0.6024, 0.6007, 0.5989, 0.5973, 0.5958, 0.5944, 0.5932, 0.5923, 0.5916, 0.591, 0.5906, 0.5903, 0.59, 0.5898, 0.5896, 0.5895, 0.5894, 0.5895, 0.5896, 0.5898, 0.5899, 0.5901, 0.5901, 0.59, 0.5896, 0.589, 0.5883, 0.5873, 0.5863, 0.5852, 0.5841, 0.5832, 0.5823, 0.5816, 0.5809, 0.5803, 0.5796], "req": 0.7042, "aspect": 0.586, "colors": {"top": "#acc1de", "mid": "#8babc1", "bottom": "#8aa8b4"}, "eye": {"pos": [[-0.1135, 0.5698], [0.1135, 0.5698]], "w": 0.0887, "h": 0.1096, "p": 1.7, "rot": 0, "pw": 0.547, "ph": 0.443, "prot": 0, "pdx": 0.012, "pdy": -0.143, "clip": true, "lidU": 0.5}, "mouth": {"x": -0.0123, "y": 0.3923, "w": 0.0209, "up": 0.0209, "down": 0.0209, "curve": 0.0, "skew": 0.0, "t": 0.0, "q": 2}}, "cloud": {"profile": [0.9409, 0.9316, 0.921, 0.9091, 0.8959, 0.8817, 0.8668, 0.8516, 0.837, 0.8235, 0.8119, 0.803, 0.7971, 0.7944, 0.795, 0.7985, 0.8042, 0.8114, 0.8193, 0.827, 0.8339, 0.8395, 0.8436, 0.8463, 0.8478, 0.8484, 0.8486, 0.8488, 0.849, 0.8495, 0.85, 0.8505, 0.8504, 0.8497, 0.8479, 0.8451, 0.8412, 0.8365, 0.8312, 0.8256, 0.8201, 0.8147, 0.8096, 0.8046, 0.7995, 0.7939, 0.7876, 0.7804, 0.772, 0.7627, 0.7528, 0.7427, 0.7331, 0.7247, 0.7179, 0.7134, 0.7113, 0.7117, 0.7143, 0.7189, 0.7249, 0.7317, 0.7388, 0.7459, 0.7526, 0.7588, 0.7644, 0.7696, 0.7744, 0.7791, 0.7837, 0.7883, 0.793, 0.7975, 0.802, 0.8063, 0.8103, 0.8139, 0.8172, 0.8201, 0.8226, 0.8247, 0.8265, 0.8278, 0.8287, 0.8291, 0.8292, 0.8289, 0.8284, 0.8278, 0.8273, 0.827, 0.827, 0.8274, 0.828, 0.8288, 0.8294, 0.8297, 0.8293, 0.8281, 0.826, 0.823, 0.8191, 0.8148, 0.8101, 0.8054, 0.801, 0.7969, 0.793, 0.7893, 0.7853, 0.7808, 0.7754, 0.769, 0.7616, 0.7534, 0.7447, 0.7363, 0.7288, 0.7229, 0.7193, 0.7184, 0.7205, 0.7255, 0.7329, 0.7423, 0.7529, 0.764, 0.7748, 0.785, 0.7941, 0.802, 0.8088, 0.8148, 0.8202, 0.8252, 0.8302, 0.8352, 0.8401, 0.845, 0.8495, 0.8536, 0.857, 0.8597, 0.8618, 0.8632, 0.8642, 0.865, 0.8658, 0.8665, 0.8673, 0.8679, 0.8682, 0.868, 0.8669, 0.8647, 0.8615, 0.8573, 0.8522, 0.8467, 0.8412, 0.8364, 0.8326, 0.8306, 0.8305, 0.8327, 0.8372, 0.8439, 0.8526, 0.8627, 0.8739, 0.8857, 0.8975, 0.9089, 0.9194, 0.9287, 0.9367, 0.9431, 0.9482, 0.9519, 0.9545, 0.9563, 0.9577, 0.9589, 0.9603, 0.9619, 0.964, 0.9664, 0.969, 0.9716, 0.9739, 0.9757, 0.9767, 0.9769, 0.9761, 0.9745, 0.9723, 0.9697, 0.9668, 0.9639, 0.961, 0.958, 0.9546, 0.9506, 0.9456, 0.9392, 0.9314, 0.9219, 0.911, 0.899, 0.8864, 0.874, 0.8623, 0.8522, 0.844, 0.8382, 0.8347, 0.8335, 0.8341, 0.836, 0.8386, 0.8412, 0.8433, 0.8445, 0.8446, 0.8434, 0.8411, 0.8378, 0.8338, 0.8293, 0.8245, 0.8196, 0.8146, 0.8096, 0.8046, 0.7995, 0.7945, 0.7894, 0.7843, 0.7793, 0.7743, 0.7694, 0.7646, 0.7599, 0.7551, 0.7504, 0.7456, 0.7406, 0.7356, 0.7306, 0.7256, 0.7207, 0.716, 0.7115, 0.7072, 0.7029, 0.6987, 0.6943, 0.6896, 0.6846, 0.6792, 0.6736, 0.6679, 0.6625, 0.6577, 0.6538, 0.6512, 0.6502, 0.6507, 0.6529, 0.6566, 0.6614, 0.6672, 0.6735, 0.68, 0.6864, 0.6925, 0.6983, 0.7037, 0.7088, 0.7136, 0.7182, 0.7226, 0.727, 0.7312, 0.7354, 0.7396, 0.7437, 0.7478, 0.752, 0.7565, 0.7612, 0.7663, 0.7717, 0.7774, 0.7833, 0.7891, 0.7947, 0.7999, 0.8045, 0.8085, 0.8118, 0.8146, 0.8169, 0.8191, 0.8213, 0.8236, 0.826, 0.8285, 0.831, 0.8334, 0.8353, 0.8366, 0.8373, 0.8375, 0.8374, 0.8373, 0.8377, 0.839, 0.8415, 0.8458, 0.8517, 0.8593, 0.8684, 0.8784, 0.889, 0.8995, 0.9095, 0.9187, 0.9269, 0.934, 0.9401, 0.9455, 0.9505, 0.9553, 0.9602, 0.9653, 0.9706, 0.976, 0.9813, 0.9863, 0.9908, 0.9944, 0.9972, 0.9991, 1.0, 1.0, 0.9992, 0.9978, 0.9957, 0.9932, 0.9902, 0.9868, 0.983, 0.9787, 0.974, 0.9687, 0.9629, 0.9564, 0.9491], "req": 0.8318, "aspect": 1.26, "colors": {"top": "#d1dce4", "mid": "#adbddc", "bottom": "#a5b0db"}, "eye": {"pos": [[-0.0231, 0.3407], [0.1307, 0.3407]], "w": 0.0583, "h": 0.1078, "p": 2.0, "rot": -0.1, "pw": 0.78, "ph": 0.676, "prot": 0, "pdx": -0.63, "pdy": 0.0, "clip": false, "lidU": 0}, "mouth": {"x": 0.0386, "y": 0.1455, "w": 0.0769, "up": 0.0, "down": 0.0, "curve": 0.035, "skew": 0.0058, "t": 0.0047, "q": 2}}, "flower": {"profile": [0.9351, 0.9428, 0.9497, 0.9557, 0.9611, 0.9658, 0.97, 0.9737, 0.977, 0.98, 0.9829, 0.9857, 0.9883, 0.9908, 0.9932, 0.9952, 0.9969, 0.9982, 0.9988, 0.9988, 0.9981, 0.9966, 0.9944, 0.9916, 0.9881, 0.9841, 0.9796, 0.9748, 0.9695, 0.9639, 0.9579, 0.9515, 0.9446, 0.9372, 0.9291, 0.9203, 0.9107, 0.9004, 0.8893, 0.8775, 0.8651, 0.8521, 0.8389, 0.8257, 0.8127, 0.8001, 0.7884, 0.7778, 0.7687, 0.7612, 0.7555, 0.7518, 0.7501, 0.7504, 0.7526, 0.7565, 0.7619, 0.7686, 0.7763, 0.7847, 0.7936, 0.8028, 0.812, 0.8211, 0.83, 0.8386, 0.8468, 0.8546, 0.8619, 0.869, 0.8756, 0.882, 0.8882, 0.8941, 0.8998, 0.9053, 0.9105, 0.9153, 0.9196, 0.9233, 0.9263, 0.9286, 0.9301, 0.9309, 0.931, 0.9306, 0.9299, 0.9291, 0.9283, 0.9278, 0.9277, 0.9279, 0.9285, 0.9293, 0.9302, 0.9309, 0.9312, 0.931, 0.9301, 0.9284, 0.926, 0.9227, 0.9188, 0.9144, 0.9096, 0.9045, 0.8992, 0.8938, 0.8883, 0.8826, 0.8766, 0.8703, 0.8635, 0.8562, 0.8483, 0.8398, 0.8309, 0.8215, 0.812, 0.8024, 0.7929, 0.7839, 0.7755, 0.768, 0.7616, 0.7565, 0.7529, 0.7509, 0.7506, 0.7523, 0.7558, 0.7611, 0.7683, 0.7771, 0.7875, 0.7991, 0.8117, 0.8249, 0.8386, 0.8523, 0.8657, 0.8787, 0.8909, 0.9023, 0.9127, 0.9222, 0.9308, 0.9385, 0.9455, 0.9519, 0.958, 0.9636, 0.9691, 0.9743, 0.9794, 0.9841, 0.9885, 0.9923, 0.9955, 0.9979, 0.9994, 1.0, 0.9996, 0.9983, 0.9963, 0.9937, 0.9906, 0.9873, 0.9841, 0.9808, 0.9778, 0.975, 0.9723, 0.9697, 0.9669, 0.9638, 0.9602, 0.9559, 0.9507, 0.9446, 0.9374, 0.9291, 0.9197, 0.9093, 0.898, 0.8859, 0.8734, 0.8606, 0.8479, 0.8354, 0.8237, 0.8129, 0.8035, 0.7957, 0.7898, 0.7859, 0.7841, 0.7845, 0.787, 0.7915, 0.7976, 0.8053, 0.8141, 0.8237, 0.8339, 0.8444, 0.8549, 0.8652, 0.8753, 0.8849, 0.894, 0.9025, 0.9105, 0.9179, 0.9248, 0.9312, 0.9371, 0.9426, 0.9476, 0.9523, 0.9566, 0.9605, 0.964, 0.9672, 0.9699, 0.9721, 0.9739, 0.9753, 0.9763, 0.9768, 0.977, 0.9769, 0.9764, 0.9756, 0.9743, 0.9726, 0.9702, 0.9671, 0.9632, 0.9585, 0.9528, 0.9463, 0.9392, 0.9316, 0.9237, 0.9159, 0.9083, 0.901, 0.8941, 0.8876, 0.8812, 0.8747, 0.8678, 0.8601, 0.8514, 0.8415, 0.8304, 0.8182, 0.8052, 0.7918, 0.7784, 0.7655, 0.7536, 0.7431, 0.7341, 0.7268, 0.7211, 0.7171, 0.7144, 0.7129, 0.7125, 0.713, 0.7146, 0.7173, 0.7213, 0.7268, 0.7338, 0.7425, 0.7527, 0.7644, 0.7771, 0.7904, 0.8039, 0.8171, 0.8296, 0.841, 0.8512, 0.8602, 0.8681, 0.8752, 0.8817, 0.888, 0.8944, 0.9011, 0.9082, 0.9156, 0.9234, 0.9312, 0.9388, 0.946, 0.9525, 0.9583, 0.9631, 0.967, 0.97, 0.9722, 0.9738, 0.9749, 0.9755, 0.9759, 0.976, 0.9758, 0.9753, 0.9745, 0.9734, 0.9719, 0.97, 0.9675, 0.9647, 0.9613, 0.9575, 0.9531, 0.9483, 0.9431, 0.9373, 0.9311, 0.9244, 0.9172, 0.9095, 0.9013, 0.8926, 0.8835, 0.874, 0.864, 0.8538, 0.8434, 0.8331, 0.8229, 0.8133, 0.8045, 0.7967, 0.7905, 0.7859, 0.7834, 0.783, 0.7848, 0.7889, 0.795, 0.803, 0.8126, 0.8235, 0.8352, 0.8475, 0.86, 0.8724, 0.8845, 0.8961, 0.907, 0.9172, 0.9265], "req": 0.8885, "aspect": 1.098, "colors": {"top": "#e9e0ef", "mid": "#c8cbe8", "bottom": "#b7c1e4"}, "eye": {"pos": [[-0.1955, 0.2853], [0.1526, 0.2853]], "w": 0.1003, "h": 0.0826, "p": 2.6, "rot": 0, "pw": 0.441, "ph": 0.607, "prot": 0, "pdx": 0.294, "pdy": -0.214, "clip": true, "lidU": 0}, "mouth": {"x": -0.0185, "y": 0.1496, "w": 0.0767, "up": 0.0018, "down": 0.059, "curve": 0.0024, "skew": 0.0, "t": 0.0018, "q": 2.4}}};
+
+/* Team roster (from the project's character bible). */
+const CHARS = [
+  { key: 'splat',   name: 'ใหม่',    shape: 'แฉก',    role: 'CI / Branding', mbti: 'INFJ', trait: 'ครีเอทีฟ ใจดี ชอบของใหม่ ไม่ค่อยมั่นใจ เสียงเบา', trigger: 'รู้สึกแย่ถ้าตัวเองเป็นตัวถ่วง' },
+  { key: 'pill',    name: 'ตัวที่ 2', shape: 'แท่ง',    role: 'รอกำหนดบทบาท', mbti: '—', trait: 'ยังไม่ได้ใส่นิสัย ใช้บุคลิกกลางๆ ไปก่อน', trigger: '—' },
+  { key: 'gumdrop', name: 'มิน',     shape: 'หยด',    role: 'CEO', mbti: 'ENFJ', trait: 'มั่นใจ พร้อมลุย เปิดกว้าง ใจแลกใจ', trigger: 'นอยง่าย คิดมากถ้ามีอะไรกระทบ' },
+  { key: 'diamond', name: 'แอ๊ค',    shape: 'ปริซึม', role: 'UI / Motion', mbti: 'ISFJ', trait: 'ละเอียดอ่อน เนี้ยบ รักความสวยงาม', trigger: 'นอยถ้ารู้สึกว่าไม่มีใครเห็นความสำคัญ' },
+  { key: 'cloud',   name: 'ฟ้า',     shape: 'เมฆ',    role: 'Handoff / Dev', mbti: 'INFJ', trait: 'ส่วนตัวสูง ทำงานไว ละเอียดกับจุดเล็กๆ', trigger: 'วีนง่ายถ้าขัดใจ' },
+  { key: 'flower',  name: 'ไผ่',     shape: 'ดอกไม้', role: 'UX / CX', mbti: 'ENFP', trait: 'พลังล้น เสียงดัง ชอบคุย มองภาพกว้าง', trigger: 'ซึมถ้าไม่มีใครสนใจ' },
+];
+
+/* How each personality reacts. ignore = seconds before feeling ignored; gains scale how fast moods build. */
+const PERSONA = {
+  flower: { ignore: 12, pet: 1.25, play: 1.5, poke: .09, stretch: .25, squish: .3, grabExpr: 'joy', hurtExpr: 'grumpy', lonelyExpr: 'sad',
+    lines: { hello: ['หวัดดีีี! มาเล่นกันน!', 'มาแล้วว ทำอะไรกันดี!'], poke: ['เฮ้ย! จิ้มทำไมม 555', 'อุ๊ยย จั๊กจี้!'], pokeSpam: ['พอแล้วว จิ้มรัวเลยย!'], pet: ['ชอบบบ ลูบอีกก!', 'ฟินนน~'],
+      grab: ['อุ๊ย จับแล้ว!', 'พาไปไหนน!'], stretchBig: ['ยืดดดด ว้าววว!'], boing: ['ดึ๋งงง!', 'อีกรอบบ!'], squish: ['บี้ๆ จั๊กจี้!'], squishHard: ['แบนแล้วว ปล่อยยย!'],
+      lonely: ['ไม่มีใครเล่นด้วยเลย…', 'ฮัลโหลล มีใครอยู่มั้ย…'], sleepy: ['เบื่อ… งีบดีกว่า'], slap: ['โอ๊ยย! แรงไปปป'], back: ['กลับมาแล้ววว! คิดถึงง'] } },
+  splat: { ignore: 25, pet: 1.45, play: .8, poke: .12, stretch: .5, squish: .4, grabExpr: 'shy', hurtExpr: 'sad', lonelyExpr: 'sad',
+    lines: { hello: ['สวัสดีนะ…'], poke: ['อ๊ะ…', 'มีอะไรให้ช่วยมั้ย…'], pokeSpam: ['ขอโทษนะ… ทำอะไรผิดรึเปล่า'], pet: ['อุ่นจัง… ขอบคุณนะ', 'ดีใจจัง…'],
+      grab: ['เอ๊ะ จะพาไปไหน…'], stretchBig: ['ยืดเยอะแล้วนะ…'], boing: ['ฟุ้บ'], squish: ['เขินนะ…'], squishHard: ['เราเป็นภาระรึเปล่า…'],
+      lonely: ['ไม่เป็นไร… รอได้'], sleepy: ['ง่วงนิดหน่อย…'], slap: ['ขอโทษ ขอโทษ…'], back: ['กลับมาแล้วเหรอ… ดีใจจัง'] } },
+  pill: { ignore: 20, pet: 1, play: 1, poke: .15, stretch: .5, squish: .5, grabExpr: 'smile', hurtExpr: 'grumpy', lonelyExpr: 'sleepy',
+    lines: { hello: ['หวัดดี'], poke: ['จิ้มทำไม'], pokeSpam: ['พอก่อนน'], pet: ['สบายดี'], grab: ['โอ๊ะ'], stretchBig: ['ยาวแล้ว!'], boing: ['เด้ง!'], squish: ['บี้เบาๆ'], squishHard: ['แน่นไปแล้ว'],
+      lonely: ['เงียบจัง'], sleepy: ['zzz'], slap: ['โอ๊ย!'], back: ['มาแล้ว'] } },
+  gumdrop: { ignore: 18, pet: 1.05, play: 1.2, poke: .14, stretch: .4, squish: .5, grabExpr: 'joy', hurtExpr: 'sad', lonelyExpr: 'sad',
+    lines: { hello: ['มาแล้ว! ลุยกัน!'], poke: ['ฮ่าๆ มีอะไรเหรอ', 'ว่าไง มีงานด่วน?'], pokeSpam: ['เดี๋ยวๆ เราทำอะไรให้ไม่พอใจรึเปล่า…'], pet: ['ขอบใจนะ ใจแลกใจ!', 'ทีมเราดีที่สุด!'],
+      grab: ['ได้เลย พาไปไหนก็ไป!'], stretchBig: ['ไหวๆ ยังไหว!'], boing: ['กลับมาแล้ว!'], squish: ['กอดทีมแน่นๆ!'], squishHard: ['แรงไปนิด… คิดมากเลยนะ'],
+      lonely: ['ทุกคนไปไหนกันหมด…'], sleepy: ['พักแป๊บนึงนะ'], slap: ['…เขาหมายถึงเราใช่มั้ย'], back: ['กลับมาแล้ว! ลุยต่อ!'] } },
+  diamond: { ignore: 15, pet: .9, play: .7, poke: .2, stretch: .9, squish: .7, grabExpr: 'smile', hurtExpr: 'sad', lonelyExpr: 'sad',
+    lines: { hello: ['สวัสดี มุมนี้แสงสวยดี'], poke: ['ระวังเลเยอร์เคลื่อน!'], pokeSpam: ['ทรงเสียหมดแล้ว…'], pet: ['อืม… นุ่มนวลดี', 'easing พอดีเลย'],
+      grab: ['ขยับเบาๆ นะ'], stretchBig: ['สัดส่วนเพี้ยนแล้ว!'], boing: ['เด้งกลับพอดีเป๊ะ'], squish: ['squash & stretch สินะ'], squishHard: ['เสียทรงงง'],
+      lonely: ['ไม่มีใครเห็นเลยสินะ…'], sleepy: ['…'], slap: ['โอ๊ย งานพัง!'], back: ['ในที่สุดก็มีคนเห็น'] } },
+  cloud: { ignore: 40, pet: .6, play: .6, poke: .3, stretch: .8, squish: .8, grabExpr: 'grumpy', hurtExpr: 'grumpy', lonelyExpr: 'smile',
+    lines: { hello: ['…หวัดดี'], poke: ['อะไร', 'ว่า?'], pokeSpam: ['พอ! อย่ามายุ่ง!'], pet: ['…ก็ได้ ลูบนิดเดียวนะ'],
+      grab: ['ปล่อยนะ'], stretchBig: ['จะเอายังไงกันแน่!'], boing: ['ส่งแล้ว'], squish: ['ขอพื้นที่ส่วนตัวหน่อย'], squishHard: ['พอแล้ววว!'],
+      lonely: ['เงียบดี ชอบ'], sleepy: ['zzz'], slap: ['!!!'], back: ['…มาอีกแล้ว'] } },
+};
+
+const $ = (id) => document.getElementById(id);
+const clamp = (v, a, b) => Math.min(b, Math.max(a, v));
+const lerp = (a, b, t) => a + (b - a) * t;
+const smooth = (a, b, x) => { const t = clamp((x - a) / (b - a), 0, 1); return t * t * (3 - 2 * t); };
+const easeOut = (t) => 1 - Math.pow(1 - t, 3);
+const easeInOut = (t) => t < .5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
+const pick = (a) => Array.isArray(a) ? a[Math.floor(Math.random() * a.length)] : a;
+const V3 = THREE.Vector3;
+const reduceMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+/* ---------- renderer / scene ---------- */
+const stage = $('stage');
+const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+const coarse = matchMedia('(pointer: coarse)').matches;
+renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, coarse ? 1.75 : 2));
+renderer.outputColorSpace = THREE.SRGBColorSpace;
+renderer.toneMapping = THREE.NeutralToneMapping;
+renderer.setClearColor(0x000000, 0);
+renderer.domElement.classList.add('gl');
+stage.insertBefore(renderer.domElement, $('ov'));
+const ovCanvas = $('ov'), ov = ovCanvas.getContext('2d');
+
+const scene = new THREE.Scene();
+const camera = new THREE.PerspectiveCamera(28, 1, 0.1, 60);
+camera.position.set(0, 0.35, 6.4); camera.lookAt(0, 0, 0);
+scene.environment = new THREE.PMREMGenerator(renderer).fromScene(new RoomEnvironment(), 0.04).texture;
+
+const hemi = new THREE.HemisphereLight(0xffe1f2, 0x9cb0ea, 2.1); scene.add(hemi);
+const key = new THREE.DirectionalLight(0xfff5fb, 1.5); key.position.set(1.4, 3.6, 3.2); scene.add(key);
+const fill = new THREE.DirectionalLight(0xa8b8ff, .55); fill.position.set(-2.2, -2.4, 2.2); scene.add(fill);
+const rim = new THREE.DirectionalLight(0xffffff, 1.3); rim.position.set(-2.6, 1.6, -3.2); scene.add(rim);
+
+const bodyMat = new THREE.MeshPhysicalMaterial({ color: 0xdcd9f3, roughness: .9, sheen: 1, sheenRoughness: .42, sheenColor: new THREE.Color(0xf7efff), envMapIntensity: .35 });
+
+function canvasTex(size) { const c = document.createElement('canvas'); c.width = c.height = size; const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 4; return { c, g: c.getContext('2d'), t }; }
+function radial(size, inner, outer) { const x = canvasTex(size), gr = x.g.createRadialGradient(size / 2, size / 2, 0, size / 2, size / 2, size / 2); gr.addColorStop(0, inner); gr.addColorStop(1, outer); x.g.fillStyle = gr; x.g.fillRect(0, 0, size, size); x.t.needsUpdate = true; return x.t; }
+
+const decalBase = { transparent: true, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -4, polygonOffsetUnits: -4 };
+const TEX = 512;
+const eyeTex = [canvasTex(TEX), canvasTex(TEX)], mouthTex = canvasTex(TEX);
+const eyeMats = eyeTex.map(x => new THREE.MeshStandardMaterial({ map: x.t, roughness: .75, envMapIntensity: .4, ...decalBase }));
+const mouthMat = new THREE.MeshStandardMaterial({ map: mouthTex.t, roughness: .7, ...decalBase });
+const blushMat = new THREE.MeshBasicMaterial({ map: radial(128, 'rgba(246,150,190,.85)', 'rgba(246,150,190,0)'), opacity: 0, ...decalBase });
+
+/* rig(position) > squash(scale, pivot at feet) > turn(rotation, pivot at centre) > body + face */
+const rig = new THREE.Group(); scene.add(rig);
+const squash = new THREE.Group(); rig.add(squash);
+const turn = new THREE.Group(); squash.add(turn);
+const faceG = new THREE.Group();
+const shadow = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), new THREE.MeshBasicMaterial({ map: radial(128, 'rgba(70,70,130,0.42)', 'rgba(70,70,130,0)'), transparent: true, depthWrite: false }));
+shadow.rotation.x = -Math.PI / 2; scene.add(shadow);
+
+const ico = new THREE.IcosahedronGeometry(1, coarse ? 40 : 60); ico.deleteAttribute('normal'); ico.deleteAttribute('uv');
+const flatGeo = mergeVertices(ico);
+const dirs = flatGeo.attributes.position.array.slice();
+const insetGeo = flatGeo.clone();
+const body = new THREE.Mesh(insetGeo, bodyMat); body.frustumCulled = false;
+turn.add(body, faceG);
+
+/* ---------- state ---------- */
+let C = null, charKey = 'flower';
+const shape = { thick: .85, eye: 1.1 };
+let floorY = -1, bodyW = 2, dFront = .7;
+let BOX = .4, MBOX = .3, mScale = 1;
+let profR = () => 1, basePos = null, deformDirty = false;
+const geo = { top: 1, bot: 1, sideL: 1, sideR: 1 };
+
+function superPath(g, a, b, p) {
+  g.beginPath();
+  for (let i = 0; i <= 96; i++) { const t = i / 96 * Math.PI * 2, c = Math.cos(t), s = Math.sin(t);
+    const x = a * Math.sign(c) * Math.pow(Math.abs(c), 2 / p), y = b * Math.sign(s) * Math.pow(Math.abs(s), 2 / p);
+    i ? g.lineTo(x, y) : g.moveTo(x, y); }
+  g.closePath();
+}
+const superD = (dx, dy, a, b, p) => Math.pow(Math.pow(Math.abs(dx) / a, p) + Math.pow(Math.abs(dy) / b, p), 1 / p);
+
+/* ---------- body from the traced silhouette ---------- */
+function rebuildBody() {
+  const prof = C.profile, N = prof.length;
+  let mean = 0; for (const v of prof) mean += v; mean /= N;
+  const sample = (t) => { const u = ((t / (Math.PI * 2)) % 1 + 1) % 1 * N, i = Math.floor(u), f = u - i; return prof[i % N] * (1 - f) + prof[(i + 1) % N] * f; };
+  profR = sample;
+  geo.top = sample(Math.PI / 2); geo.bot = sample(-Math.PI / 2); geo.sideR = sample(0); geo.sideL = sample(Math.PI);
+  const pos = flatGeo.attributes.position, e = .86;
+  const dF = shape.thick * C.req, dB = dF * .8; dFront = dF;
+  for (let i = 0; i < pos.count; i++) {
+    const x = dirs[i * 3], y = dirs[i * 3 + 1], z = dirs[i * 3 + 2], c = Math.hypot(x, y);
+    const r = mean + (sample(Math.atan2(y, x)) - mean) * Math.pow(c, 2.4);
+    const k = c > 1e-7 ? Math.pow(c, e) / c : 0, zz = Math.sign(z) * Math.pow(Math.abs(z), e);
+    pos.setXYZ(i, x * k * r, y * k * r, zz * (z > 0 ? dF : dB));
+  }
+  pos.needsUpdate = true; flatGeo.computeVertexNormals(); flatGeo.computeBoundingBox();
+  const bb = flatGeo.boundingBox; floorY = bb.min.y; bodyW = bb.max.x - bb.min.x;
+  rig.position.y = floorY; turn.position.y = -floorY; shadow.position.y = floorY + .003;
+
+  // shallow eye sockets pressed into the clay
+  const ip = insetGeo.attributes.position, nor = flatGeo.attributes.normal, E = C.eye;
+  const S = shape.eye, grow = 1.12, depth = .16 * Math.min(E.w, E.h) * S;
+  const pupOff = [E.pdx * E.w * S, E.pdy * E.h * S];
+  for (let i = 0; i < pos.count; i++) {
+    let x = pos.getX(i), y = pos.getY(i), z = pos.getZ(i);
+    if (z > .1) {
+      let f = 0;
+      for (const [ex, ey] of E.pos) {
+        const dx0 = x - ex, dy0 = y - ey, cr = Math.cos(-E.rot), sr = Math.sin(-E.rot);
+        const dx = dx0 * cr - dy0 * sr, dy = dx0 * sr + dy0 * cr;
+        let d = superD(dx, dy, E.w * S * grow, E.h * S * grow, E.p);
+        if (!E.clip) d = Math.min(d, Math.hypot((dx - pupOff[0]) / (E.pw * E.w * S * 1.15), (dy - pupOff[1]) / (E.ph * E.h * S * 1.15)));
+        f = Math.max(f, 1 - smooth(.86, 1.14, d));
+      }
+      if (f > 0) { const dd = depth * f; x -= nor.getX(i) * dd; y -= nor.getY(i) * dd; z -= nor.getZ(i) * dd; }
+    }
+    ip.setXYZ(i, x, y, z);
+  }
+  ip.needsUpdate = true; insetGeo.computeVertexNormals(); insetGeo.computeBoundingSphere();
+  basePos = Float32Array.from(ip.array); deformDirty = false;
+  buildFace();
+}
+
+const ray = new THREE.Raycaster();
+const flatProbe = new THREE.Mesh(flatGeo), insetProbe = new THREE.Mesh(insetGeo);
+function decal(x, y, size, mat) {
+  flatProbe.updateMatrixWorld(); insetProbe.updateMatrixWorld();
+  ray.set(new V3(x, y, 5), new V3(0, 0, -1));
+  const hit = ray.intersectObject(flatProbe, false)[0]; if (!hit) return null;
+  const h = new THREE.Object3D(); h.position.copy(hit.point); h.lookAt(hit.point.clone().add(hit.face.normal));
+  const m = new THREE.Mesh(new DecalGeometry(insetProbe, hit.point, h.rotation, new V3(size, size, .24)), mat);
+  m.frustumCulled = false; m.userData.base = Float32Array.from(m.geometry.attributes.position.array);
+  return m;
+}
+function buildFace() {
+  faceG.children.slice().forEach(c => { c.geometry.dispose(); faceG.remove(c); });
+  const E = C.eye, S = shape.eye;
+  BOX = Math.max(E.w, E.h) * S * 3.4;
+  E.pos.forEach(([ex, ey], i) => { const m = decal(ex, ey, BOX, eyeMats[i]); if (m) faceG.add(m); });
+  const left = E.pos[0][0] < E.pos[1][0] ? 0 : 1;
+  E.pos.forEach(([ex, ey], i) => { const out = i === left ? -1 : 1; const m = decal(ex + out * E.w * S * .75, ey - E.h * S * 1.55, .24 * mScale, blushMat); if (m) faceG.add(m); });
+  MBOX = .34 * Math.max(1, mScale);
+  const m = decal(C.mouth.x, C.mouth.y, MBOX, mouthMat); if (m) faceG.add(m);
+  lastEyeKey = lastMouthKey = '';
+}
+
+function applyColours() {
+  const top = new THREE.Color(C.colors.top), mid = new THREE.Color(C.colors.mid), bot = new THREE.Color(C.colors.bottom), hsl = {};
+  bodyMat.color.copy(mid).lerp(new THREE.Color(1, 1, 1), .35);
+  top.getHSL(hsl); hemi.color.setHSL(hsl.h, Math.min(1, hsl.s * 1.6 + .08), Math.max(hsl.l, .9));
+  bot.getHSL(hsl); hemi.groundColor.setHSL(hsl.h, Math.min(1, hsl.s * 1.5), hsl.l * .8);
+  top.getHSL(hsl); bodyMat.sheenColor.setHSL(hsl.h, .5, .96);
+}
+
+/* ---------- soft-body deformers: each one pulls the clay around an anchor, then springs back ---------- */
+let defs = [];
+function newDef(anchor, R) {
+  const d = { a: anchor.clone(), d: new V3(), v: new V3(), target: null, R, invR2: 1 / (R * R), held: false };
+  defs.push(d);
+  if (defs.length > 7) { const i = defs.findIndex(x => !x.target); if (i >= 0) defs.splice(i, 1); }
+  return d;
+}
+function updateDefs(dt) {
+  const K = 150, D = 7.5, prev = new V3();
+  for (const f of defs) {
+    if (f.target) { prev.copy(f.d); f.d.lerp(f.target, 1 - Math.exp(-dt * 20)); f.v.copy(f.d).sub(prev).divideScalar(Math.max(dt, 1e-3)).multiplyScalar(.6); }
+    else { f.v.x += (-K * f.d.x - D * f.v.x) * dt; f.v.y += (-K * f.d.y - D * f.v.y) * dt; f.v.z += (-K * f.d.z - D * f.v.z) * dt; f.d.addScaledVector(f.v, dt); }
+  }
+  defs = defs.filter(f => f.target || f.d.lengthSq() > 1e-7 || f.v.lengthSq() > 1e-5);
+}
+function warp(src, dst, act) {
+  for (let i = 0; i < src.length; i += 3) {
+    const x = src[i], y = src[i + 1], z = src[i + 2];
+    let dx = 0, dy = 0, dz = 0;
+    for (const f of act) {
+      const ex = x - f.a.x, ey = y - f.a.y, ez = z - f.a.z, q = (ex * ex + ey * ey + ez * ez) * f.invR2;
+      if (q > 9) continue;
+      const w = Math.exp(-q); dx += f.d.x * w; dy += f.d.y * w; dz += f.d.z * w;
+    }
+    dst[i] = x + dx; dst[i + 1] = y + dy; dst[i + 2] = z + dz;
+  }
+}
+function applyDeform() {
+  const act = defs.filter(f => f.d.lengthSq() > 1e-8);
+  const ip = insetGeo.attributes.position;
+  if (!act.length) {
+    if (!deformDirty) return;
+    ip.array.set(basePos); ip.needsUpdate = true; insetGeo.computeVertexNormals();
+    faceG.children.forEach(m => { const p = m.geometry.attributes.position; p.array.set(m.userData.base); p.needsUpdate = true; });
+    deformDirty = false; return;
+  }
+  warp(basePos, ip.array, act); ip.needsUpdate = true; insetGeo.computeVertexNormals();
+  faceG.children.forEach(m => { const p = m.geometry.attributes.position; warp(m.userData.base, p.array, act); p.needsUpdate = true; });
+  deformDirty = true;
+}
+
+/* global squish (two palms / press from above / mouse wheel), as a damped spring per axis */
+const sq = { x: 0, vx: 0, y: 0, vy: 0 };
+let handTx = 0, handTy = 0, mouseSq = 0, mouseSqT = -9;
+function stepAxis(k, t, dt) {
+  const v = 'v' + k;
+  if (t > .005) { const p = sq[k]; sq[k] = lerp(sq[k], t, 1 - Math.exp(-dt * 14)); sq[v] = (sq[k] - p) / Math.max(dt, 1e-3) * .5; }
+  else { sq[v] += (-170 * sq[k] - 8 * sq[v]) * dt; sq[k] += sq[v] * dt; }
+  sq[k] = clamp(sq[k], -.25, .5);
+}
+
+/* ---------- face drawing ---------- */
+const INK = '#202429', WHITE = '#f4f4f6';
+function drawEye(i, st) {
+  const { g, t } = eyeTex[i], E = C.eye, S = shape.eye;
+  g.setTransform(1, 0, 0, 1, 0, 0); g.clearRect(0, 0, TEX, TEX);
+  g.translate(TEX / 2, TEX / 2); g.scale(TEX / BOX, -TEX / BOX);
+  const w = E.w * S * st.eye, h = E.h * S * st.eye;
+  let lu = st.lidU[i], ll = st.lidL[i]; const sum = lu + ll;
+  if (sum > .8) { const f = lerp(sum, 1, clamp((sum - .8) / .1, 0, 1)) / sum; lu *= f; ll *= f; }
+  lu += st.blink * Math.max(0, 1 - lu - ll);
+  if (lu + ll > .97) {
+    const dir = st.blink > .5 && st.lidU[i] + st.lidL[i] < .9 ? -1 : st.arc[i];
+    const aw = Math.max(w, h * .8);
+    g.lineCap = 'round'; g.lineWidth = Math.max(.012, .15 * Math.min(w, h)) * 1.05; g.strokeStyle = INK; g.beginPath();
+    if (dir > 0) { g.moveTo(-aw * .8, -h * .18); g.quadraticCurveTo(0, h * .7, aw * .8, -h * .18); }
+    else { g.moveTo(-aw * .82, h * .08); g.quadraticCurveTo(0, -h * .55, aw * .82, h * .08); }
+    g.stroke(); t.needsUpdate = true; return;
+  }
+  g.save(); g.rotate(E.rot);
+  superPath(g, w, h, E.p); g.fillStyle = WHITE; g.fill();
+  if (E.clip) { g.save(); superPath(g, w, h, E.p); g.clip(); }
+  const lim = E.clip ? 1.2 : 2.2;
+  g.save(); g.translate(clamp(st.lx, -lim, lim) * w * .5, clamp(st.ly, -lim, lim) * h * .5); g.rotate(E.prot);
+  g.fillStyle = INK; g.beginPath(); g.ellipse(0, 0, E.pw * w * st.pupil, E.ph * h * st.pupil, 0, 0, Math.PI * 2); g.fill(); g.restore();
+  if (E.clip) g.restore();
+  g.restore();
+  const W = Math.max(w, h) * 2.4, c = st.lidCurve;
+  g.globalCompositeOperation = 'destination-out'; g.fillStyle = '#000';
+  g.save(); g.rotate(st.tilt[i]);
+  if (lu > .005) { const y = h - lu * 2 * h; g.beginPath(); g.moveTo(-W, y + h * .12 * c); g.quadraticCurveTo(0, y - h * .14 * c, W, y + h * .12 * c); g.lineTo(W, h * 3); g.lineTo(-W, h * 3); g.closePath(); g.fill(); }
+  if (ll > .005) { const y = -h + ll * 2 * h; g.beginPath(); g.moveTo(-W, y - h * .1 * c); g.quadraticCurveTo(0, y + h * .14 * c, W, y - h * .1 * c); g.lineTo(W, -h * 3); g.lineTo(-W, -h * 3); g.closePath(); g.fill(); }
+  g.restore(); g.globalCompositeOperation = 'source-over';
+  t.needsUpdate = true;
+}
+function mouthEdges(m, x) {
+  const u = Math.abs(x / m.w), e = Math.pow(Math.max(0, 1 - Math.pow(u, m.q)), 1 / m.q);
+  const yc = m.curve * u * u + m.skew * (x / m.w), th = m.t * Math.pow(e, .4);
+  return [yc + m.up * e + th, yc - m.down * e - th];
+}
+function mouthPath(g, m, N = 64) {
+  g.beginPath();
+  for (let i = 0; i <= N; i++) { const x = -m.w + 2 * m.w * i / N; const [tp] = mouthEdges(m, x); i ? g.lineTo(x, tp) : g.moveTo(x, tp); }
+  for (let i = N - 1; i > 0; i--) { const x = -m.w + 2 * m.w * i / N; g.lineTo(x, mouthEdges(m, x)[1]); }
+  g.closePath();
+}
+function drawMouth(m) {
+  const { g, t } = mouthTex;
+  g.setTransform(1, 0, 0, 1, 0, 0); g.clearRect(0, 0, TEX, TEX);
+  g.translate(TEX / 2, TEX / 2); g.scale(TEX / MBOX, -TEX / MBOX);
+  g.lineJoin = 'round'; g.lineWidth = .0035; g.fillStyle = INK; g.strokeStyle = INK;
+  mouthPath(g, m); g.fill(); g.stroke();
+  if (m.tongue > .02 && m.down > .025) {
+    g.save(); mouthPath(g, m); g.clip();
+    g.fillStyle = '#ee8fb0'; g.beginPath(); g.ellipse(0, mouthEdges(m, 0)[1], m.w * .56, m.tongue * m.down * 1.2, 0, 0, Math.PI * 2); g.fill();
+    g.restore();
+  }
+  t.needsUpdate = true;
+}
+
+/* ---------- expressions ---------- */
+const M = (w, up, down, curve, t, tongue = 0, q = 2, skew = 0) => ({ w, up, down, curve, t, tongue, q, skew });
+const GENERIC = {
+  smile:     { th: 'ยิ้ม', en: 'Smile', lidU: [0, 0], lidL: [.12, .12], tilt: [0, 0], arc: [1, 1], eye: 1, pupil: 1, look: [.3, -.1], blush: .2, mouth: M(.07, .003, .055, .012, .003, 0, 2.4), sy: 1, rx: 0, rz: 0 },
+  joy:       { th: 'หัวเราะ', en: 'Joy', lidU: [.5, .5], lidL: [.5, .5], tilt: [0, 0], arc: [1, 1], eye: 1, pupil: 1, look: [0, 0], blush: .85, mouth: M(.09, .006, .095, .016, .003, .5, 2.4), sy: 1.02, rx: -.04, rz: 0 },
+  surprised: { th: 'ตกใจ', en: 'Surprised', lidU: [0, 0], lidL: [0, 0], tilt: [0, 0], arc: [-1, -1], eye: 1.1, pupil: .72, look: [0, .1], blush: 0, mouth: M(.04, .042, .048, 0, .003), sy: 1.04, rx: -.05, rz: 0 },
+  sad:       { th: 'เศร้า', en: 'Sad', lidU: [.34, .34], lidL: [0, 0], tilt: [.36, -.36], arc: [-1, -1], eye: 1, pupil: 1.02, look: [0, -.8], blush: 0, mouth: M(.055, 0, 0, -.026, .008), sy: .96, rx: .1, rz: 0 },
+  wink:      { th: 'ขยิบตา', en: 'Wink', lidU: [0, .5], lidL: [0, .5], tilt: [0, 0], arc: [1, 1], eye: 1, pupil: 1, look: [.35, -.1], blush: .45, mouth: M(.068, .003, .05, .016, .003, .3, 2.4), sy: 1, rx: 0, rz: -.06 },
+  sleepy:    { th: 'ง่วง', en: 'Sleepy', lidU: [.6, .6], lidL: [.06, .06], tilt: [.1, -.1], arc: [-1, -1], eye: 1, pupil: 1, look: [0, -.5], blush: .1, mouth: M(.026, .012, .018, 0, .003), sy: .97, rx: .05, rz: .04 },
+  grumpy:    { th: 'งอน', en: 'Grumpy', lidU: [.4, .4], lidL: [.06, .06], tilt: [-.32, .32], arc: [-1, -1], eye: 1, pupil: .95, look: [-.8, -.1], blush: .35, mouth: M(.046, 0, 0, -.011, .008), sy: .98, rx: 0, rz: .05 },
+  shy:       { th: 'เขิน', en: 'Shy', lidU: [.12, .12], lidL: [.3, .3], tilt: [0, 0], arc: [1, 1], eye: 1, pupil: 1, look: [-.7, -.7], blush: 1, mouth: M(.034, 0, 0, .018, .007), sy: .98, rx: .05, rz: -.08 },
+};
+const EXPR_KEYS = ['original', ...Object.keys(GENERIC)];
+const EXPR_TH = { original: 'ปกติ', ...Object.fromEntries(Object.entries(GENERIC).map(([k, v]) => [k, v.th])) };
+function exprFor(k) {
+  if (k === 'original') {
+    const E = C.eye, mo = C.mouth;
+    return { th: 'ปกติ', en: 'Original', lidU: [E.lidU, E.lidU], lidL: [0, 0], tilt: [0, 0], arc: [1, 1], eye: 1, pupil: 1, look: [E.pdx * 2, E.pdy * 2], lidCurve: E.lidU ? 0 : 1, blush: .1,
+      mouth: { w: mo.w, up: mo.up, down: mo.down, curve: mo.curve, t: mo.t, tongue: 0, q: mo.q, skew: mo.skew }, sy: 1, rx: 0, rz: 0 };
+  }
+  const x = GENERIC[k], s = mScale;
+  return { ...x, lidCurve: 1, lidU: [...x.lidU], lidL: [...x.lidL], tilt: [...x.tilt], look: [...x.look],
+    mouth: { ...x.mouth, w: x.mouth.w * s, up: x.mouth.up * s, down: x.mouth.down * s, curve: x.mouth.curve * s, t: x.mouth.t * Math.sqrt(s) } };
+}
+let target = null, exprKey = 'original', cur = null, lastEyeKey = '', lastMouthKey = '';
+
+/* ---------- body actions ---------- */
+const ACTS = {
+  hop:   { dur: 1.5, f(t) { const ph = (t * 3) % 1, fade = t > .9 ? (1 - t) / .1 : 1; return { y: .22 * Math.sin(Math.PI * ph) * fade, sy: lerp(1, .97 - .09 * Math.cos(2 * Math.PI * ph), fade), rz: .09 * Math.sin(2 * Math.PI * t * 1.5) * fade }; } },
+  shake: { dur: 1.1, f(t) { return { ry: .42 * Math.sin(t * Math.PI * 6) * Math.pow(1 - t, 1.2), rz: .05 * Math.sin(t * Math.PI * 6) * (1 - t) }; } },
+  nod:   { dur: 1.0, f(t) { const s = Math.sin(t * Math.PI * 4); return { rx: .2 * Math.max(0, s) * (1 - t * .5), sy: 1 - .045 * Math.abs(s) * (1 - t) }; } },
+  jelly: { dur: 1.3, f(t) { return { sy: 1 - .2 * Math.sin(t * Math.PI * 7) * Math.exp(-3.2 * t), rz: .03 * Math.sin(t * Math.PI * 5) * (1 - t) }; } },
+  tilt:  { dur: 1.7, f(t) { const b = Math.pow(Math.sin(Math.PI * t), .55); return { rz: .3 * b, rx: -.05 * b }; } },
+  sway:  { dur: 2.0, f(t) { const f = Math.sin(Math.PI * t); return { rz: .16 * Math.sin(t * Math.PI * 4) * f, y: .04 * Math.abs(Math.sin(t * Math.PI * 4)) * f }; } },
+};
+const EXPR_ACT = { joy: 'hop', grumpy: 'shake', surprised: 'jelly', shy: 'sway', sad: 'tilt', wink: 'nod' };
+let act = null, actT = 0, lastActT = -9;
+
+/* ---------- sound (tiny synth, starts after the first click) ---------- */
+let actx = null;
+function audioInit() { if (!actx) { try { actx = new (window.AudioContext || window.webkitAudioContext)(); } catch {} } else if (actx.state === 'suspended') actx.resume(); }
+function tone(f0, f1, dur, type = 'sine', vol = .12) {
+  if (!actx || !$('optSfx').checked) return;
+  const t = actx.currentTime, o = actx.createOscillator(), g = actx.createGain();
+  o.type = type; o.frequency.setValueAtTime(f0, t); o.frequency.exponentialRampToValueAtTime(Math.max(30, f1), t + dur);
+  g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(vol, t + .012); g.gain.exponentialRampToValueAtTime(.0008, t + dur);
+  o.connect(g).connect(actx.destination); o.start(t); o.stop(t + dur + .02);
+}
+const SFX = {
+  pop: () => tone(760, 260, .09, 'sine', .14),
+  pick: () => tone(330, 520, .12, 'triangle', .08),
+  boing: () => { tone(180, 520, .16, 'sine', .14); setTimeout(() => tone(520, 240, .22, 'sine', .08), 120); },
+  chirp: () => { tone(880, 1180, .07, 'sine', .06); setTimeout(() => tone(1050, 1400, .08, 'sine', .05), 80); },
+  squish: () => tone(140, 90, .2, 'triangle', .09),
+  slap: () => tone(420, 80, .14, 'square', .06),
+};
+
+/* ---------- mood engine ---------- */
+const mood = { joy: .2, annoy: 0, surprise: 0, shy: 0, lastTouch: 0, petT: -9, pokes: [], override: null, overrideT: 0, lonelySaid: false, sleepySaid: false, winkT: -9, nextWink: 6, why: '' };
+const persona = () => PERSONA[charKey];
+const sayLast = {}; let sayGlobal = -9, bubbleTimer = 0;
+function say(kind, force) {
+  if (!$('optTalk').checked) return;
+  const now = performance.now() / 1000;
+  if (!force && (now - (sayLast[kind] ?? -9) < 3.5 || now - sayGlobal < 1.4)) return;
+  const line = persona().lines[kind]; if (!line) return;
+  sayLast[kind] = now; sayGlobal = now;
+  const b = $('bubble'); b.textContent = pick(line); b.classList.add('show');
+  clearTimeout(bubbleTimer); bubbleTimer = setTimeout(() => b.classList.remove('show'), 2300);
+}
+function touch(time) {
+  const P = persona();
+  if (time - mood.lastTouch > P.ignore) say('back', true);
+  mood.lastTouch = time; mood.lonelySaid = false; mood.sleepySaid = false;
+}
+function onPoke(time) {
+  const P = persona(); touch(time);
+  mood.surprise = Math.max(mood.surprise, .75); mood.annoy += P.poke;
+  mood.pokes = mood.pokes.filter(t => time - t < 2.5); mood.pokes.push(time);
+  if (mood.pokes.length >= 4) { mood.annoy += .2; say('pokeSpam', true); } else say('poke');
+  mood.why = 'โดนจิ้ม'; SFX.pop();
+}
+let chirpT = -9;
+function petTick(dt, time) {
+  const P = persona(); touch(time);
+  mood.joy += dt * .32 * P.pet; mood.annoy -= dt * .25; mood.shy += dt * .04; mood.petT = time;
+  mood.why = 'กำลังโดนลูบหัว'; say('pet');
+  if (time - chirpT > 1.4) { chirpT = time; SFX.chirp(); }
+}
+function onGrabStart(time) { touch(time); mood.surprise = Math.max(mood.surprise, .45); mood.why = 'โดนหยิบ'; say('grab'); SFX.pick(); }
+function onRelease(stretch, time) {
+  touch(time);
+  if (stretch > .3) { say('boing'); mood.joy += .08 * persona().play; SFX.boing(); if (!act) { act = ACTS.jelly; actT = 0; } }
+}
+function onSlap(time) { touch(time); mood.surprise = 1; mood.annoy += .3; mood.why = 'โดนปัด'; say('slap', true); SFX.slap(); }
+
+let exprCand = 'original', candT = 0;
+function grabStretch() { let s = -1; for (const f of defs) if (f.held && f.target) s = Math.max(s, f.target.length() / 1.1); return s; }
+function busy() { return grabStretch() >= 0 || Math.max(sq.x, sq.y) > .05; }
+function pickExpr(time) {
+  if (mood.override && time < mood.overrideT) return mood.override;
+  mood.override = null;
+  const P = persona(), g = grabStretch(), s = Math.max(handTx, handTy, mouseSq) > .005 ? Math.max(sq.x, sq.y) : 0, L = time - mood.lastTouch;
+  if (mood.surprise > .55) return 'surprised';
+  if (mood.annoy > .62) return 'grumpy';
+  if (g >= 0) return g > .8 ? 'surprised' : P.grabExpr;
+  if (s > .04) return s > .24 ? (mood.annoy > .3 ? 'grumpy' : 'joy') : 'shy';
+  if (time - mood.petT < .5 || mood.joy > .62) return 'joy';
+  if (mood.shy > .45) return 'shy';
+  if (mood.annoy > .32) return P.hurtExpr;
+  if (L > P.ignore * 2.2) return 'sleepy';
+  if (L > P.ignore) return P.lonelyExpr;
+  if (mood.joy > .28) {
+    if (time > mood.nextWink) { mood.winkT = time + .7; mood.nextWink = time + 7 + Math.random() * 6; }
+    return time < mood.winkT ? 'wink' : 'smile';
+  }
+  return 'original';
+}
+function applyExpr(k, time) {
+  exprKey = k; target = exprFor(k);
+  if (!cur) cur = JSON.parse(JSON.stringify(target));
+  const a = EXPR_ACT[k];
+  if (a && !busy() && !act && time - lastActT > 1.8) { act = ACTS[a]; actT = 0; lastActT = time; }
+  Object.entries(exprBtns).forEach(([kk, b]) => b.setAttribute('aria-pressed', kk === k));
+  $('moodName').textContent = EXPR_TH[k];
+}
+function updateMood(dt, time) {
+  const P = persona(), L = time - mood.lastTouch;
+  const g = grabStretch(), s = Math.max(handTx, handTy, mouseSq) > .005 ? Math.max(sq.x, sq.y) : 0;
+  if (g >= 0) {
+    touch(time); mood.why = `กำลังยืด ${Math.round(g * 100)}%`;
+    if (g > .8) { mood.annoy += dt * P.stretch * .6; say('stretchBig'); } else mood.joy += dt * .12 * P.play;
+  }
+  if (s > .04) {
+    touch(time); mood.why = `โดนบี้ ${Math.round(s * 220)}%`;
+    if (s < .22) { mood.shy += dt * .5; say('squish'); } else { mood.annoy += dt * .4 * P.squish; mood.joy += dt * .05 * P.play; say('squishHard'); }
+  }
+  if (L > P.ignore && !mood.lonelySaid) { mood.lonelySaid = true; say('lonely', true); mood.why = 'ไม่มีใครเล่นด้วย'; }
+  if (L > P.ignore * 2.2 && !mood.sleepySaid) { mood.sleepySaid = true; say('sleepy', true); mood.why = 'เริ่มง่วง'; }
+  mood.joy = clamp(mood.joy - dt * (L > P.ignore ? .06 : .03), 0, 1);
+  mood.annoy = clamp(mood.annoy - dt * .07, 0, 1);
+  mood.surprise = clamp(mood.surprise - dt * 1.3, 0, 1);
+  mood.shy = clamp(mood.shy - dt * .22, 0, 1);
+  const k = pickExpr(time);
+  if (k !== exprCand) { exprCand = k; candT = time; }
+  if (k !== exprKey && (k === 'surprised' || time - candT > .18)) applyExpr(k, time);
+}
+let meterT = 0;
+function updateMeters(time) {
+  if (time - meterT < .1) return; meterT = time;
+  const P = persona(), lonely = clamp((time - mood.lastTouch - P.ignore * .4) / (P.ignore * 1.6), 0, 1);
+  const set = (id, v) => { $('m' + id).style.width = Math.round(v * 100) + '%'; $('o' + id).textContent = Math.round(v * 100); };
+  set('Joy', mood.joy); set('Annoy', mood.annoy); set('Shy', mood.shy); set('Lonely', lonely);
+  $('moodWhy').textContent = mood.why;
+  const n = $('now');
+  if (!cam.on) { if (camMsg) n.textContent = camMsg; else n.innerHTML = coarse ? `ใช้นิ้วเล่นได้เลย หรือ<b>เปิดกล้อง</b>เพื่อใช้มือ` : `ใช้เมาส์เล่นได้เลย หรือ<b>เปิดกล้อง</b>เพื่อใช้มือ`; }
+  else n.innerHTML = handsSeen ? `เห็นมือ <b>${handsSeen}</b> ข้าง · ${handModesText()}` : 'ยกมือขึ้นมาในกรอบกล้อง';
+}
+
+/* ---------- picking: screen point -> body space (cheap silhouette test, no raycast) ---------- */
+const _plane = new THREE.Plane(), _n = new V3(), _c = new V3(), _ndc = new THREE.Vector2();
+let SW = 1, SH = 1;
+function probe(sx, sy) {
+  _ndc.set(sx / SW * 2 - 1, -(sy / SH) * 2 + 1);
+  ray.setFromCamera(_ndc, camera);
+  turn.getWorldPosition(_c); camera.getWorldDirection(_n);
+  _plane.setFromNormalAndCoplanarPoint(_n, _c);
+  const w = ray.ray.intersectPlane(_plane, new V3()); if (!w) return null;
+  const local = turn.worldToLocal(w.clone());
+  const rl = rig.worldToLocal(w.clone());
+  const bodyPt = { x: rl.x, y: rl.y + floorY };
+  const th = Math.atan2(local.y, local.x), r = profR(th), rho = Math.hypot(local.x, local.y);
+  const inside = rho < r * 1.04;
+  local.z = inside ? dFront * Math.pow(Math.max(0, 1 - (rho / r) ** 2), .43) : 0;
+  return { inside, local, body: bodyPt, rho, r };
+}
+function grabTarget(f, h) {
+  const d = h.local.clone().sub(f.a); d.z = 0;
+  const L = d.length(); if (L > 1.1) d.multiplyScalar(1.1 / L);
+  d.z = Math.min(L, 1.1) * .22; f.target = d;
+}
+const inPetBand = (b) => Math.abs(b.x) < (geo.sideL + geo.sideR) / 2 * .95 && b.y > geo.top * .45 && b.y < geo.top * 1.5;
+
+/* ---------- mouse / touch ---------- */
+const canvas = renderer.domElement;
+const mouse = { x: 0, y: 0, active: false, down: false, downH: null, dx: 0, dy: 0, grab: null, prev: null, prevT: 0 };
+const stagePt = (e) => { const r = canvas.getBoundingClientRect(); return { x: e.clientX - r.left, y: e.clientY - r.top }; };
+const touches = new Map(); let pinch0 = 0;
+const pinchDist = () => { const [a, b] = [...touches.values()]; return Math.hypot(a.x - b.x, a.y - b.y); };
+canvas.addEventListener('pointerdown', e => {
+  audioInit(); const p = stagePt(e);
+  touches.set(e.pointerId, p);
+  try { canvas.setPointerCapture(e.pointerId); } catch {}
+  if (touches.size >= 2) {
+    // second finger down: switch from stretching to a two-finger squish
+    if (mouse.grab) { mouse.grab.target = null; mouse.grab.held = false; mouse.grab = null; }
+    mouse.down = false; mouse.downH = null; pinch0 = pinchDist(); return;
+  }
+  mouse.down = true; mouse.dx = p.x; mouse.dy = p.y;
+  const h = probe(p.x, p.y); mouse.downH = h && h.inside ? h : null;
+});
+canvas.addEventListener('pointermove', e => {
+  const p = stagePt(e), t = performance.now() / 1000;
+  if (touches.has(e.pointerId)) touches.set(e.pointerId, p);
+  if (touches.size >= 2) {
+    if (pinch0 > 0) { const s = clamp((1 - pinchDist() / pinch0) * .9, 0, .45); if (mouseSq < .02 && s > .04) SFX.squish(); mouseSq = s; mouseSqT = clock.elapsedTime; }
+    return;
+  }
+  mouse.x = p.x; mouse.y = p.y; mouse.active = true;
+  const h = probe(p.x, p.y); if (!h) return;
+  if (mouse.down && mouse.downH) {
+    if (!mouse.grab && Math.hypot(p.x - mouse.dx, p.y - mouse.dy) > 6) { mouse.grab = newDef(mouse.downH.local, .62); mouse.grab.held = true; mouse.grab.target = new V3(); onGrabStart(clock.elapsedTime); }
+    if (mouse.grab) grabTarget(mouse.grab, h);
+  } else if (mouse.prev) {
+    const dt = clamp(t - mouse.prevT, 1 / 240, .2), vx = (h.body.x - mouse.prev.x) / dt, vy = (h.body.y - mouse.prev.y) / dt, spd = Math.hypot(vx, vy);
+    if (inPetBand(h.body) && Math.abs(vx) > .5 && spd < 8) petTick(dt, clock.elapsedTime);
+  }
+  mouse.prev = h.body; mouse.prevT = t;
+});
+function endPointer(e) {
+  if (e) touches.delete(e.pointerId);
+  if (touches.size < 2) pinch0 = 0;
+  if (!mouse.down) return; mouse.down = false;
+  const p = e ? stagePt(e) : { x: mouse.dx, y: mouse.dy };
+  if (mouse.grab) { const s = mouse.grab.target ? mouse.grab.target.length() / 1.1 : 0; mouse.grab.target = null; mouse.grab.held = false; mouse.grab = null; onRelease(s, clock.elapsedTime); }
+  else if (mouse.downH && Math.hypot(p.x - mouse.dx, p.y - mouse.dy) <= 6) { const f = newDef(mouse.downH.local, .3); f.d.set(0, 0, -.16); f.v.set(0, 0, -1); onPoke(clock.elapsedTime); }
+  mouse.downH = null;
+}
+canvas.addEventListener('pointerup', endPointer);
+canvas.addEventListener('pointercancel', endPointer);
+canvas.addEventListener('pointerleave', () => { mouse.active = false; mouse.prev = null; });
+canvas.addEventListener('wheel', e => {
+  const p = stagePt(e), h = probe(p.x, p.y); if (!h || !h.inside) return;
+  e.preventDefault(); audioInit();
+  if (mouseSq < .02 && e.deltaY > 0) SFX.squish();
+  mouseSq = clamp(mouseSq + e.deltaY * .0016, 0, .45); mouseSqT = clock.elapsedTime;
+}, { passive: false });
+
+/* ---------- hand tracking (MediaPipe Hand Landmarker, runs locally) ---------- */
+const MP = 'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14';
+const MODEL = 'https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/1/hand_landmarker.task';
+const video = $('cam');
+const cam = { on: false };
+let handLm = null, stream = null, lastVT = -1, handsSeen = 0;
+const hands = new Map();
+const BONES = [[0,1],[1,2],[2,3],[3,4],[0,5],[5,6],[6,7],[7,8],[5,9],[9,10],[10,11],[11,12],[9,13],[13,14],[14,15],[15,16],[13,17],[17,18],[18,19],[19,20],[0,17]];
+const MODE_TH = { pinch: 'หยิบ', point: 'ชี้', palm: 'แบมือ', fist: 'กำมือ' };
+const handModesText = () => [...hands.values()].map(s => MODE_TH[s.mode] || '—').join(' / ');
+let camMsg = '';
+const camStatus = (t) => { $('camStatus').textContent = t; camMsg = t; };
+function camUi(label, off, disabled) {
+  for (const id of ['camBtn', 'camBtn2']) { const b = $(id); if (label) b.textContent = label; b.classList.toggle('off', off); b.disabled = disabled; }
+}
+const dist = (a, b) => Math.hypot(a.x - b.x, a.y - b.y);
+
+function toStage(p) {
+  const vw = video.videoWidth || 640, vh = video.videoHeight || 480, s = Math.max(SW / vw, SH / vh), dw = vw * s, dh = vh * s;
+  return { x: (SW - dw) / 2 + (1 - p.x) * dw, y: (SH - dh) / 2 + p.y * dh };
+}
+function avgP(P, ids) { let x = 0, y = 0; for (const i of ids) { x += P[i].x; y += P[i].y; } return { x: x / ids.length, y: y / ids.length }; }
+
+function releaseHand(st, time) {
+  if (st.grab) { const s = st.grab.target ? st.grab.target.length() / 1.1 : 0; st.grab.target = null; st.grab.held = false; st.grab = null; onRelease(s, time); }
+  if (st.poke) { st.poke.target = null; st.poke.held = false; st.poke = null; }
+  st.pressing = false;
+}
+function processHand(key, L, time, palms) {
+  let st = hands.get(key);
+  if (!st) { st = { mode: 'none', pinch: false, grab: null, poke: null, prevB: null, prevT: time, aboveT: -9, pressing: false, lastSlap: -9, P: null, cursor: null }; hands.set(key, st); }
+  st.seenT = time;
+  const P = L.map(toStage); st.P = P;
+  const size = Math.max(8, dist(P[0], P[9]));
+  const pd = dist(P[4], P[8]) / size;
+  st.pinch = st.pinch ? pd < .5 : pd < .3;
+  const tips = [8, 12, 16, 20], pips = [6, 10, 14, 18];
+  const ext = tips.map((t, j) => dist(P[t], P[0]) > dist(P[pips[j]], P[0]) * 1.1);
+  const nExt = ext.filter(Boolean).length;
+  const prevMode = st.mode;
+  const mode = st.pinch ? 'pinch' : nExt >= 3 ? 'palm' : (ext[0] && nExt <= 2) ? 'point' : 'fist';
+  st.mode = mode;
+  st.cursor = mode === 'pinch' ? { x: (P[4].x + P[8].x) / 2, y: (P[4].y + P[8].y) / 2 } : mode === 'point' ? P[8] : mode === 'palm' ? avgP(P, [0, 5, 9, 13, 17]) : P[9];
+  const h = probe(st.cursor.x, st.cursor.y); if (!h) return;
+  st.h = h;
+  const dt = clamp(time - st.prevT, 1 / 120, .2);
+  const vx = st.prevB ? (h.body.x - st.prevB.x) / dt : 0, vy = st.prevB ? (h.body.y - st.prevB.y) / dt : 0, spd = Math.hypot(vx, vy);
+  st.prevB = h.body; st.prevT = time;
+
+  // pinch: grab & stretch
+  if (st.grab && mode !== 'pinch') releaseHand(st, time);
+  if (mode === 'pinch') {
+    if (!st.grab && prevMode !== 'pinch' && h.inside) { st.grab = newDef(h.local, .62); st.grab.held = true; st.grab.target = new V3(); onGrabStart(time); }
+    if (st.grab) grabTarget(st.grab, h);
+  }
+  // point: poke a dent that follows the fingertip
+  if (mode === 'point' && h.inside) {
+    if (!st.poke) { st.poke = newDef(h.local, .3); st.poke.held = true; st.poke.target = new V3(0, 0, -.17); onPoke(time); }
+    else st.poke.a.lerp(h.local, .35);
+  } else if (st.poke) { st.poke.target = null; st.poke.held = false; st.poke = null; }
+  // open palm: slap, press from above, or pet
+  if (mode === 'palm') {
+    const halfW = (geo.sideL + geo.sideR) / 2, inX = Math.abs(h.body.x) < halfW * .95;
+    if (h.inside && spd > 7 && time - st.lastSlap > .9) { st.lastSlap = time; const f = newDef(h.local, .55); f.v.set(vx * .12, vy * .12, -1.6); onSlap(time); }
+    if (inX && h.body.y > geo.top * .85) st.aboveT = time;
+    if (!st.pressing && inX && h.inside && h.body.y < geo.top * .72 && time - st.aboveT < .8) { st.pressing = true; SFX.squish(); }
+    if (st.pressing && (!inX || h.body.y > geo.top * .9)) st.pressing = false;
+    if (st.pressing) handTy = Math.max(handTy, clamp((geo.top - h.body.y) / (geo.top + geo.bot) * 1.15, 0, .45));
+    else if (inPetBand(h.body) && Math.abs(vx) > .5 && spd < 6) petTick(dt, time);
+    palms.push(h.body);
+  } else st.pressing = false;
+}
+function updateHands(time) {
+  if (!cam.on || !handLm || video.readyState < 2 || video.currentTime === lastVT) return;
+  lastVT = video.currentTime;
+  let res; try { res = handLm.detectForVideo(video, performance.now()); } catch { return; }
+  handTx = 0; handTy = 0;
+  const palms = [], seen = new Set(), list = res.landmarks || [], hd = res.handedness || res.handednesses || [];
+  list.forEach((L, i) => { let k = hd[i]?.[0]?.categoryName || 'h' + i; if (seen.has(k)) k += '2'; seen.add(k); processHand(k, L, time, palms); });
+  for (const [k, st] of hands) if (!seen.has(k)) { releaseHand(st, time); hands.delete(k); }
+  handsSeen = list.length;
+  if (palms.length >= 2) {
+    const [a, b] = palms[0].x < palms[1].x ? [palms[0], palms[1]] : [palms[1], palms[0]];
+    const W = geo.sideL + geo.sideR, inY = p => p.y > -geo.bot * .9 && p.y < geo.top * .9;
+    if (a.x < 0 && b.x > 0 && inY(a) && inY(b)) { const t = clamp(1 - (b.x - a.x) / (W * 1.1), 0, .45); if (t > .02 && handTx < .02 && sq.x < .02) SFX.squish(); handTx = t; }
+  }
+}
+
+for (const id of ['camBtn', 'camBtn2']) $(id).addEventListener('click', () => { audioInit(); cam.on ? stopCam() : startCam(); });
+$('camSel').addEventListener('change', () => { if (cam.on) { stopCam(true); startCam(); } });
+async function listCams() {
+  try {
+    const cams = (await navigator.mediaDevices.enumerateDevices()).filter(d => d.kind === 'videoinput');
+    const sel = $('camSel'), curId = stream?.getVideoTracks()[0]?.getSettings().deviceId;
+    sel.innerHTML = ''; cams.forEach((c, i) => { const o = document.createElement('option'); o.value = c.deviceId; o.textContent = c.label || `กล้อง ${i + 1}`; if (c.deviceId === curId) o.selected = true; sel.append(o); });
+    sel.hidden = cams.length < 2;
+  } catch {}
+}
+async function startCam() {
+  if (!navigator.mediaDevices?.getUserMedia) {
+    camStatus(isSecureContext ? 'เบราว์เซอร์นี้เปิดกล้องไม่ได้ ลองเปิดด้วย Safari หรือ Chrome (ไม่ใช่เบราว์เซอร์ในแอป LINE หรือ Facebook)' : 'ต้องเปิดผ่านลิงก์ https:// เท่านั้นถึงจะใช้กล้องได้');
+    return;
+  }
+  camUi(null, false, true); camStatus('กำลังเปิดกล้อง…');
+  try {
+    const id = $('camSel').value;
+    stream = await navigator.mediaDevices.getUserMedia({ audio: false, video: id ? { deviceId: { exact: id }, width: 960, height: 720 } : { facingMode: 'user', width: 960, height: 720 } });
+  } catch (e) {
+    camUi(null, false, false);
+    camStatus(e && e.name === 'NotAllowedError' ? 'ยังไม่ได้รับอนุญาตให้ใช้กล้อง กดไอคอนกล้องที่แถบที่อยู่ของเบราว์เซอร์ หรือเปิดสิทธิ์ใน System Settings › Privacy & Security › Camera แล้วลองใหม่' : 'เปิดกล้องไม่ได้: ' + (e && e.message || e));
+    return;
+  }
+  video.srcObject = stream; try { await video.play(); } catch {}
+  listCams();
+  if (!handLm) {
+    camStatus('กำลังโหลดโมเดลจับมือ (ครั้งแรกใช้เวลาสักครู่)…');
+    try {
+      const { HandLandmarker, FilesetResolver } = await import(`${MP}/vision_bundle.mjs`);
+      const files = await FilesetResolver.forVisionTasks(`${MP}/wasm`);
+      const make = (delegate) => HandLandmarker.createFromOptions(files, { baseOptions: { modelAssetPath: MODEL, delegate }, runningMode: 'VIDEO', numHands: 2, minHandDetectionConfidence: .6, minHandPresenceConfidence: .5, minTrackingConfidence: .5 });
+      try { handLm = await make('GPU'); } catch { handLm = await make('CPU'); }
+    } catch (e) {
+      camStatus('โหลดโมเดลไม่สำเร็จ ต้องต่ออินเทอร์เน็ตตอนเปิดครั้งแรก (' + (e && e.message || e) + ')');
+      stopCam(); return;
+    }
+  }
+  cam.on = true; lastVT = -1;
+  stage.classList.toggle('ar', $('optAr').checked);
+  camUi('ปิดกล้อง', true, false);
+  camStatus('พร้อมแล้ว ยกมือขึ้นมาให้เห็นในจอ แล้วเอื้อมไปจิ้ม หยิบ หรือลูบหัวได้เลย ภาพจากกล้องประมวลผลในเครื่องนี้เท่านั้น');
+  if (matchMedia('(max-width: 900px)').matches) stage.scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+function stopCam(keepUi) {
+  cam.on = false; stream?.getTracks().forEach(t => t.stop()); stream = null; video.srcObject = null;
+  for (const st of hands.values()) releaseHand(st, clock.elapsedTime); hands.clear(); handsSeen = 0; handTx = handTy = 0;
+  stage.classList.remove('ar');
+  if (keepUi) return;
+  camUi('เปิดกล้อง', false, false);
+  camStatus('ปิดกล้องแล้ว ยังเล่นด้วยเมาส์หรือนิ้วได้');
+}
+
+/* ---------- overlay: hands + cursors ---------- */
+let accent = '#5a62c4';
+const readAccent = () => { accent = getComputedStyle(document.documentElement).getPropertyValue('--accent').trim() || accent; };
+matchMedia('(prefers-color-scheme: dark)').addEventListener?.('change', readAccent);
+function drawOverlay() {
+  const dpr = ovCanvas.width / Math.max(1, SW);
+  ov.setTransform(dpr, 0, 0, dpr, 0, 0); ov.clearRect(0, 0, SW, SH);
+  if (!cam.on) return;
+  for (const st of hands.values()) {
+    if (!st.P) continue;
+    const P = st.P;
+    if ($('optSkel').checked) {
+      ov.strokeStyle = 'rgba(255,255,255,.75)'; ov.lineWidth = 2; ov.lineCap = 'round'; ov.beginPath();
+      for (const [a, b] of BONES) { ov.moveTo(P[a].x, P[a].y); ov.lineTo(P[b].x, P[b].y); }
+      ov.stroke();
+      ov.fillStyle = 'rgba(255,255,255,.9)';
+      for (const i of [4, 8, 12, 16, 20]) { ov.beginPath(); ov.arc(P[i].x, P[i].y, 3.5, 0, Math.PI * 2); ov.fill(); }
+    }
+    const c = st.cursor, hot = st.h?.inside;
+    ov.lineWidth = 2.5; ov.strokeStyle = accent; ov.fillStyle = accent;
+    if (st.mode === 'pinch') { ov.beginPath(); ov.arc(c.x, c.y, st.grab ? 12 : 9, 0, Math.PI * 2); ov.globalAlpha = st.grab ? 1 : .7; ov.fill(); ov.globalAlpha = 1; }
+    else if (st.mode === 'point') { ov.beginPath(); ov.arc(c.x, c.y, 7, 0, Math.PI * 2); ov.fill(); ov.beginPath(); ov.arc(c.x, c.y, 13, 0, Math.PI * 2); ov.globalAlpha = hot ? 1 : .4; ov.stroke(); ov.globalAlpha = 1; }
+    else if (st.mode === 'palm') { ov.beginPath(); ov.arc(c.x, c.y, 28, 0, Math.PI * 2); ov.globalAlpha = .18; ov.fill(); ov.globalAlpha = hot ? .9 : .45; ov.stroke(); ov.globalAlpha = 1; }
+    else { ov.beginPath(); ov.arc(c.x, c.y, 6, 0, Math.PI * 2); ov.globalAlpha = .4; ov.fill(); ov.globalAlpha = 1; }
+  }
+}
+
+/* ---------- UI ---------- */
+function chip(html, on, cls = '') { const b = document.createElement('button'); b.type = 'button'; b.className = 'chip ' + cls; b.innerHTML = html; b.addEventListener('click', on); return b; }
+const charBtns = {}, exprBtns = {};
+CHARS.forEach(ch => {
+  const d = DATA[ch.key];
+  const b = chip(`<i style="background:linear-gradient(${d.colors.top},${d.colors.bottom})"></i>${ch.name}<small>${ch.shape}</small>`, () => setChar(ch.key), 'char');
+  charBtns[ch.key] = b; $('chars').append(b);
+});
+EXPR_KEYS.forEach(k => { const b = chip(`${EXPR_TH[k]}<small>${k === 'original' ? 'Original' : GENERIC[k].en}</small>`, () => { mood.override = k; mood.overrideT = clock.elapsedTime + 3; applyExpr(k, clock.elapsedTime); }); exprBtns[k] = b; $('exprs').append(b); });
+
+function setChar(k) {
+  charKey = k; C = DATA[k];
+  const ch = CHARS.find(c => c.key === k);
+  $('charName').innerHTML = `${ch.name}<span>${ch.role}</span>`;
+  const pc = $('persona'); pc.innerHTML = '';
+  const top = document.createElement('div'); top.className = 'top';
+  const nm = document.createElement('b'); nm.textContent = ch.name;
+  const rl = document.createElement('span'); rl.className = 'role'; rl.textContent = ch.role;
+  const mb = document.createElement('span'); mb.className = 'mbti'; mb.textContent = ch.mbti;
+  top.append(nm, rl, mb);
+  const p1 = document.createElement('p'); p1.textContent = ch.trait;
+  const p2 = document.createElement('p'); p2.innerHTML = '<em>จุดอ่อน:</em> '; p2.append(ch.trigger);
+  pc.append(top, p1, p2);
+  Object.entries(charBtns).forEach(([kk, b]) => b.setAttribute('aria-pressed', kk === k));
+  mScale = clamp(Math.sqrt(C.eye.w * C.eye.h) / Math.sqrt(.1003 * .0826), .72, 1.1);
+  defs = []; sq.x = sq.y = sq.vx = sq.vy = 0;
+  for (const st of hands.values()) { st.grab = null; st.poke = null; st.pressing = false; }
+  mouse.grab = null;
+  applyColours(); rebuildBody();
+  const t = clock.elapsedTime;
+  Object.assign(mood, { joy: .25, annoy: 0, surprise: 0, shy: 0, lastTouch: t, petT: -9, pokes: [], override: null, lonelySaid: false, sleepySaid: false, why: '' });
+  cur = null; exprKey = ''; applyExpr('original', t); exprCand = 'original';
+  say('hello', true);
+}
+
+const opt = { idle: !reduceMotion };
+$('optIdle').checked = opt.idle;
+$('optIdle').addEventListener('change', e => opt.idle = e.target.checked);
+$('optAr').addEventListener('change', e => stage.classList.toggle('ar', e.target.checked && cam.on));
+$('fsBtn').addEventListener('click', () => { try { stage.requestFullscreen?.(); } catch {} });
+
+function resize() {
+  SW = stage.clientWidth; SH = stage.clientHeight;
+  renderer.setSize(SW, SH, false); camera.aspect = SW / SH;
+  camera.position.setLength(6.4 * Math.max(1, .95 / camera.aspect)); camera.lookAt(0, 0, 0);
+  camera.updateProjectionMatrix();
+  const dpr = Math.min(window.devicePixelRatio || 1, 2);
+  ovCanvas.width = Math.round(SW * dpr); ovCanvas.height = Math.round(SH * dpr);
+}
+new ResizeObserver(resize).observe(stage);
+
+/* ---------- loop ---------- */
+const clock = new THREE.Clock();
+let blink = 0, blinkT = -1, nextBlink = 1.6, sac = [0, 0], nextSac = 1;
+const look = { x: 0, y: 0, ry: 0, rx: 0 };
+const _p = new V3();
+function screenOf(v) { _p.copy(v).project(camera); return { x: (_p.x + 1) / 2 * SW, y: (1 - _p.y) / 2 * SH }; }
+
+function tick() {
+  const dt = Math.min(clock.getDelta(), 1 / 20), time = clock.elapsedTime;
+  scene.updateMatrixWorld();
+  updateHands(time);
+  if (touches.size >= 2) mouseSqT = time;
+  if (time - mouseSqT > .25) mouseSq *= Math.exp(-dt * 10);
+  if (mouseSq < .004) mouseSq = 0;
+  updateDefs(dt);
+  stepAxis('x', handTx, dt); stepAxis('y', Math.max(handTy, mouseSq), dt);
+  updateMood(dt, time);
+  updateMeters(time);
+
+  const k = 1 - Math.exp(-dt * 12);
+  for (const f of ['eye', 'pupil', 'blush', 'sy', 'rx', 'rz', 'lidCurve']) cur[f] = lerp(cur[f], target[f], k);
+  for (const f of ['lidU', 'lidL', 'tilt', 'look']) for (let i = 0; i < 2; i++) cur[f][i] = lerp(cur[f][i], target[f][i], k);
+  for (const f in target.mouth) cur.mouth[f] = lerp(cur.mouth[f] ?? target.mouth[f], target.mouth[f], k);
+  cur.arc = target.arc;
+
+  if (time > nextBlink && blinkT < 0) blinkT = 0;
+  if (blinkT >= 0) { blinkT += dt; blink = blinkT < .07 ? blinkT / .07 : blinkT < .1 ? 1 : Math.max(0, 1 - (blinkT - .1) / .1);
+    if (blinkT > .2) { blinkT = -1; blink = 0; nextBlink = time + 2 + Math.random() * 3.5; } }
+  if (time > nextSac) { sac = [(Math.random() - .5) * .3, (Math.random() - .5) * .2]; nextSac = time + 1.2 + Math.random() * 2.8; }
+
+  // eyes and head follow the nearest hand (or the mouse)
+  let focus = null;
+  for (const st of hands.values()) if (st.cursor) { focus = st.cursor; break; }
+  if (!focus && mouse.active) focus = { x: mouse.x, y: mouse.y };
+  const centre = screenOf(turn.getWorldPosition(_c));
+  const fx = focus ? clamp((focus.x - centre.x) / (SW * .28), -1.3, 1.3) : 0, fy = focus ? clamp(-(focus.y - centre.y) / (SH * .28), -1.3, 1.3) : 0;
+  const lookingAway = exprKey === 'shy' || exprKey === 'grumpy' || exprKey === 'sad' || exprKey === 'sleepy';
+  const useFocus = focus && !lookingAway;
+  const gk = 1 - Math.exp(-dt * 14), hk = 1 - Math.exp(-dt * 5);
+  look.x = lerp(look.x, useFocus ? fx * 1.1 : cur.look[0] + (opt.idle ? sac[0] : 0), gk);
+  look.y = lerp(look.y, useFocus ? fy * 1.1 : cur.look[1] + (opt.idle ? sac[1] : 0), gk);
+  look.ry = lerp(look.ry, useFocus ? fx * .3 : 0, hk);
+  look.rx = lerp(look.rx, useFocus ? -fy * .14 : 0, hk);
+
+  const st = { ...cur, blink, lx: look.x, ly: look.y };
+  const eyeKey = [st.eye, st.pupil, st.lidCurve, ...st.lidU, ...st.lidL, ...st.tilt, blink, look.x, look.y, ...st.arc].map(v => (+v).toFixed(3)).join();
+  if (eyeKey !== lastEyeKey) { drawEye(0, st); drawEye(1, st); lastEyeKey = eyeKey; }
+  const mKey = Object.values(cur.mouth).map(v => (+v).toFixed(4)).join();
+  if (mKey !== lastMouthKey) { drawMouth(cur.mouth); lastMouthKey = mKey; }
+  blushMat.opacity = cur.blush * .9;
+
+  let y = 0, sy = cur.sy, rx = cur.rx, ry = 0, rz = cur.rz;
+  if (opt.idle) { sy *= 1 + .013 * Math.sin(time * 2.3); rz += .015 * Math.sin(time * .9); ry += .03 * Math.sin(time * .55); }
+  if (act) { actT += dt / act.dur; if (actT >= 1) act = null; else { const a = act.f(actT); y += a.y || 0; sy *= a.sy ?? 1; rx += a.rx || 0; ry += a.ry || 0; rz += a.rz || 0; } }
+  const qx = sq.x, qy = sq.y, base = 1 / Math.sqrt(sy);
+  const SXs = base * (1 - qx) * (1 + .6 * qy), SYs = sy * (1 - qy) * (1 + .7 * qx), SZs = base * (1 + .3 * qx) * (1 + .6 * qy);
+  rig.position.y = floorY + y; rig.position.x = 0; shadow.position.x = 0;
+  squash.scale.set(SXs, SYs, SZs);
+  turn.rotation.set(rx + look.rx, ry + look.ry, rz);
+  const sh = 1 / (1 + y * 2.2); shadow.scale.set(bodyW * 1.15 * SXs * sh, 1.5 * SZs * sh, 1); shadow.material.opacity = sh;
+
+  applyDeform();
+  renderer.render(scene, camera);
+  drawOverlay();
+
+  // speech bubble rides above the head
+  const head = screenOf(turn.localToWorld(_c.set(0, geo.top + .08, 0)));
+  const b = $('bubble'); b.style.left = clamp(head.x, 90, SW - 90) + 'px'; b.style.top = clamp(head.y, 70, SH) + 'px';
+
+  requestAnimationFrame(tick);
+}
+
+readAccent(); resize(); setChar('flower');
+requestAnimationFrame(tick);
+</script>
+
+</body>
+</html>
