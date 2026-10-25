@@ -29,6 +29,11 @@ export function addShell(b, pal, night) {
     return (x, y, z, c) => c.copy(a).lerp(bb, THREE.MathUtils.clamp((-z + 4.75) / 9.5, 0, 1) ** 2 * 0.9);
   };
   b.add(floor, floorPaint(pal.floor, 0.35), { position: [0, 0, WALL_Z + 4.75], shade: 0, night: floorPaint(n.floor, 0.12) });
+  // Front apron (kiln, S2): the minigame camera pulls far back on portrait phones and would
+  // otherwise see past the floor's front edge. Plain base colour = seamless with the floor's front.
+  const apron = new THREE.PlaneGeometry(HALF_W * 2, 24, 1, 1);
+  apron.rotateX(-Math.PI / 2);
+  b.add(apron, pal.floor, { position: [0, -0.002, WALL_Z + 9.5 + 12], shade: 0, night: n.floor });
   // Skirting: one long soft bead where wall meets floor.
   b.add(roundedBox(HALF_W * 2, 0.32, 0.22, 0.1), pal.trim, { position: [0, 0.16, WALL_Z + 0.05], shade: 0.04, night: n.trim });
 }

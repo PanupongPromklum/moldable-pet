@@ -11,7 +11,7 @@ const easeInOut = (t) => (t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) 
 /**
  * @param {{
  *   scene: import('three').Scene,
- *   createRoom: (id: string) => object,
+ *   createRoom: (id: string, opts?: { theme?: 'light'|'dark' }) => object,
  *   roomIds: string[],
  *   onEnter: (room: object, id: string, prevId: string|null) => void,
  *   onLeave?: (room: object, id: string) => void,
@@ -22,7 +22,10 @@ const easeInOut = (t) => (t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) 
 export function createRoomManager({ scene, createRoom, roomIds, onEnter, onLeave, reduceMotion = false, keyTarget = window }) {
   let id = null, room = null;
   let leaving = null; // { room, dir }
-  let t = 1, ar = false;
+  let t = 1, ar = false, theme = 'light';
+
+  /** Prop's `room.setTheme` (S2-05), optional so a room without it still works. */
+  function applyTheme(r) { try { r.setTheme?.(theme); } catch (e) { console.error('[rooms] setTheme', e); } }
 
   function setAr(r, on) {
     if (typeof r.setArMode === 'function') r.setArMode(on);
@@ -46,7 +49,8 @@ export function createRoomManager({ scene, createRoom, roomIds, onEnter, onLeave
     if (!next || next === id || leaving) return false;
     const prevId = id;
     const dir = typeof dirOrId === 'number' ? Math.sign(dirOrId) : (roomIds.indexOf(next) > roomIds.indexOf(id) ? 1 : -1);
-    const r = createRoom(next);
+    const r = createRoom(next, { theme });   // Prop: rooms start in the current theme
+    applyTheme(r);
     setAr(r, ar);
     scene.add(r.group);
     if (room) {
@@ -74,6 +78,9 @@ export function createRoomManager({ scene, createRoom, roomIds, onEnter, onLeave
     get room() { return room; },
     /** True while sliding between rooms. */
     get moving() { return !!leaving; },
+    /** 'light' | 'dark' — applied to the current, leaving and every future room. */
+    setTheme(next) { theme = next === 'dark' ? 'dark' : 'light'; if (room) applyTheme(room); if (leaving) applyTheme(leaving.room); },
+    get theme() { return theme; },
     /** Camera on: hide the room backdrop so the mirrored video shows through. */
     setArMode(on) { ar = on; if (room) setAr(room, on); if (leaving) setAr(leaving.room, on); },
     update(dt, time) {

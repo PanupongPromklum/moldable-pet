@@ -227,6 +227,8 @@ export function createMood({ data, game, hud, sfx, timers, getPet, random = Math
     },
 
     /** Per frame. */
+    /** Keep the pet engaged without any line (e.g. during a minigame): no lonely/sleepy/back talk. */
+    keepAwake(time) { m.lastTouch = time; m.lonelySaid = false; m.sleepySaid = false; },
     update(dt, time) {
       now = time;
       const p = P();

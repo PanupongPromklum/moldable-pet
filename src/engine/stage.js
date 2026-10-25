@@ -24,6 +24,17 @@ const VIEW = {
 };
 
 /**
+ * Stage light presets per theme (presentation, not gameplay). Light = the
+ * prototype's daytime pastel; dark = a soft evening look that matches Prop's
+ * `room.setTheme('dark')`. Prop may export its own preset as `stageLights` from
+ * `rooms/index.js` with the same shape; main.js passes it to `setTheme`.
+ */
+export const STAGE_LIGHTS = Object.freeze({
+  light: { hemi: { sky: 0xffe1f2, ground: 0x9cb0ea, intensity: 2.1 }, key: { color: 0xfff5fb, intensity: 1.5 }, fill: { color: 0xa8b8ff, intensity: 0.55 }, rim: { color: 0xffffff, intensity: 1.3 }, env: 1 },
+  dark: { hemi: { sky: 0xc9bff2, ground: 0x4b5590, intensity: 1.55 }, key: { color: 0xffe6cf, intensity: 1.25 }, fill: { color: 0x8c9cff, intensity: 0.6 }, rim: { color: 0xc4ccff, intensity: 1.1 }, env: 0.75 },
+});
+
+/**
  * @param {{ container: HTMLElement, overlay?: HTMLCanvasElement, hudReserve?: {top:number, bottom:number} }} opts
  */
 export function createStage({ container, overlay, hudReserve = { top: 120, bottom: 160 } }) {
@@ -180,6 +191,21 @@ export function createStage({ container, overlay, hudReserve = { top: 120, botto
      * that must also fit across the screen (e.g. a toilet beside the pet).
      * @param {THREE.Vector3} v @param {number} [width]
      */
+    /**
+     * Light the scene for a theme.
+     * @param {'light'|'dark'} theme
+     * @param {object} [preset] same shape as STAGE_LIGHTS.light (e.g. Prop's); missing parts use ours
+     */
+    setTheme(theme, preset) {
+      const base = STAGE_LIGHTS[theme === 'dark' ? 'dark' : 'light'];
+      const p = preset && typeof preset === 'object' ? preset : base;
+      const pick = (k) => ({ ...base[k], ...(p[k] || {}) });
+      const h = pick('hemi');
+      hemi.color.set(h.sky); hemi.groundColor.set(h.ground); hemi.intensity = h.intensity;
+      for (const [k, l] of [['key', key], ['fill', fill], ['rim', rim]]) { const c = pick(k); l.color.set(c.color); l.intensity = c.intensity; }
+      const env = typeof p.env === 'number' ? p.env : base.env;
+      if ('environmentIntensity' in scene) scene.environmentIntensity = env;
+    },
     setFocus(v, width = 0) { focus.set(v.x, v.y + VIEW.lookAtY, v.z); extraWidth = Math.max(0, width); frame(); },
     /** Update the HUD bands kept clear of the pet (px). */
     setHudReserve(r) { Object.assign(reserve, r); frame(); },

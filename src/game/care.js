@@ -7,6 +7,13 @@
 import * as THREE from 'three';
 import { eatFood, flushToilet, toiletNoNeed } from './needs.js';
 
+/**
+ * Toilet flow copy (contract Sprint 2 › feedback 3). One control at a time:
+ * before sitting a coach mark (only when the toilet need is low), while sitting
+ * only the flush button, after flushing nothing.
+ */
+const TOILET_COACH = 'ลากตัวไปที่ชักโครก';
+
 /** Interaction geometry in world units / seconds (input feel, not balance). */
 const FEEL = {
   foodAhead: 0.9,      // food plane sits this far in front of the pet centre
@@ -38,8 +45,46 @@ export function createCare(deps) {
   let food = null;   // { mesh, id, phase, t, from: Vector3, to: Vector3, s0 }
   let carry = null;  // { target: Vector3 }
   let hop = null;    // { from, to, t }
-  let sitting = false;
+  let sitting = false, flushing = false;
   let lastEat = -99;
+  let toiletStage = '';       // '' | 'idle' | 'need' | 'sitting' | 'flushing'
+  let roomTip = null;         // timed kitchen tip
+  let coachShown;             // last text sent to hud.coach (undefined = never)
+
+  function showCoach(text) {
+    if (text === coachShown) return;
+    coachShown = text;
+    hud.coach?.(text);
+  }
+
+  /**
+   * One source of truth for the bathroom controls. Calls Glaze's
+   * `hud.setToiletStage` when it exists and the Sprint 1 `setFlushVisible`
+   * (both optional), and toggles `#app.toilet-sitting` so the shell can hide the
+   * room nav even before the HUD knows about stages.
+   */
+  function setToiletStage(stage) {
+    if (stage === toiletStage) return;
+    toiletStage = stage;
+    hud.setToiletStage?.(stage);
+    hud.setFlushVisible?.(stage === 'sitting');
+    deps.onToiletStage?.(stage);
+  }
+
+  /** Recompute the coach + toilet stage from room, need and pose. */
+  function syncControls() {
+    const id = getRoomId();
+    if (id === 'bathroom') {
+      const n = game.needs();
+      const low = !!n && n.toilet <= data.needs.needs.toilet.low;
+      const stage = flushing ? 'flushing' : sitting ? 'sitting' : low ? 'need' : 'idle';
+      setToiletStage(stage);
+      showCoach(stage === 'need' ? TOILET_COACH : null);
+    } else {
+      setToiletStage('idle');
+      showCoach(roomTip);
+    }
+  }
 
   const petObj = () => getPet()?.object3d;
   function petCentre(out) {
@@ -97,7 +142,7 @@ export function createCare(deps) {
     food = { mesh, id: foodId, phase: 'drag', t: 0 };
     if (foodPlanePoint(x, y, v.hit)) mesh.position.copy(v.hit);
     sfx.play('pick');
-    hud.coach(null);
+    roomTip = null; syncControls();
     return true;
   }
 
@@ -138,8 +183,7 @@ export function createCare(deps) {
     sitting = false;
     getPet()?.setSitting(false);
     mood.hold('sitting', false);
-    hud.setFlushVisible(false);
-    hud.coach(null);
+    syncControls();
   }
 
   function hopHome() {
@@ -179,8 +223,7 @@ export function createCare(deps) {
     getPet().setSitting(true);
     sitting = true;
     mood.hold('sitting', true);
-    hud.setFlushVisible(true);
-    hud.coach('กดชักโครก');
+    syncControls();   // flush button only, no coach
     if (toiletNoNeed(game.needs(), data.needs)) mood.say('toiletNoNeed', true);
     else sfx.play('pop');
   }
@@ -206,16 +249,16 @@ export function createCare(deps) {
   /** HUD flush button. */
   function flush() {
     const room = getRoom();
-    if (!sitting || !room || typeof room.flush !== 'function') return false;
+    if (!sitting || flushing || !room || typeof room.flush !== 'function') return false;
     const d = room.flush() || 1.2;
+    flushing = true;
+    syncControls();   // button goes away at once: it cannot be pressed twice
     sfx.play('flush');
     const res = flushToilet(game.needs(), data.needs);
     game.setLevels(res.levels); onNeedsChanged?.();
-    hud.setFlushVisible(false);
-    hud.coach(null);
     mood.say('flush', true);
     if (res.relieved) timers.after(Math.min(1, d * 0.6), () => { mood.say('relieved', true); mood.react('joy', 1.6); }, 'toilet');
-    timers.after(d, () => { stand(); hopHome(); }, 'toilet');
+    timers.after(d, () => { flushing = false; stand(); hopHome(); }, 'toilet');
     return true;
   }
 
@@ -232,31 +275,39 @@ export function createCare(deps) {
     get feeding() { return !!food && food.phase === 'drag'; },
     get carrying() { return !!carry; },
     get sitting() { return sitting; },
+    /** Current bathroom control stage: 'idle' | 'need' | 'sitting' | 'flushing'. */
+    get toiletStage() { return toiletStage; },
+    /** Re-evaluate coach / flush controls (needs changed, minigame ended…). */
+    syncControls,
+    /** Hide the coach (e.g. while a minigame or the wardrobe covers the room). */
+    clearCoach() { showCoach(null); },
 
     /** Room switched: drop everything and stand the pet at the new petSpot. */
     onRoomChanged(room, id) {
       cancelFood();
       if (carry) { carry = null; getPet()?.setCarried(false); mood.onCarryEnd(); }
+      flushing = false;
       stand(); hop = null;
       timers.cancel('toilet');
       const o = petObj(); if (o && room?.petSpot) o.position.copy(room.petSpot);
-      hud.setFlushVisible(false);
-      const tip = id === 'kitchen' ? 'ลากอาหารไปที่ปากได้เลย' : id === 'bathroom' ? 'กดค้างที่ตัวเพื่ออุ้มไปนั่งชักโครก' : null;
-      hud.coach(tip);
+      roomTip = id === 'kitchen' ? 'ลากอาหารไปที่ปากได้เลย' : null;
       timers.cancel('coach');
-      if (tip) timers.after(FEEL.coachSeconds, () => { if (!sitting) hud.coach(null); }, 'coach');
+      if (roomTip) timers.after(FEEL.coachSeconds, () => { roomTip = null; syncControls(); }, 'coach');
+      syncControls();
     },
 
     /** New character instance: forget poses on the old one. */
     onCharacterChanged() {
-      cancelFood(); carry = null; hop = null; sitting = false;
+      cancelFood(); carry = null; hop = null; sitting = false; flushing = false;
+      timers.cancel('toilet');
       mood.hold('sitting', false);
-      hud.setFlushVisible(false);
+      syncControls();
       const o = petObj(); if (o) o.position.copy(homeSpot());
     },
 
     update(dt, time) {
       const pet = getPet();
+      if (getRoomId() === 'bathroom' && !deps.isPaused?.()) syncControls();   // cheap: only touches the DOM on change
       if (food) {
         if (food.phase === 'drag' && pet) {
           pet.getMouthWorld(v.mouth);

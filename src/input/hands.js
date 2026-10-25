@@ -7,6 +7,11 @@
  * on the pet = carry; pinch over a tray food = pick it up) · open palm rub over the
  * head = pet · palm press from above = squish · two palms = side squish · fast
  * swipe = startle.
+ *
+ * View (S2-04): `setView(hidden)`. Shown = mirrored video behind the room (AR,
+ * thin skeleton). Hidden = no video, the room shows normally and soft stylized
+ * clay hands (rounded palm + capsule fingers, brand tint, light outline) are
+ * drawn from the landmarks instead of the skeleton.
  * @module input/hands
  */
 
@@ -16,6 +21,15 @@ const MP = 'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14';
 const MODEL = 'https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/1/hand_landmarker.task';
 const BONES = [[0, 1], [1, 2], [2, 3], [3, 4], [0, 5], [5, 6], [6, 7], [7, 8], [5, 9], [9, 10], [10, 11], [11, 12], [9, 13], [13, 14], [14, 15], [15, 16], [13, 17], [17, 18], [18, 19], [19, 20], [0, 17]];
 const TIPS = [8, 12, 16, 20], PIPS = [6, 10, 14, 18], PALM = [0, 5, 9, 13, 17];
+/** Finger chains for the soft hand (thumb … pinky), and the palm outline. */
+const FINGERS = [[1, 2, 3, 4], [5, 6, 7, 8], [9, 10, 11, 12], [13, 14, 15, 16], [17, 18, 19, 20]];
+const PALM_RING = [0, 1, 5, 9, 13, 17];
+/** Soft-hand look: widths are shares of the wrist→middle-knuckle length. */
+const SOFT = {
+  finger: 0.34, thumb: 0.38, palmRound: 0.42, outline: 3,
+  light: { fill: '#9BB0DE', shade: 'rgba(52, 58, 110, .30)', outline: '#FFFFFF', cursor: '#5A68B5' },
+  dark: { fill: '#B7C1E4', shade: 'rgba(0, 0, 0, .35)', outline: 'rgba(255, 255, 255, .92)', cursor: '#E9E0EF' },
+};
 const HAND = { pinchOn: 0.3, pinchOff: 0.5, extend: 1.1, pressStart: 0.72, pressEnd: 0.9, pressScale: 1.15, aboveSlack: 0.1, twoPalmSpan: 1.1, squishMax: 0.45 };
 
 const MSG = {
@@ -46,9 +60,10 @@ const clamp = (v, a, b) => (v < a ? a : v > b ? b : v);
  *   getTime: () => number,
  * }} deps
  */
-export function createHands({ video, overlay, app, picker, stage, hud, gestures, mood, rooms, getTime }) {
+export function createHands({ video, overlay, app, picker, stage, hud, gestures, mood, rooms, getTime, cameraHidden = false, onView }) {
   const ctx = overlay ? overlay.getContext('2d') : null;
   let landmarker = null, stream = null, on = false, starting = false, lastVT = -1, drew = false;
+  let hidden = !!cameraHidden, passive = false, theme = 'light';
   const hands = new Map();
   const palms = [0, 1, 2, 3].map(() => ({ x: 0, y: 0, petX: 0, feetY: 0, headY: 0, hw: 1 }));
   let palmCount = 0;
@@ -92,6 +107,10 @@ export function createHands({ video, overlay, app, picker, stage, hud, gestures,
   function processHand(st, L, t) {
     const P = st.P;
     for (let i = 0; i < 21; i++) toStage(L[i], P[i]);
+    if (passive) {   // minigame: track only (cursor = palm centre), no gestures
+      avg(P, PALM, st.cursor); st.mode = 'palm';
+      return;
+    }
     const size = Math.max(8, dist(P[0], P[9]));
     const pd = dist(P[4], P[8]) / size;
     st.pinch = st.pinch ? pd < HAND.pinchOff : pd < HAND.pinchOn;
@@ -159,7 +178,7 @@ export function createHands({ video, overlay, app, picker, stage, hud, gestures,
       const inY = (p) => p.y > p.feetY + h * 0.1 && p.y < p.headY - h * 0.1;
       if (a.x < a.petX && b.x > a.petX && inY(a) && inY(b)) squishX = clamp(1 - (b.x - a.x) / (a.hw * 2 * HAND.twoPalmSpan), 0, HAND.squishMax);
     }
-    gestures.setHandSquish(squishX, squishY);
+    gestures.setHandSquish(passive ? 0 : squishX, passive ? 0 : squishY);
     if (list.length) mood.onCameraHello(t);
   }
 
@@ -170,6 +189,7 @@ export function createHands({ video, overlay, app, picker, stage, hud, gestures,
     ctx.setTransform(dpr, 0, 0, dpr, -stage.size.left * dpr, -stage.size.top * dpr);
     ctx.clearRect(stage.size.left, stage.size.top, stage.size.w, stage.size.h);
     drew = true;
+    if (hidden) { for (const st of hands.values()) drawSoftHand(st); return; }
     for (const st of hands.values()) {
       const P = st.P;
       ctx.strokeStyle = 'rgba(255,255,255,.8)'; ctx.lineWidth = 2; ctx.lineCap = 'round';
@@ -187,6 +207,53 @@ export function createHands({ video, overlay, app, picker, stage, hud, gestures,
       else { ctx.arc(c.x, c.y, 6, 0, Math.PI * 2); ctx.globalAlpha = 0.4; ctx.fill(); }
       ctx.globalAlpha = 1;
     }
+  }
+
+  /** Path a capsule chain (round caps + joins do the softness). */
+  function chain(ids, P) {
+    ctx.moveTo(P[ids[0]].x, P[ids[0]].y);
+    for (let i = 1; i < ids.length; i++) ctx.lineTo(P[ids[i]].x, P[ids[i]].y);
+  }
+  function palmPath(P) {
+    ctx.moveTo(P[PALM_RING[0]].x, P[PALM_RING[0]].y);
+    for (let i = 1; i < PALM_RING.length; i++) ctx.lineTo(P[PALM_RING[i]].x, P[PALM_RING[i]].y);
+    ctx.closePath();
+  }
+  /**
+   * Stylized clay hand: three passes (soft shadow + outline, fill, cursor).
+   * No allocations: paths are rebuilt from the landmark array each pass.
+   */
+  function drawSoftHand(st) {
+    const P = st.P, c = SOFT[theme] || SOFT.light;
+    const size = Math.max(10, dist(P[0], P[9]));
+    const fw = size * SOFT.finger, tw = size * SOFT.thumb, pr = size * SOFT.palmRound, o = SOFT.outline;
+    ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+    // pass 1: outline (light) with a soft drop shade so it reads on light rooms too
+    ctx.save();
+    ctx.shadowColor = c.shade; ctx.shadowBlur = 10; ctx.shadowOffsetY = 3;
+    ctx.strokeStyle = c.outline; ctx.fillStyle = c.outline;
+    ctx.beginPath(); palmPath(P); ctx.lineWidth = pr + o * 2; ctx.stroke(); ctx.fill();
+    for (let f = 0; f < FINGERS.length; f++) { ctx.beginPath(); chain(FINGERS[f], P); ctx.lineWidth = (f === 0 ? tw : fw) + o * 2; ctx.stroke(); }
+    ctx.restore();
+    // pass 2: brand-tint body
+    ctx.strokeStyle = c.fill; ctx.fillStyle = c.fill;
+    ctx.beginPath(); palmPath(P); ctx.lineWidth = pr; ctx.stroke(); ctx.fill();
+    for (let f = 0; f < FINGERS.length; f++) { ctx.beginPath(); chain(FINGERS[f], P); ctx.lineWidth = f === 0 ? tw : fw; ctx.stroke(); }
+    // pass 3: soft highlight on the palm + mode cursor
+    ctx.globalAlpha = 0.35; ctx.fillStyle = '#FFFFFF';
+    ctx.beginPath(); ctx.arc((P[5].x + P[9].x + P[0].x) / 3, (P[5].y + P[9].y + P[0].y) / 3, size * 0.18, 0, Math.PI * 2); ctx.fill();
+    ctx.globalAlpha = 1;
+    const cur = st.cursor;
+    if (!passive && (st.mode === 'pinch' || st.mode === 'point')) {
+      ctx.beginPath(); ctx.arc(cur.x, cur.y, st.mode === 'pinch' && st.pinchDown ? 9 : 6, 0, Math.PI * 2);
+      ctx.fillStyle = c.cursor; ctx.fill(); ctx.lineWidth = 2; ctx.strokeStyle = c.outline; ctx.stroke();
+    }
+  }
+
+  /** Apply the camera view (video + veil via #app classes, room backdrop). */
+  function applyView() {
+    app.classList.toggle('cam-hidden', hidden);
+    if (on) rooms.setArMode(!hidden);
   }
 
   async function listCams() {
@@ -252,7 +319,7 @@ export function createHands({ video, overlay, app, picker, stage, hud, gestures,
     starting = false; on = true; lastVT = -1;
     readAccent();
     app.classList.add('ar');
-    rooms.setArMode(true);
+    applyView();
     hud.setCamera('on', MSG.ready);
   }
 
@@ -281,6 +348,39 @@ export function createHands({ video, overlay, app, picker, stage, hud, gestures,
     start, stop,
     toggle() { return on || starting ? stop() : start(); },
     get on() { return on; },
+    /** Camera image hidden (soft hands only). */
+    get hidden() { return hidden; },
+    /**
+     * Show or hide the camera image (the choice is saved by main via `onView`).
+     * @param {boolean} h true = hide video, draw soft hands
+     */
+    setView(h) { hidden = !!h; applyView(); onView?.(hidden); },
+    /** Minigame: keep tracking but send nothing to the gesture layer. */
+    setPassive(p) {
+      passive = !!p;
+      if (passive) { for (const st of hands.values()) releaseHand(st); gestures.setHandSquish(0, 0); }
+    },
+    /** 'light' | 'dark' — soft-hand colours. */
+    setTheme(t) { theme = t === 'dark' ? 'dark' : 'light'; readAccent(); },
+    /**
+     * Test / debug only (main exposes it under ?debug): feed normalized landmark
+     * sets as if MediaPipe returned them, so the overlay and the minigame hand
+     * input can be checked without a webcam. `null` clears.
+     * @param {Array<Array<{x:number,y:number}>>|null} list
+     */
+    debugFeed(list) {
+      if (!list) { for (const st of hands.values()) releaseHand(st); hands.clear(); on = false; app.classList.remove('ar'); rooms.setArMode(false); draw(); return; }
+      if (!on) { on = true; app.classList.add('ar'); applyView(); }
+      const t = getTime();
+      for (const st of hands.values()) st.seen = 0;
+      list.forEach((L, i) => { const k = 'dbg' + i; let st = hands.get(k); if (!st) { st = newHand('hand:' + k); hands.set(k, st); } st.seen = 1; processHand(st, L, t); });
+    },
+    /** Client x of the first tracked hand's palm centre, or null. */
+    primaryX() {
+      if (!on) return null;
+      for (const st of hands.values()) if (st.seen) return st.cursor.x;
+      return null;
+    },
     update, draw,
   };
 }

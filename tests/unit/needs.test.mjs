@@ -7,7 +7,7 @@ import {
   decayNeeds, eatFood, flushToilet, pickNeedMood, pickReturnStyle, needState,
   sanitizeLevels, startLevels, addNeed,
 } from '../../src/game/needs.js';
-import { newSave, migrateSave, tickSave, createGameState, SAVE_KEY } from '../../src/game/state.js';
+import { newSave, migrateSave, tickSave, createGameState, SAVE_KEY, SAVE_VERSION } from '../../src/game/state.js';
 
 const load = (f) => JSON.parse(readFileSync(fileURLToPath(new URL(`../../assets/data/${f}`, import.meta.url)), 'utf8'));
 const DATA = { needs: load('needs.json'), foods: load('foods.json'), personas: load('personas.json') };
@@ -202,7 +202,7 @@ test('migrate: garbage, NaN, out-of-range, unknown keys, missing tLast', () => {
 
 test('migrate v0 single-needs save into per-character save', () => {
   const m = migrateSave({ needs: { hunger: 0.2, toilet: 0.3, fun: 0.4, social: 0.5 }, tLast: T0 - H, charKey: 'cloud' }, DATA, T0);
-  assert(m.version === 1 && m.selected === 'cloud' && m.chars.cloud.needs.hunger === 0.2 && m.chars.cloud.tLast === T0 - H, JSON.stringify(m.chars.cloud));
+  assert(m.version === SAVE_VERSION && m.selected === 'cloud' && m.chars.cloud.needs.hunger === 0.2 && m.chars.cloud.tLast === T0 - H, JSON.stringify(m.chars.cloud));
 });
 
 test('createGameState: round trip through storage, and throwing storage never throws', () => {
@@ -213,7 +213,7 @@ test('createGameState: round trip through storage, and throwing storage never th
   assert(a.fresh, 'fresh');
   a.select('diamond'); a.bump('fun', -0.3); a.setRoom('kitchen');
   assert(a.persist(), 'persist');
-  assert(JSON.parse(mem.get(SAVE_KEY)).version === 1, 'versioned');
+  assert(JSON.parse(mem.get(SAVE_KEY)).version === SAVE_VERSION, 'versioned');
   now = T0 + 2 * H;
   const b = createGameState({ data: DATA, storage, now: () => now });
   assert(!b.fresh && b.selected === 'diamond' && b.room === 'kitchen' && b.chosen, 'restored');
