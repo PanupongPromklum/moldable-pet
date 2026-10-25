@@ -3,15 +3,18 @@
  * Rounded toilet (bowl, seat, open lid, tank, push button) back-right of the pet,
  * pedestal sink with oval mirror back-left, towel rail; bathtub with bubbles and a
  * clay duck, bath mat and a bottle shelf for wide screens.
+ * Evening look (setTheme('dark')): the globe sconce by the mirror glows, the small
+ * round window (wide screens) shows a dusk sky with soft stars.
  *
  * Contract extras: `toiletSeat` (room-local = world while room.group sits at the
  * origin), `dropZones.toilet`, `flush()` → duration in seconds.
  */
 import * as THREE from 'three';
-import { ClayBuilder, PALETTE, BRAND, lighten, roundedBox, capsule, sphere, torus, lathe, puck, blob, circle } from '../props/clay.js';
+import { ClayBuilder, PALETTE, NIGHT, BRAND, lighten, roundedBox, capsule, sphere, torus, lathe, puck, blob, circle, gradientY } from '../props/clay.js';
 import { addShell, makeRoom, WALL_Z, ease } from './shell.js';
 
 const P = PALETTE.bathroom;
+const N = NIGHT.bathroom;
 const W = WALL_Z + 0.04;
 /** Flush animation length in seconds (animation timing, not a gameplay value). */
 export const FLUSH_SECONDS = 1.2;
@@ -22,12 +25,12 @@ const SEAT_LOCAL = new THREE.Vector3(0, 0.8, 0.04);
 
 /** Build the bathroom. @returns {ReturnType<typeof makeRoom>} */
 export function buildBathroom() {
-  const b = new ClayBuilder({ shadowColor: P.shadow, shadowOpacity: 0.2 });
-  addShell(b, P);
+  const b = new ClayBuilder({ shadowColor: P.shadow, shadowOpacity: 0.2, themed: true, nightShadowColor: N.shadow });
+  addShell(b, P, N);
   const group = new THREE.Group();
 
   // --- wainscot band (soft tile-coloured lower wall)
-  b.add(roundedBox(32, 1.25, 0.05, 0.02), P.trim, { position: [0, 0.62, W], shade: 0 });
+  b.add(roundedBox(32, 1.25, 0.05, 0.02), P.trim, { position: [0, 0.62, W], shade: 0, night: N.trim });
   b.add(roundedBox(32, 0.09, 0.12, 0.045), '#FFFFFF', { position: [0, 1.27, W + 0.03], shade: 0 });
 
   // --- toilet (own group so it can wobble on flush)
@@ -35,7 +38,7 @@ export function buildBathroom() {
   toilet.name = 'bathroom:toilet';
   toilet.position.copy(TOILET_POS);
   toilet.rotation.y = TOILET_YAW;
-  const tb = new ClayBuilder();
+  const tb = new ClayBuilder({ themed: true });
   const WHITE = '#FFFFFF';
   tb.add(lathe([[0, 0], [0.3, 0], [0.33, 0.04], [0.27, 0.18], [0.25, 0.36], [0.32, 0.47], [0, 0.47]], 28), WHITE, { scale: [1, 1, 1.12], shade: 0.08 });
   tb.add(lathe([[0, 0.4], [0.34, 0.42], [0.47, 0.54], [0.53, 0.66], [0.53, 0.71], [0.45, 0.735], [0.4, 0.66], [0.3, 0.6], [0, 0.58]], 32), WHITE, { scale: [1, 1, 1.15], shade: 0.06 });
@@ -49,14 +52,14 @@ export function buildBathroom() {
   toilet.add(toiletBody);
 
   const BUTTON_Y = 1.69;
-  const button = new ClayBuilder().add(puck(0.1, 0.07, 18), BRAND.periwinkle, { shade: 0.1 }).buildMesh('bathroom:flushHandle');
+  const button = new ClayBuilder({ themed: true }).add(puck(0.1, 0.07, 18), BRAND.periwinkle, { shade: 0.1 }).buildMesh('bathroom:flushHandle');
   button.position.set(0.18, BUTTON_Y - 0.02, -0.56);
   toilet.add(button);
 
   const WATER_Y = 0.6;
   const wc = [new THREE.Color('#C6D8EE'), new THREE.Color('#EEF4FB')];
   const waterGeo = circle(0.39, 48); waterGeo.rotateX(-Math.PI / 2);
-  const water = new ClayBuilder().add(waterGeo, (x, y, z, c) => {
+  const water = new ClayBuilder({ themed: true }).add(waterGeo, (x, y, z, c) => {
     const a = Math.atan2(z, x), r = Math.hypot(x, z);
     c.copy(wc[0]).lerp(wc[1], 0.5 + 0.5 * Math.sin(3 * a + r * 16));
   }, { shade: 0 }).buildMesh('bathroom:water');
@@ -87,6 +90,23 @@ export function buildBathroom() {
   b.add(puck(0.42, 0.04, 36), PALETTE.glass, { position: [kx, 2.42, W + 0.05], rotation: [Math.PI / 2, 0, 0], scale: [1, 1, 1.26], shade: 0 });
   b.add(capsule(0.035, 0.32, 3, 8), WHITE, { position: [kx - 0.16, 2.55, W + 0.1], rotation: [0, 0, -0.5] });
   b.add(capsule(0.025, 0.12, 3, 8), WHITE, { position: [kx - 0.03, 2.66, W + 0.1], rotation: [0, 0, -0.5] });
+  // globe sconce right of the mirror (glows in the evening)
+  const gx = kx + 0.82, gy = 2.72;
+  b.add(roundedBox(0.16, 0.24, 0.05, 0.06), WHITE, { position: [gx, gy - 0.06, W + 0.03] });
+  b.add(capsule(0.025, 0.08, 2, 6), PALETTE.steel, { position: [gx, gy - 0.06, W + 0.11], rotation: [Math.PI / 2, 0, 0] });
+  b.addLamp(sphere(0.14, 20, 14), lighten(BRAND.periwinkle, 0.75), { position: [gx, gy + 0.04, W + 0.22], shade: 0.04 });
+  b.addHalo(gx, gy, W + 0.02, 1.7, NIGHT.lamp, 0.3);
+  b.addHalo(gx, gy + 0.04, W + 0.42, 0.55, NIGHT.lamp, 0.18);
+
+  // --- small round window (right, wide screens)
+  const wx = 2.45, wy = 2.62, R = 0.36;
+  b.add(torus(R, 0.08, 10, 36), WHITE, { position: [wx, wy, W + 0.04], shade: 0.03 });
+  b.addGlow(circle(R, 36), gradientY('#E9F2F8', '#CFE0F6', -R, R * 0.8),
+    { position: [wx, wy, W], night: gradientY(NIGHT.skyLow, NIGHT.skyHigh, -R, R * 0.8) });
+  b.addGlow(blob(0.08, { seed: 4, detail: 2 }), '#FFFFFF', { position: [wx - 0.08, wy + 0.1, W + 0.01], scale: [1.8, 0.7, 0.2], night: NIGHT.cloud });
+  for (const [ax, ay, s_] of [[0.14, 0.18, 0.07], [-0.16, -0.04, 0.05], [0.1, -0.16, 0.06], [0.2, 0.0, 0.05]]) {
+    b.addHalo(wx + ax, wy + ay, W + 0.014, s_, NIGHT.star, 0.95);
+  }
 
   // --- bathtub with bubbles and a clay duck (left, desktop)
   const ux = -3.4, uz = -2.25;

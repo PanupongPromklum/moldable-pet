@@ -3,11 +3,12 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>Rooms demo — S1-03</title>
+<title>Rooms demo — S1-03 / S2-05 / S2-09</title>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Prompt:wght@400;500&family=Poppins:wght@400;500&display=swap">
 <style>
   :root { --ink: #252941; --primary: #5A68B5; --panel: rgba(255, 255, 255, 0.86); }
   html, body { margin: 0; height: 100%; overflow: hidden; background: #F2F1FB; color: var(--ink); font-family: 'Prompt', 'Poppins', sans-serif; }
+  body.dark { --ink: #F3F1FF; --panel: rgba(44, 42, 74, 0.86); background: #2C2A4A; }
   canvas { display: block; width: 100vw; height: 100vh; touch-action: none; }
   .bar { position: fixed; left: 50%; transform: translateX(-50%); display: flex; gap: 6px; padding: 6px; border-radius: 999px; background: var(--panel); }
   .top { top: 12px; } .bottom { bottom: 16px; }
@@ -30,15 +31,18 @@
 <div class="bar bottom">
   <button id="flush" type="button">กดชักโครก</button>
   <button id="foods" type="button" aria-pressed="true">อาหาร</button>
-  <button id="bands" type="button" aria-pressed="false">HUD bands</button>
+  <button id="theme" type="button" aria-pressed="false">กลางคืน</button>
+  <button id="mini" type="button" aria-pressed="false">มินิเกม</button>
+  <button id="bands" type="button" aria-pressed="false">HUD</button>
 </div>
 <div class="hud-band" style="top:0;height:120px"></div>
 <div class="hud-band" style="bottom:0;height:160px"></div>
 <script type="module">
 import * as THREE from 'three';
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
-import { createRoom, ROOM_IDS, ROOM_NAMES_TH } from '../../src/rooms/index.js';
+import { createRoom, ROOM_IDS, ROOM_NAMES_TH, ROOM_THEME_LIGHTS, applyStageLights } from '../../src/rooms/index.js';
 import { createFoodMesh, FOOD_IDS } from '../../src/props/foods.js';
+import { createCoinMesh, createDemonMesh } from '../../src/props/minigame.js';
 import { ClayBuilder, roundedBox, capsule, countDrawCalls } from '../../src/props/clay.js';
 
 const params = new URLSearchParams(location.search);
@@ -51,8 +55,14 @@ document.body.prepend(renderer.domElement);
 const scene = new THREE.Scene();
 scene.background = new THREE.Color('#F2F1FB');
 scene.environment = new THREE.PMREMGenerator(renderer).fromScene(new RoomEnvironment(), 0.04).texture;
-scene.add(new THREE.HemisphereLight(0xfff1f8, 0xc9d2f0, 1.6));
-const key = new THREE.DirectionalLight(0xfff7fb, 1.1); key.position.set(1.6, 4, 3.4); scene.add(key);
+// same rig as src/engine/stage.js, driven by ROOM_THEME_LIGHTS
+const lights = {
+  hemi: new THREE.HemisphereLight(0xffffff, 0xffffff, 1),
+  key: new THREE.DirectionalLight(0xffffff, 1), fill: new THREE.DirectionalLight(0xffffff, 1), rim: new THREE.DirectionalLight(0xffffff, 1),
+};
+lights.key.position.set(1.4, 4.6, 4.2); lights.fill.position.set(-2.2, -1.4, 3.2); lights.rim.position.set(-2.6, 2.6, -3.2);
+scene.add(lights.hemi, lights.key, lights.fill, lights.rim);
+let theme = 'light';
 
 const camera = new THREE.PerspectiveCamera(30, 1, 0.1, 80);
 camera.position.set(0, 1.2, 8); camera.lookAt(0, 1, 0);
@@ -69,6 +79,14 @@ FOOD_IDS.forEach((id, i) => { const f = createFoodMesh(id); f.position.set(-1.35
 shelf.position.set(0, 2.62, 0.9);
 scene.add(shelf);
 
+// minigame meshes (S2-09): real size row in front of the pet + a 2x close-up pair
+const mini = new THREE.Group(); mini.visible = false;
+[[createCoinMesh(), -0.62, 1], [createDemonMesh(), 0, 1], [createFoodMesh('cupcake'), 0.62, 1],
+ [createCoinMesh(), -0.5, 1.7], [createDemonMesh(), 0.52, 1.7]].forEach(([m, x, s], i) => {
+  m.position.set(x, i < 3 ? 0.45 : 1.75, i < 3 ? 2.2 : 1.6); m.scale.setScalar(s); m.userData.spin = i === 0; mini.add(m);
+});
+scene.add(mini);
+
 let room = null;
 const roomBar = document.getElementById('rooms');
 for (const id of ROOM_IDS) {
@@ -77,7 +95,7 @@ for (const id of ROOM_IDS) {
 }
 function setRoom(id) {
   if (room) room.dispose();
-  room = createRoom(id);
+  room = createRoom(id, { theme });
   scene.add(room.group);
   pet.position.copy(room.petSpot).add(new THREE.Vector3(0, 1.0, 0));
   for (const b of roomBar.children) b.setAttribute('aria-pressed', String(b.dataset.id === id));
@@ -86,6 +104,19 @@ function setRoom(id) {
 }
 document.getElementById('flush').onclick = () => room.flush && room.flush();
 document.getElementById('foods').onclick = (e) => { shelf.visible = !shelf.visible; e.currentTarget.setAttribute('aria-pressed', String(shelf.visible)); };
+function setTheme(t) {
+  theme = t;
+  applyStageLights(t, lights);
+  scene.background = new THREE.Color(ROOM_THEME_LIGHTS[t].clear);
+  room && room.setTheme(t);
+  document.body.classList.toggle('dark', t === 'dark');
+  document.getElementById('theme').setAttribute('aria-pressed', String(t === 'dark'));
+}
+document.getElementById('theme').onclick = () => setTheme(theme === 'dark' ? 'light' : 'dark');
+document.getElementById('mini').onclick = (e) => {
+  mini.visible = !mini.visible; pet.visible = !mini.visible; shelf.visible = !mini.visible && document.getElementById('foods').getAttribute('aria-pressed') === 'true';
+  e.currentTarget.setAttribute('aria-pressed', String(mini.visible));
+};
 document.getElementById('bands').onclick = (e) => { const on = document.body.classList.toggle('bands'); e.currentTarget.setAttribute('aria-pressed', String(on)); };
 
 function resize() {
@@ -94,8 +125,10 @@ function resize() {
 }
 addEventListener('resize', resize); resize();
 
-window.__demo = { setRoom, scene, renderer, countRoomCalls: () => countDrawCalls(room.group), calls: 0, frames: 0 };
+window.__demo = { setRoom, setTheme, scene, renderer, mini, countRoomCalls: () => countDrawCalls(room.group), calls: 0, frames: 0 };
+setTheme(params.get('theme') === 'dark' ? 'dark' : 'light');
 setRoom(ROOM_IDS.includes(params.get('room')) ? params.get('room') : 'living');
+if (params.get('mini') === '1') document.getElementById('mini').click();
 if (params.get('foods') === '0') document.getElementById('foods').click();
 if (params.get('bands') === '1') document.getElementById('bands').click();
 if (params.get('ui') === '0') for (const el of document.querySelectorAll('.bar,#info')) el.style.display = 'none';
@@ -105,6 +138,7 @@ const info = document.getElementById('info');
 renderer.setAnimationLoop(() => {
   const dt = Math.min(0.05, clock.getDelta()), t = clock.elapsedTime;
   room.update(dt, t);
+  if (mini.visible) for (const m of mini.children) if (m.userData.spin) m.rotation.y = Math.sin(t * 1.2) * 0.5;
   renderer.render(scene, camera);
   window.__demo.calls = renderer.info.render.calls; window.__demo.frames++;
   if (window.__demo.frames % 15 === 1) info.textContent = `${room.id} · room draw calls ${countDrawCalls(room.group)} · frame ${renderer.info.render.calls}`;

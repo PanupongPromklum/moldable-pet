@@ -3,20 +3,23 @@
  * Fridge left of the pet, counter with kettle right, wall shelf with jars, round
  * table with stools and pendant lamp; stove, clock and window for wide screens.
  * The food tray itself is HUD (glaze), not 3D.
+ * Evening look (setTheme('dark')): the under-shelf light and pendant lamp glow,
+ * the desktop window shows a dusk sky with a moon and soft stars.
  */
 import * as THREE from 'three';
-import { ClayBuilder, PALETTE, BRAND, lighten, roundedBox, capsule, sphere, torus, lathe, puck, blob, circle, gradientY, brandGradientX } from '../props/clay.js';
+import { ClayBuilder, PALETTE, NIGHT, BRAND, lighten, roundedBox, capsule, sphere, torus, lathe, puck, blob, circle, gradientY, brandGradientX } from '../props/clay.js';
 import { addShell, makeRoom, WALL_Z } from './shell.js';
 
 const P = PALETTE.kitchen;
+const N = NIGHT.kitchen;
 const W = WALL_Z + 0.04;
 const CAB = '#F7E6EE';
 const DOOR = lighten('#F7E6EE', 0.45);
 
 /** Build the kitchen. @returns {ReturnType<typeof makeRoom>} */
 export function buildKitchen() {
-  const b = new ClayBuilder({ shadowColor: P.shadow, shadowOpacity: 0.2 });
-  addShell(b, P);
+  const b = new ClayBuilder({ shadowColor: P.shadow, shadowOpacity: 0.2, themed: true, nightShadowColor: N.shadow });
+  addShell(b, P, N);
   const group = new THREE.Group();
 
   // --- fridge (left, behind the pet's shoulder)
@@ -65,6 +68,10 @@ export function buildKitchen() {
   b.add(lathe([[0, 0], [0.12, 0], [0.19, 0.08], [0.2, 0.16], [0.18, 0.17], [0, 0.05]], 20), '#F1DCEA', { position: [sx + 0.08, sy + 0.05, W + 0.16] });
   b.add(lathe([[0, 0], [0.1, 0], [0.12, 0.2], [0, 0.2]], 16), lighten(BRAND.lavender, 0.4), { position: [sx + 0.36, sy + 0.05, W + 0.16] });
   b.add(blob(0.12, { seed: 11, detail: 2 }), lighten(BRAND.teal, 0.3), { position: [sx + 0.36, sy + 0.34, W + 0.16], scale: [1, 1.15, 1] });
+  // soft light bar under the shelf (glows in the evening, lights the backsplash)
+  b.addLamp(capsule(0.035, 0.7, 3, 10), lighten(BRAND.pink, 0.7), { position: [sx, sy - 0.08, W + 0.2], rotation: [0, 0, Math.PI / 2], shade: 0 });
+  b.addHalo(sx, sy - 0.35, W + 0.02, 1.9, NIGHT.lamp, 0.3);
+  b.addHalo(sx, sy - 0.1, W + 0.3, 0.7, NIGHT.lamp, 0.16);
 
   // --- round table with stools + pendant lamp (right, desktop)
   const tx = 3.15, tz = -1.15;
@@ -79,7 +86,8 @@ export function buildKitchen() {
   }
   b.addShadow(tx, tz, 1.9, 1.3);
   b.add(capsule(0.015, 2.6, 2, 6), PALETTE.steel, { position: [tx, 4.2, tz] });
-  b.add(lathe([[0, 0], [0.36, 0], [0.37, 0.03], [0.3, 0.18], [0.12, 0.28], [0, 0.29]], 24), lighten(BRAND.pink, 0.55), { position: [tx, 2.7, tz], shade: 0.03 });
+  b.addLamp(lathe([[0, 0], [0.36, 0], [0.37, 0.03], [0.3, 0.18], [0.12, 0.28], [0, 0.29]], 24), lighten(BRAND.pink, 0.55), { position: [tx, 2.7, tz], shade: 0.03 });
+  b.addHalo(tx, 2.6, tz + 0.1, 2.2, NIGHT.lamp, 0.28);
   b.addGlow(sphere(0.1, 12, 8), '#FFF6EE', { position: [tx, 2.68, tz], scale: [1, 0.55, 1] });
 
   // --- stove + clock + window (left, desktop)
@@ -101,7 +109,13 @@ export function buildKitchen() {
 
   const wx = -5.0, wy = 2.4, R = 0.62;
   b.add(torus(R, 0.1, 10, 40), PALETTE.white, { position: [wx, wy, W + 0.04], shade: 0.03 });
-  b.addGlow(circle(R, 40), gradientY('#F9E4EC', '#D6E3F6', -R, R * 0.8), { position: [wx, wy, W] });
+  b.addGlow(circle(R, 40), gradientY('#F9E4EC', '#D6E3F6', -R, R * 0.8),
+    { position: [wx, wy, W], night: gradientY(NIGHT.skyLow, NIGHT.skyHigh, -R, R * 0.8) });
+  b.addHalo(wx - 0.25, wy + 0.28, W + 0.015, 0.36, NIGHT.moon, 0.95);
+  b.addHalo(wx - 0.25, wy + 0.28, W + 0.016, 0.17, NIGHT.moon, 0.9);
+  for (const [ax, ay, s_] of [[0.25, 0.35, 0.08], [0.05, 0.12, 0.06], [0.36, 0.05, 0.07], [-0.4, -0.05, 0.06], [0.12, -0.25, 0.05]]) {
+    b.addHalo(wx + ax, wy + ay, W + 0.014, s_, NIGHT.star, 0.95);
+  }
   b.add(roundedBox(1.25, 0.1, 0.24, 0.05), PALETTE.white, { position: [wx, wy - R - 0.08, W + 0.1] });
   b.add(lathe([[0, 0], [0.13, 0], [0.16, 0.2], [0, 0.2]], 16), lighten(BRAND.pink, 0.5), { position: [wx + 0.3, wy - R - 0.03, W + 0.12] });
   b.add(blob(0.13, { seed: 13, detail: 2 }), lighten(BRAND.teal, 0.3), { position: [wx + 0.3, wy - R + 0.26, W + 0.12], scale: [1, 1.15, 1] });

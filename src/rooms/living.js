@@ -2,21 +2,24 @@
  * living.js — ห้องนั่งเล่น (owner: prop).
  * Sofa behind the pet, round window with soft sky, framed brand blob, rug, plant,
  * floor lamp, toy ball; extra cabinet, pouf and shelf for wide desktop screens.
+ * Evening look (setTheme('dark')): dusk sky with a moon and soft stars in the window,
+ * the sill lamp and floor lamp glow warmly.
  */
 import * as THREE from 'three';
 import {
-  ClayBuilder, PALETTE, BRAND, lighten, roundedBox, capsule, sphere, torus, lathe, puck, blob, circle,
+  ClayBuilder, PALETTE, NIGHT, BRAND, lighten, roundedBox, capsule, sphere, torus, lathe, puck, blob, circle,
   gradientY, brandGradientX,
 } from '../props/clay.js';
 import { addShell, makeRoom, WALL_Z } from './shell.js';
 
 const P = PALETTE.living;
+const N = NIGHT.living;
 const W = WALL_Z + 0.04;
 
 /** Build the living room. @returns {ReturnType<typeof makeRoom>} */
 export function buildLiving() {
-  const b = new ClayBuilder({ shadowColor: P.shadow, shadowOpacity: 0.22 });
-  addShell(b, P);
+  const b = new ClayBuilder({ shadowColor: P.shadow, shadowOpacity: 0.22, themed: true, nightShadowColor: N.shadow });
+  addShell(b, P, N);
   const group = new THREE.Group();
 
   // --- sofa (centred behind the pet, as in the approved mockup)
@@ -36,12 +39,27 @@ export function buildLiving() {
   // --- round window with soft sky
   const wx = -0.62, wy = 2.5, R = 0.55;
   b.add(torus(R, 0.1, 10, 40), PALETTE.white, { position: [wx, wy, W + 0.04], shade: 0.03 });
-  b.addGlow(circle(R, 40), gradientY('#F7E3EE', '#CFE0F6', -R, R * 0.8), { position: [wx, wy, W] });
-  b.addGlow(blob(0.12, { seed: 2, detail: 2 }), '#FFFFFF', { position: [wx - 0.22, wy + 0.2, W + 0.01], scale: [1.9, 0.75, 0.2] });
-  b.addGlow(blob(0.1, { seed: 5, detail: 2 }), '#FFFFFF', { position: [wx + 0.25, wy - 0.05, W + 0.01], scale: [1.7, 0.7, 0.2] });
+  b.addGlow(circle(R, 40), gradientY('#F7E3EE', '#CFE0F6', -R, R * 0.8),
+    { position: [wx, wy, W], night: gradientY(NIGHT.skyLow, NIGHT.skyHigh, -R, R * 0.8) });
+  b.addGlow(blob(0.12, { seed: 2, detail: 2 }), '#FFFFFF', { position: [wx - 0.22, wy + 0.2, W + 0.01], scale: [1.9, 0.75, 0.2], night: NIGHT.cloud });
+  b.addGlow(blob(0.1, { seed: 5, detail: 2 }), '#FFFFFF', { position: [wx + 0.25, wy - 0.05, W + 0.01], scale: [1.7, 0.7, 0.2], night: NIGHT.cloud });
+  // night sky: moon + a few soft stars (dark theme only)
+  b.addHalo(wx + 0.27, wy + 0.27, W + 0.015, 0.34, NIGHT.moon, 0.95);
+  b.addHalo(wx + 0.27, wy + 0.27, W + 0.016, 0.16, NIGHT.moon, 0.9);
+  for (const [sx_, sy_, s_] of [[-0.3, 0.32, 0.09], [-0.05, 0.4, 0.06], [0.1, 0.18, 0.07], [-0.36, 0.02, 0.06], [0.32, -0.12, 0.07], [-0.12, -0.24, 0.05]]) {
+    b.addHalo(wx + sx_, wy + sy_, W + 0.014, s_, NIGHT.star, 0.95);
+  }
   b.add(roundedBox(R * 1.9, 0.06, 0.05, 0.025), PALETTE.white, { position: [wx, wy, W + 0.05] });
   b.add(roundedBox(0.06, R * 1.9, 0.05, 0.025), PALETTE.white, { position: [wx, wy, W + 0.05] });
   b.add(roundedBox(R * 2.1, 0.1, 0.24, 0.05), PALETTE.white, { position: [wx, wy - R - 0.08, W + 0.1] });
+  // little dome lamp on the sill (visible on phones; glows in the evening)
+  const sl = [wx - 0.42, wy - R - 0.03, W + 0.12];
+  b.add(puck(0.09, 0.04, 16), '#FFFFFF', { position: sl });
+  b.add(capsule(0.018, 0.08, 2, 6), '#FFFFFF', { position: [sl[0], sl[1] + 0.08, sl[2]] });
+  b.addLamp(lathe([[0, 0], [0.15, 0], [0.155, 0.02], [0.12, 0.1], [0.06, 0.15], [0, 0.16]], 20), lighten(BRAND.pink, 0.55), { position: [sl[0], sl[1] + 0.12, sl[2]], shade: 0.03 });
+  b.addGlow(sphere(0.05, 10, 6), '#FFF6EE', { position: [sl[0], sl[1] + 0.12, sl[2]], scale: [1, 0.5, 1] });
+  b.addHalo(sl[0], sl[1] + 0.14, W + 0.02, 1.3, NIGHT.lamp, 0.32);
+  b.addHalo(sl[0], sl[1] + 0.12, sl[2] + 0.2, 0.5, NIGHT.lamp, 0.22);
 
   // --- framed brand blob (right of the window)
   b.add(roundedBox(0.66, 0.78, 0.08, 0.16), '#FBF0F4', { position: [0.92, 2.48, W + 0.04] });
@@ -51,8 +69,10 @@ export function buildLiving() {
   const lx = -2.6, lz = -2.45;
   b.add(puck(0.27, 0.08), '#D8D2EE', { position: [lx, 0, lz] });
   b.add(capsule(0.04, 1.6, 3, 8), '#E3DEF4', { position: [lx, 0.88, lz] });
-  b.add(lathe([[0, 0], [0.42, 0], [0.43, 0.04], [0.38, 0.16], [0.24, 0.34], [0.07, 0.42], [0, 0.43]], 24), lighten(BRAND.pink, 0.62), { position: [lx, 1.66, lz], shade: 0.03 });
+  b.addLamp(lathe([[0, 0], [0.42, 0], [0.43, 0.04], [0.38, 0.16], [0.24, 0.34], [0.07, 0.42], [0, 0.43]], 24), lighten(BRAND.pink, 0.62), { position: [lx, 1.66, lz], shade: 0.03 });
   b.addGlow(sphere(0.1, 12, 8), '#FFF6EE', { position: [lx, 1.64, lz], scale: [1, 0.5, 1] });
+  b.addHalo(lx, 1.8, W + 0.02, 2.6, NIGHT.lamp, 0.34);
+  b.addHalo(lx, 1.7, lz + 0.5, 1.0, NIGHT.lamp, 0.18);
   b.addShadow(lx, lz, 0.9, 0.6);
 
   // --- side table with mug (right of sofa)
@@ -68,7 +88,7 @@ export function buildLiving() {
   const px = 3.15, pz = -2.4;
   b.add(lathe([[0, 0], [0.24, 0], [0.3, 0.05], [0.34, 0.5], [0.39, 0.55], [0.38, 0.62], [0, 0.6]], 24), lighten(BRAND.lavender, 0.3), { position: [px, 0, pz] });
   b.addShadow(px, pz, 1.0, 0.6);
-  const lb = new ClayBuilder();
+  const lb = new ClayBuilder({ themed: true });
   const leaf = (rx, rz, len, col) => lb.add(blob(0.16, { seed: rx * 7 + rz, wobble: 0.06, detail: 2 }), col,
     { position: [Math.sin(rz) * -len * 0.5, Math.cos(rz) * len * 0.5 * Math.cos(rx), Math.sin(rx) * len * 0.5], rotation: [rx, 0, rz], scale: [0.7, len * 3.1, 0.32] });
   const L1 = lighten(BRAND.teal, 0.2), L2 = lighten(BRAND.teal, 0.42);
@@ -102,7 +122,7 @@ export function buildLiving() {
   b.addShadow(-4.1, -1.6, 1.5, 1.1);
 
   // --- toy ball (sits behind-right of the pet; rocks gently)
-  const ball = new ClayBuilder().add(sphere(0.27, 28, 18), (x, y, z, c) => {
+  const ball = new ClayBuilder({ themed: true }).add(sphere(0.27, 28, 18), (x, y, z, c) => {
     const a = Math.atan2(z, x); const k = Math.floor(((a + Math.PI) / (2 * Math.PI)) * 6) % 3;
     c.set(Math.abs(y) > 0.24 ? '#FFFFFF' : [lighten(BRAND.pink, 0.3), lighten(BRAND.periwinkle, 0.3), '#FFFFFF'][k]);
   }, { shade: 0.1 }).buildMesh('living:toyBall');
