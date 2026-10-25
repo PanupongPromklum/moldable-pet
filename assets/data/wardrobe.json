@@ -1,0 +1,39 @@
+{
+  "_meta": {
+    "owner": "loop",
+    "story": "S2-07",
+    "version": 1,
+    "doc": "design/gdd/economy.md",
+    "units": {
+      "price": "coins; 0 for starter items",
+      "startCoins": "coins in a new save",
+      "reactions.*.social / fun": "need level delta (0..1 scale), applied once per equip, before persona gains",
+      "bonusCooldownSeconds": "seconds per character before an equip can give the need bonus again"
+    },
+    "notes": "items[] order is display order in the sheet. likes = characters who react happily (wearLike) when wearing the item; everyone else says wearOk. Reaction face/action reuse the persona's foodReaction.like / foodReaction.ok."
+  },
+  "startCoins": 0,
+  "slots": {
+    "head": { "label": "หัว" },
+    "eyes": { "label": "ตา" },
+    "body": { "label": "ตัว" }
+  },
+  "items": [
+    { "id": "hat-beanie",    "slot": "head", "name": "หมวกไหมพรม",   "price": 0,   "starter": true,  "likes": ["cloud"] },
+    { "id": "hat-party",     "slot": "head", "name": "หมวกปาร์ตี้",   "price": 90,  "starter": false, "likes": ["flower", "gumdrop"] },
+    { "id": "bow-ribbon",    "slot": "head", "name": "โบว์",          "price": 120, "starter": false, "likes": ["splat"] },
+    { "id": "crown-flower",  "slot": "head", "name": "มงกุฎดอกไม้",   "price": 350, "starter": false, "likes": ["splat", "flower"] },
+    { "id": "glasses-round", "slot": "eyes", "name": "แว่นกลม",       "price": 0,   "starter": true,  "likes": ["flower"] },
+    { "id": "glasses-sun",   "slot": "eyes", "name": "แว่นกันแดด",    "price": 120, "starter": false, "likes": ["cloud"] },
+    { "id": "glasses-star",  "slot": "eyes", "name": "แว่นดาว",       "price": 200, "starter": false, "likes": ["diamond"] },
+    { "id": "tie-neck",      "slot": "body", "name": "เน็คไท",        "price": 0,   "starter": true,  "likes": ["gumdrop"] },
+    { "id": "badge-star",    "slot": "body", "name": "เข็มกลัดดาว",   "price": 60,  "starter": false, "likes": ["splat", "gumdrop"] },
+    { "id": "tie-bow",       "slot": "body", "name": "หูกระต่าย",     "price": 90,  "starter": false, "likes": ["diamond"] },
+    { "id": "scarf",         "slot": "body", "name": "ผ้าพันคอ",      "price": 150, "starter": false, "likes": ["diamond", "cloud"] }
+  ],
+  "reactions": {
+    "like": { "line": "wearLike", "persona": "foodReaction.like", "social": 0.03, "fun": 0.02 },
+    "ok":   { "line": "wearOk",   "persona": "foodReaction.ok",   "social": 0.0,  "fun": 0.0 }
+  },
+  "bonusCooldownSeconds": 600
+}

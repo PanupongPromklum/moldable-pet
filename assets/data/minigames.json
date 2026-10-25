@@ -1,0 +1,93 @@
+{
+  "_meta": {
+    "owner": "loop",
+    "story": "S2-07",
+    "version": 1,
+    "doc": "design/gdd/minigame-snack-rain.md",
+    "units": {
+      "durationSec / countdownSec / graceSec / rampSec / grumpySec / pauseResumeCountdownSec": "seconds",
+      "lanesOrWidth": "< 2 = continuous movement, value is the play width as a fraction of the visible width at the pet's depth; integer >= 2 = that many lanes",
+      "playWidthMaxUnits / catchRadius / itemSize": "world units (1 = prototype body radius)",
+      "spawn.*PerSec": "objects spawned per second",
+      "spawn.rampPower": "curve exponent on round progress p (0..1): 1 = linear, > 1 = slow start",
+      "fallSpeed.*": "visible play heights per second (screen-relative, same feel on phone and desktop)",
+      "move.keySpeed": "play widths per second while an arrow key is held",
+      "move.followPerSec": "smoothing rate toward the pointer/hand target, 1/s (higher = snappier)",
+      "items.*.weight": "relative spawn weight; demon weight ramps from 0 after graceSec over rampSec",
+      "items.*.points": "score per catch, before the streak multiplier (demon points are a flat penalty, not multiplied)",
+      "streak.step": "consecutive catches per multiplier step",
+      "coinsPerPoints": "points per 1 bonus coin at round end (floor)",
+      "needs.*": "need level delta (0..1 scale) on round end, scaled by the fraction of the round played; fun also x persona playGain"
+    }
+  },
+  "snackRain": {
+    "title": "ฝนขนม",
+    "durationSec": 45,
+    "countdownSec": 3,
+    "pauseResumeCountdownSec": 3,
+    "lanesOrWidth": 0.86,
+    "playWidthMaxUnits": 6.0,
+    "catchRadius": 0.55,
+    "itemSize": 0.45,
+    "move": {
+      "keySpeed": 1.1,
+      "followPerSec": 14
+    },
+    "spawn": {
+      "startPerSec": 0.9,
+      "endPerSec": 2.0,
+      "rampPower": 1.3,
+      "maxOnScreen": 6,
+      "minGapSec": 0.22,
+      "edgeMargin": 0.06
+    },
+    "fallSpeed": {
+      "start": 0.32,
+      "end": 0.62,
+      "jitter": 0.08
+    },
+    "items": {
+      "snack": {
+        "weight": 0.74,
+        "points": 10,
+        "foods": ["onigiri", "banana", "cupcake", "apple", "bun", "milk"],
+        "likedBonus": 5
+      },
+      "coin": {
+        "weight": 0.16,
+        "points": 15,
+        "coins": 2
+      },
+      "demon": {
+        "weight": 0.1,
+        "points": -20,
+        "graceSec": 8,
+        "rampSec": 17,
+        "maxInARow": 1,
+        "grumpySec": 0.8
+      }
+    },
+    "streak": {
+      "step": 4,
+      "bonusPerStep": 0.5,
+      "maxMultiplier": 3,
+      "resetOnMiss": false,
+      "resetOnDemon": true
+    },
+    "coinsPerPoints": 40,
+    "minCoinsPerRound": 5,
+    "minCoinsOnlyIfComplete": true,
+    "maxCoinsPerRound": 60,
+    "needs": {
+      "fun": 0.25,
+      "social": 0.1,
+      "hunger": -0.05
+    },
+    "lines": {
+      "start": "minigameStart",
+      "demon": "minigameDemon",
+      "end": "minigameWin",
+      "demonLineCooldownSec": 6
+    }
+  }
+}
