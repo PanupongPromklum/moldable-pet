@@ -143,6 +143,37 @@ Input (mouse, touch and webcam hands share one gesture layer):
 - **Return after absence** (gap ≥ `needs.json backAfterMinutes`): pick a reaction style at random using `personas.json <key>.returnStyles` weights — `gentle` (smile + `back` line), `dramatic` (persona `hurtExpr` + `lonely` then `back` line, a short shake), `sleepy` (`sleepy` expression + yawn + `sleepy` line, then `back`).
 - ไผ่'s loneliness timing and the toilet warning thresholds stay as Loop set them.
 
+## Sprint 2 additions (2026-10-25, kiln)
+
+### Owner feedback to fix
+1. **Contrast in both themes.** Text on primary (#5A68B5) fills is white (#FFFFFF), never dark. Add a real **dark theme** (`prefers-color-scheme: dark`) that meets 4.5:1 for text and 3:1 for meter fills/rings/status against their surfaces; need levels and states must be readable in both themes. Declare `color-scheme: light dark` and `<meta name="color-scheme" content="light dark">` so browsers do not auto-invert ("force dark") the page. Rooms get a matching evening look in dark mode (`room.setTheme('light'|'dark')`).
+2. **No settings button.** Remove the gear. Tapping the character chip (avatar + name, top-left) opens the character select. `onSettings` is removed; the chip calls `onCharacterChip()`.
+3. **Toilet flow shows one control at a time.** Before sitting: one coach mark "ลากตัวไปที่ชักโครก" (no button). While sitting: one primary button "กดชักโครก" (no coach mark, room nav hidden). After flushing: back to normal. Never show a coach and a button with the same words together.
+4. **Camera view options.** When the camera is on, a toggle "ซ่อนภาพกล้อง / แสดงภาพกล้อง". Hidden = the room shows normally (no video) and only soft stylized hands are drawn (rounded clay-like hands in a brand tint with a light outline, not a skeleton). Shown = current AR view. The choice is saved.
+
+### Outfits — clay (3D), loop (catalog), glaze (UI), wire (state)
+Slots: `head`, `eyes`, `body`. One item per slot (equipping replaces the item in that slot; items in different slots never overlap visually). Fits all six characters.
+Item ids (fixed): head `hat-beanie` (หมวกไหมพรม), `hat-party` (หมวกปาร์ตี้), `bow-ribbon` (โบว์), `crown-flower` (มงกุฎดอกไม้) · eyes `glasses-round` (แว่นกลม), `glasses-sun` (แว่นกันแดด), `glasses-star` (แว่นดาว) · body `tie-neck` (เน็คไท), `tie-bow` (หูกระต่าย), `scarf` (ผ้าพันคอ), `badge-star` (เข็มกลัดดาว).
+```js
+pet.setOutfit({ head: 'bow-ribbon', eyes: null, body: 'tie-neck' });  // null = empty slot
+pet.getOutfit();
+import { ACCESSORY_IDS, SLOT_OF } from './characters/accessories.js';
+```
+Clay places each item from per-shape anchors (head top, eye line and both eye centres, chest front below the mouth) so it sits correctly on every silhouette, follows squash/stretch, carry and sitting, and never covers the eyes or mouth (except eyewear over the eyes). Clay-style matte meshes, brand-tint colours.
+
+`assets/data/wardrobe.json` (loop): `{ "slots": { "head": {"label":"หัว"}, "eyes": {"label":"ตา"}, "body": {"label":"ตัว"} }, "items": [ { "id", "slot", "name", "price", "starter": bool, "likes": ["<charKey>"] } ] }` — starter items are owned from the start; others cost coins.
+Save (wire): `owned: [ids]` shared across characters; `chars[key].outfit: {head, eyes, body}` per character.
+HUD (glaze): a wardrobe button "แต่งตัว" in the living room; `hud.showWardrobe({ slots, items, owned, outfit, coins, charKey })`, `hud.hideWardrobe()`, `hud.updateWardrobe(partial)`; handlers `onWardrobe()`, `onEquip(slot, idOrNull)`, `onBuy(id)` (confirmation inside the sheet, no browser dialogs). The pet stays visible while dressing (sheet covers at most the bottom 45%).
+
+### Minigame "ฝนขนม" (Snack Rain) — loop (design + numbers), wire (logic), prop (meshes), glaze (HUD), echo (sfx)
+Started from the living room "เล่น" button. 45 s round (data-driven). Snacks, coins and the occasional little "ปีศาจลูกค้า" (client-demon blob) fall from the top. The player moves the pet left/right — drag/touch anywhere, mouse move, arrow keys, or hand x-position with the camera — and the pet catches with its open mouth. Snack = points, coin = points + coin, demon = lose a little and the pet makes a "หงุดหงิด" face; streak multiplier. End: result card with score, coins earned, best score; fun and social rise, hunger drops a little. Coins are spent in the wardrobe.
+`assets/data/minigames.json` (loop): `{ "snackRain": { "durationSec", "lanesOrWidth", "spawn": { "startPerSec", "endPerSec" }, "fallSpeed": { "start", "end" }, "items": { "snack": {"weight","points"}, "coin": {"weight","points","coins"}, "demon": {"weight","points"} }, "streak": { "step", "maxMultiplier" }, "coinsPerPoints": n, "maxCoinsPerRound": n, "needs": { "fun", "social", "hunger" } } }`.
+Prop: `createCoinMesh()`, `createDemonMesh()` (cute small grumpy blob, clay style) in `src/props/minigame.js`.
+HUD: `hud.startMinigame({ title, durationSec })`, `hud.updateMinigame({ score, timeLeft, streak, coins })`, `hud.showMinigameResult({ score, best, coins })`, `hud.endMinigame()`; handlers `onMinigameExit()`, `onMinigameAgain()`. Normal HUD (needs, nav, mic, tray) hides during play; a 3-2-1 countdown.
+Echo sfx names added: `coin`, `catch`, `bonk`, `tick`, `go`, `win`, `equip`, `buy`.
+Coins: `hud.setCoins(n)` animates the change.
+
 ## Change log
 - 2026-10-25 v1 — kiln.
 - 2026-10-25 v1.1 — per-character needs, random return style (owner decisions).
+- 2026-10-25 v2 — Sprint 2: contrast + dark theme, character chip instead of settings, one-control toilet flow, hidden-camera hands, outfits, Snack Rain minigame + coins.
