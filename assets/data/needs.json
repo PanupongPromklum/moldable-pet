@@ -9,7 +9,10 @@
       "decayPerHour": "level lost per real-time hour, before persona needRates",
       "PerSecond": "level gained per second of the gesture, before persona gains",
       "offlineCapHours": "hours",
-      "Seconds": "seconds"
+      "Seconds": "seconds",
+      "Speed": "body-heights per second (pet height on screen = 1), screen-independent",
+      "Taper": "petSocialTaperStart = social level where petting starts to slow; petSocialTaperMin = rate multiplier left at social 1.0",
+      "petHeadZoneFromTop": "fraction of body height measured down from the head top where a drag strokes instead of stretches"
     }
   },
   "needs": {
@@ -19,7 +22,13 @@
     "social": { "label": "ใกล้ชิด",  "start": 0.6,  "decayPerHour": 0.23,  "low": 0.3, "urgent": 0.12, "good": 0.75 }
   },
   "actions": {
-    "petPerSecond": { "social": 0.04, "fun": 0.02 },
+    "petPerSecond": { "social": 0.065, "fun": 0.02 },
+    "petSocialTaperStart": 0.7,
+    "petSocialTaperMin": 0.35,
+    "petStrokeMinSpeed": 0.12,
+    "petStrokeMaxSpeed": 4.0,
+    "petStrokeGraceSeconds": 0.25,
+    "petHeadZoneFromTop": 0.4,
     "pokeFun": 0.01,
     "pokeSpam": { "count": 5, "windowSeconds": 2, "fun": 0 },
     "stretchFunPerSecond": 0.02,

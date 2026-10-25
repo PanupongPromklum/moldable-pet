@@ -1,6 +1,6 @@
 # Needs System (ความต้องการ)
 
-Owner: loop · Story: S1-01 · Status: Draft v1 (2026-10-25), numbers awaiting owner sign-off
+Owner: loop · Story: S1-01 · Status: Draft v1.1 (2026-10-26, Sprint 3 petting retune), numbers awaiting owner sign-off
 Data: `assets/data/needs.json`, `assets/data/foods.json`, `assets/data/personas.json`
 Contract: `docs/architecture/module-contracts.md` (ids and shapes are binding)
 
@@ -32,7 +32,7 @@ All values in `needs.json → actions`; persona gains from `personas.json`.
 
 | Gesture | Effect | Persona scale |
 |---|---|---|
-| Pet (rub above head) | social +0.04/s, fun +0.02/s | × petGain |
+| Pet (slow stroke over the head, or mouse rub above it) | social +0.065/s, slowing above 0.7 (see 4.2); fun +0.02/s | × petGain |
 | Poke (tap) | fun +0.01 per poke | × playGain |
 | Poke spam (≥ 5 pokes in 2 s) | no fun gain; `pokeSpam` line | — |
 | Stretch (drag) | fun +0.02/s; above stretch 0.8 (`stretchBigThreshold`) the gain × 0.25 (`hardFunScale`) and `stretchBig` line | × playGain |
@@ -46,6 +46,8 @@ All values in `needs.json → actions`; persona gains from `personas.json`.
 | Flush while sitting | toilet = 1; if toilet was ≤ low, fun +0.05 (`flushReliefFun`) and `relieved` line | — |
 
 All results are clamped to [0, 1].
+
+**Petting stroke (Sprint 3, phones).** A drag that starts in the head zone (top `petHeadZoneFromTop` = 40% of the body height) strokes instead of stretching. Every frame where the finger (or mouse) moves inside the head zone at a speed between `petStrokeMinSpeed` (0.12) and `petStrokeMaxSpeed` (4.0) body-heights per second counts as petting. Speeds are measured in body-heights per second (pet height on screen = 1), so a phone and a desktop accept the same stroke. Pauses shorter than `petStrokeGraceSeconds` (0.25 s), such as turning the finger round at the end of a stroke, keep counting. Slower than the minimum is a resting finger (no gain); faster than the maximum is no longer petting (the slap check is separate and pixel-based, and must stay above the stroke maximum).
 
 ### 3.4 Eating
 1. Food is dropped in the mouth radius (wire's input rule).
@@ -92,6 +94,19 @@ Overrides: ฟ้า (cloud) social low = smile, urgent = sleepy (she likes quie
 | ฟ้า cloud | 1.15 | 0.9 | 0.8 | 0.5 | fast worker (fast metabolism), very private |
 | ปาม pill | 1.0 | 1.0 | 1.0 | 1.0 | neutral until a personality is decided |
 
+Petting response (`petGain`) and seconds of steady stroking (formula 4.2):
+
+| Char | petGain | social 0.3 → 0.75 | 0.75 → 1.0 | Why |
+|---|---|---|---|---|
+| ไผ่ flower | 1.5 | 4.7 | 4.4 | lonely fastest, so answers touch most |
+| ใหม่ splat | 1.4 | 5.0 | 4.7 | reassurance means a lot to her |
+| มิน gumdrop | 1.05 | 6.6 | 6.3 | balanced |
+| ปาม pill | 1.0 | 7.0 | 6.6 | reference character |
+| แอ๊ค diamond | 0.9 | 7.8 | 7.3 | likes being noticed, a little reserved |
+| ฟ้า cloud | 0.7 | 10.0 | 9.4 | private, slow to warm up, but clearly responds |
+
+Sprint 3 changes: ไผ่ 1.25 → 1.5, ใหม่ 1.45 → 1.4 (so ไผ่ responds most), ฟ้า 0.6 → 0.7 (still least, now clearly visible). petGain also scales the touch-joy mood and talk-back social.
+
 Hours from full (1.0) to `low` (0.3) while online:
 
 | Char | hunger | toilet* | fun | social |
@@ -137,6 +152,32 @@ one-shot:    L' = clamp(L + amount × gain, 0, 1)
 gain = petGain (pet, talk-back) | playGain (poke, stretch, squish, boing) | 1 (others)
 ```
 
+Petting social has a soft taper near the top, so it is quick from low but never instant to full:
+```
+taper(L)  = 1                                                     if L ≤ s
+          = 1 − (1 − m) × (L − s) / (1 − s)                       if L > s
+social'   = clamp(L + petPerSecond.social × petGain × taper(L) × dt, 0, 1)
+fun'      = clamp(fun + petPerSecond.fun × petGain × dt, 0, 1)      // no taper
+counts only while petStrokeMinSpeed ≤ v ≤ petStrokeMaxSpeed (v in body-heights/s),
+or within petStrokeGraceSeconds after the last counted frame
+```
+| Variable | Meaning | Default | Range |
+|---|---|---|---|
+| petPerSecond.social (b) | base social per second of stroking | 0.065 | 0.04–0.1 |
+| petSocialTaperStart (s) | level where petting starts to slow | 0.7 | 0.6–0.9 |
+| petSocialTaperMin (m) | rate multiplier left at social 1.0 | 0.35 | 0.2–1.0 (1 = no taper) |
+| petGain (g) | persona multiplier | 0.7–1.5 | 0.4–2.0 |
+
+Time from A to B: below s, `t = (B − A) / (b g)`; above s, with k = (1 − m)/(1 − s), `t = ln[(1 − k(A − s)) / (1 − k(B − s))] / (b g k)`.
+
+Worked example (ปาม, g = 1.0, social 0.3 → 0.75): 0.3 → 0.7 = 0.4 / 0.065 = 6.15 s. k = 0.65 / 0.3 = 2.167; 0.7 → 0.75 = ln(1 / 0.892) / (0.065 × 2.167) = 0.81 s. Total **7.0 s**. Going on to 1.0 adds ln(0.892 / 0.35) / 0.141 = 6.6 s, so a full fill from 0.3 is about 13.6 s. ไผ่ (g = 1.5) does 0.3 → 0.75 in 4.7 s; ฟ้า (g = 0.7) in 10.0 s.
+
+Options considered (default A applied for the phone playtest; owner decides):
+- **A. Taper (default):** b 0.065, taper from 0.7 to 0.35×. Low → good in ~7 s, last quarter slower. Feels responsive, full still takes effort.
+- **B. Flat:** b 0.06, no taper (m = 1). 0.3 → 0.75 in 7.5 s, 0.3 → 1.0 in 11.7 s. Simplest, but full arrives abruptly.
+- **C. Strong start, steep taper:** b 0.08, s 0.6, m 0.2. Low → good in ~6.0 s, then the last 0.25 crawls (~7.8 s). Most dramatic first seconds; may feel stingy at the top.
+
+
 ### 4.3 Eating
 ```
 k        = like | ok | dislike
@@ -154,7 +195,7 @@ refused if hunger ≥ fullThreshold
 - social: r = 0.23 × 1.6 = 0.368 → 0.9 − 1.104 < 0 → floored to **0.15** (low)
 
 Mood: away 3 h > 20 min → `back` line first. No need is urgent; first `low` in priority order is social → face `sad`, idle `tilt`, then `lonely` line.
-Care: petting gives social 0.04 × 1.25 = 0.05/s, so 0.15 → 1.0 takes 17 s. Feeding a cupcake (liked): hunger 0.438 + 0.15 = 0.588, fun 0.15 + 0.10 + 0.08 = 0.33, toilet 0.47 − 0.05 = 0.42.
+Care: petting gives social 0.065 × 1.5 = 0.0975/s up to 0.7 (5.7 s from 0.15), then tapers; 0.15 → 0.75 takes about 6.2 s and 0.15 → 1.0 about 10.6 s. Feeding a cupcake (liked): hunger 0.438 + 0.15 = 0.588, fun 0.15 + 0.10 + 0.08 = 0.33, toilet 0.47 − 0.05 = 0.42.
 If instead ไผ่ was away 30 h: Δh_off = 12 h, every need ends at 0.15 (low, never urgent).
 
 ## 5. Edge Cases
@@ -198,7 +239,13 @@ Each of these docs should list the needs system back as a dependency when they a
 | offlineFloor | needs | 0.15 | 0–0.3 | how sad a returning player finds the pet |
 | offlineGapSeconds | needs | 60 | 30–300 | when a gap counts as offline |
 | backAfterMinutes | needs | 20 | 5–120 | when `back` is said |
-| actions.petPerSecond | needs | social 0.04, fun 0.02 | 0.02–0.08 | petting time to refill (≈ 15–25 s) |
+| actions.petPerSecond | needs | social 0.065, fun 0.02 | social 0.04–0.1, fun 0.01–0.04 | petting time to refill (low → good ≈ 5–10 s) |
+| actions.petSocialTaperStart | needs | 0.7 | 0.6–0.9 | where petting starts to slow |
+| actions.petSocialTaperMin | needs | 0.35 | 0.2–1.0 | how slow the last stretch to full is (1 = no taper) |
+| actions.petStrokeMinSpeed | needs | 0.12 body-heights/s | 0.05–0.3 | slowest stroke that counts (lower = gentler fingers accepted) |
+| actions.petStrokeMaxSpeed | needs | 4.0 body-heights/s | 2–6 (below the slap speed) | fastest stroke that still counts |
+| actions.petStrokeGraceSeconds | needs | 0.25 s | 0–0.5 | pause allowed when the finger turns round |
+| actions.petHeadZoneFromTop | needs | 0.4 (of body height) | 0.25–0.5 | where a drag strokes instead of stretches |
 | actions.pokeFun | needs | 0.01 | 0–0.03 | value of a tap |
 | actions.stretch/squishFunPerSecond | needs | 0.02 | 0.01–0.05 | play time to refill fun |
 | actions.boingFun | needs | 0.03 | 0–0.06 | reward for big releases |
@@ -215,7 +262,7 @@ Each of these docs should list the needs system back as a dependency when they a
 | reactions.like.funBonus | foods | 0.08 | 0–0.15 | reward for knowing the pet |
 | reactions.dislike.hungerScale / funBonus | foods | 0.8 / −0.03 | 0.5–1.0 / −0.1…0 | cost of a disliked food |
 | needRates.* | personas | 0.5–1.6 | 0.4–2.0 | personality pace |
-| petGain / playGain | personas | 0.6–1.5 | 0.4–2.0 | how much a character enjoys touch / play |
+| petGain / playGain | personas | petGain 0.7–1.5, playGain 0.6–1.5 | 0.4–2.0 | how much a character enjoys touch / play |
 | ignoreSeconds | personas | 12–40 | 8–60 | short-term "ignored" mood (prototype engine) |
 | foodReaction.chewTimeScale | personas | 0.6–1.3 | 0.5–1.5 | eating speed per character |
 
@@ -239,9 +286,11 @@ Unit tests (pure functions, injected clock):
 10. Flush: toilet 0.2 → 1.0 and fun +0.05; toilet 0.8 → 1.0, fun unchanged, `toiletNoNeed` event raised.
 11. Mood: toilet 0.1 and hunger 0.1 → toilet urgent face (`surprised`); all needs ≥ 0.75 → `smile`; cloud with social 0.2 → `smile` (override).
 12. No level ever leaves [0, 1] after 10 000 random actions and ticks (seeded).
+12a. Petting: pill, social 0.3, petting ticks of 1/60 s → reaches 0.75 after 7.0 ± 0.1 s; flower after 4.7 ± 0.1 s; cloud after 10.0 ± 0.1 s. Pill from 0.75 to ≥ 0.999 takes 6.6 ± 0.2 s (taper works). A stroke at 0.1 or 4.5 body-heights/s gives no gain; at 0.12–4.0 it does.
 
 Playtest / manual:
 13. On a phone, a full care pass from all needs at 0.15 takes ≤ 2.5 minutes.
+13a. On a phone, a slow one-finger stroke over the head raises ใกล้ชิด visibly within 2 s and takes it from low to good in under 10 s for every character except ฟ้า (≤ 11 s).
 14. No line in personas.json overflows the speech bubble at 390 px width (glaze to confirm; target ≤ 28 Thai characters).
 15. No code path produces death, sickness, or loss of items from low needs.
 
