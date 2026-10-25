@@ -1,5 +1,5 @@
 /*
- * Moldable Pet — UI tokens, light + dark. Owner: glaze. Story S1-04, S2-01.
+ * Moldable Pet — UI tokens, light + dark. Owner: glaze. Story S1-04, S2-01, S3 (manual theme).
  * Source: design/art/moldable-design.md §3–§10 + owner decisions 2026-10-25.
  * Legend:  [DS]   value from the Moldable Design System (light or dark mode of the variable)
  *          [OK]   proposed by glaze, approved by the owner
@@ -7,10 +7,12 @@
  *
  * Contrast targets (S2-01): text 4.5:1, meter fills / rings / icons / focus 3:1 against
  * the surface they sit on. Ratios in comments are WCAG 2.x, measured on the token pair.
- * Dark theme follows the OS (`prefers-color-scheme: dark`); no in-game switch yet.
+ * S3: the player picks the theme with the lamp button; the OS setting no longer decides.
+ * Light = these default tokens (also `:root[data-theme="light"]`). Dark = `:root[data-theme="dark"]`,
+ * set by wire on <html>. `only` keeps browsers from auto-darkening ("force dark") the light theme.
  */
 :root {
-  color-scheme: light dark;
+  color-scheme: only light;
 
   /* ---- Brand ---- */
   --mp-gradient: linear-gradient(118deg, #7FA9B1 0%, #9BB0DE 35%, #CBA5D1 70%, #EB92B3 100%); /* [DS] Decorations/Gradient 1 */
@@ -125,57 +127,56 @@
   --mp-safe-left: env(safe-area-inset-left, 0px);
 }
 
-/* ================= Dark theme (S2-01) =================
+/* ================= Dark theme (S2-01, S3: manual switch) =================
  * DS dark-mode variables where they exist; ratios against the surface named. */
-@media (prefers-color-scheme: dark) {
-  :root {
-    --mp-gradient-soft: linear-gradient(#2C2C2C, #1E1E1E);
+:root[data-theme="dark"] {
+  color-scheme: only dark;
+  --mp-gradient-soft: linear-gradient(#2C2C2C, #1E1E1E);
 
-    --mp-bg: #1E1E1E;                 /* [DS] background/default/default (dark) */
-    --mp-bg-light: #2C2C2C;           /* [DS] background/default/light (dark) */
-    --mp-bg-primary-light: #40496F;   /* [DS] background/primary/light (dark) */
-    --mp-bg-danger-light: #731412;    /* [DS] background/danger/light (dark) */
-    --mp-surface-glass: rgba(30, 30, 30, 0.88);   /* [เสนอ] */
-    --mp-surface-glass-2: rgba(30, 30, 30, 0.8);  /* [เสนอ] */
-    --mp-scrim: rgba(18, 18, 22, 0.86);           /* [เสนอ] */
-    --mp-line: #444444;               /* [DS] border/default/on-light (dark) */
-    --mp-ava-ground: #40496F;         /* [DS] */
+  --mp-bg: #1E1E1E;                 /* [DS] background/default/default (dark) */
+  --mp-bg-light: #2C2C2C;           /* [DS] background/default/light (dark) */
+  --mp-bg-primary-light: #40496F;   /* [DS] background/primary/light (dark) */
+  --mp-bg-danger-light: #731412;    /* [DS] background/danger/light (dark) */
+  --mp-surface-glass: rgba(30, 30, 30, 0.88);   /* [เสนอ] */
+  --mp-surface-glass-2: rgba(30, 30, 30, 0.8);  /* [เสนอ] */
+  --mp-scrim: rgba(18, 18, 22, 0.86);           /* [เสนอ] */
+  --mp-line: #444444;               /* [DS] border/default/on-light (dark) */
+  --mp-ava-ground: #40496F;         /* [DS] */
 
-    --mp-text: #E6E6E6;               /* [DS] text/default/default (dark) — 14.7:1 on #1E1E1E, 11.2:1 on #2C2C2C */
-    --mp-text-muted: #B3B3B3;         /* [DS] text/default/on-light (dark) — 8.0:1 / 6.7:1 */
-    --mp-text-warn: #FFD1D1;          /* [DS] text/danger/default — 8.3:1 on #731412 */
-    --mp-text-accent: #9BB0DE;        /* [DS] text/primary/on-light (dark) — 7.7:1 on #1E1E1E */
+  --mp-text: #E6E6E6;               /* [DS] text/default/default (dark) — 14.7:1 on #1E1E1E, 11.2:1 on #2C2C2C */
+  --mp-text-muted: #B3B3B3;         /* [DS] text/default/on-light (dark) — 8.0:1 / 6.7:1 */
+  --mp-text-warn: #FFD1D1;          /* [DS] text/danger/default — 8.3:1 on #731412 */
+  --mp-text-accent: #9BB0DE;        /* [DS] text/primary/on-light (dark) — 7.7:1 on #1E1E1E */
 
-    --mp-primary-hover: #6978C2;      /* [DS] background/primary/default (dark); white 4.15:1 — hover only */
-    --mp-border-primary: #8296D2;     /* [DS] border/primary/default (dark) — 4.8:1 on #2C2C2C */
-    --mp-disabled-bg: #2C2C2C;
-    --mp-disabled-text: #9E9E9E;      /* [เสนอ] 5.2:1 on #2C2C2C */
-    --mp-coach-bg: #D3E0F2;           /* [DS] text/primary/default (dark) used as an inverted pill */
-    --mp-coach-text: #252941;         /* 11.7:1 */
-    --mp-focus: #9BB0DE;              /* 7.7:1 on #1E1E1E */
+  --mp-primary-hover: #6978C2;      /* [DS] background/primary/default (dark); white 4.15:1 — hover only */
+  --mp-border-primary: #8296D2;     /* [DS] border/primary/default (dark) — 4.8:1 on #2C2C2C */
+  --mp-disabled-bg: #2C2C2C;
+  --mp-disabled-text: #9E9E9E;      /* [เสนอ] 5.2:1 on #2C2C2C */
+  --mp-coach-bg: #D3E0F2;           /* [DS] text/primary/default (dark) used as an inverted pill */
+  --mp-coach-text: #252941;         /* 11.7:1 */
+  --mp-focus: #9BB0DE;              /* 7.7:1 on #1E1E1E */
 
-    /* Meters: dark cup, pastel DS stops as fill (5.5–6.6:1 on #2C2C2C), dark icon on fill (6.5:1+) */
-    --mp-need-hunger: #EB92B3;
-    --mp-need-toilet: #7FA9B1;
-    --mp-need-fun: #CBA5D1;
-    --mp-need-social: #9BB0DE;
-    --mp-meter-ground: #2C2C2C;
-    --mp-meter-ico: #E6E6E6;
-    --mp-meter-ico-fill: #1E1E1E;
-    --mp-need-low-fill: #FFD1D1;      /* [DS] text/danger — 8.3:1 on #731412 */
-    --mp-need-low-ground: #731412;    /* [DS] background/danger/light (dark) */
-    --mp-need-low-ico-fill: #45121D;  /* 11.3:1 on #FFD1D1 */
-    --mp-badge-bg: #FFD1D1;
-    --mp-badge-text: #45121D;
-    --mp-badge-edge: #1E1E1E;
-    --mp-time-low: #FFD1D1;
+  /* Meters: dark cup, pastel DS stops as fill (5.5–6.6:1 on #2C2C2C), dark icon on fill (6.5:1+) */
+  --mp-need-hunger: #EB92B3;
+  --mp-need-toilet: #7FA9B1;
+  --mp-need-fun: #CBA5D1;
+  --mp-need-social: #9BB0DE;
+  --mp-meter-ground: #2C2C2C;
+  --mp-meter-ico: #E6E6E6;
+  --mp-meter-ico-fill: #1E1E1E;
+  --mp-need-low-fill: #FFD1D1;      /* [DS] text/danger — 8.3:1 on #731412 */
+  --mp-need-low-ground: #731412;    /* [DS] background/danger/light (dark) */
+  --mp-need-low-ico-fill: #45121D;  /* 11.3:1 on #FFD1D1 */
+  --mp-badge-bg: #FFD1D1;
+  --mp-badge-text: #45121D;
+  --mp-badge-edge: #1E1E1E;
+  --mp-time-low: #FFD1D1;
 
-    --mp-tint-splat: #3A2E35; --mp-tint-pill: #2C2C2C; --mp-tint-gumdrop: #312F40;
-    --mp-tint-diamond: #2A3538; --mp-tint-cloud: #2B3343; --mp-tint-flower: #312F40;   /* [เสนอ] */
+  --mp-tint-splat: #3A2E35; --mp-tint-pill: #2C2C2C; --mp-tint-gumdrop: #312F40;
+  --mp-tint-diamond: #2A3538; --mp-tint-cloud: #2B3343; --mp-tint-flower: #312F40;   /* [เสนอ] */
 
-    --mp-acc-lens: #1E1E1E;
-    --mp-acc-fill-opacity: 0.7;
+  --mp-acc-lens: #1E1E1E;
+  --mp-acc-fill-opacity: 0.7;
 
-    --mp-shadow: 0 6px 20px rgba(0, 0, 0, 0.35);
-  }
+  --mp-shadow: 0 6px 20px rgba(0, 0, 0, 0.35);
 }

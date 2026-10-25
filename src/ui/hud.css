@@ -1,5 +1,5 @@
 /*
- * Moldable Pet — HUD styles (owner: glaze). Stories S1-04, S2-01..04, S2-08. Needs tokens.css first.
+ * Moldable Pet — HUD styles (owner: glaze). Stories S1-04, S2-01..04, S2-08, S3. Needs tokens.css first.
  * Every colour comes from a token so the dark theme (tokens.css) applies everywhere.
  *
  * Fonts for wire — put this in <head> of index.html (free Google Fonts):
@@ -69,7 +69,7 @@
 .mp-bar { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
 .mp-bar-end { display: flex; align-items: center; gap: 8px; }
 .mp-who {
-  display: flex; align-items: center; gap: 8px; min-width: 0;
+  position: relative; display: flex; align-items: center; gap: 8px; min-width: 0;
   height: 48px; padding: 0 10px 0 6px; border: none; text-align: left;
   border-radius: var(--mp-r-full); background: var(--mp-bg); color: var(--mp-text);
   transition: background-color var(--mp-dur-fast) var(--mp-ease), transform var(--mp-dur-fast) var(--mp-ease);
@@ -82,9 +82,7 @@
   background: var(--mp-ava-ground); display: flex; align-items: center; justify-content: center; overflow: hidden;
 }
 .mp-who-ava img { width: 30px; height: 30px; object-fit: contain; }
-.mp-who-text { display: flex; flex-direction: column; min-width: 0; }
-.mp-who-name { font-size: 15px; font-weight: 600; line-height: 1.4; white-space: nowrap; }
-.mp-who-room { font-size: var(--mp-fs-xs); font-weight: 400; line-height: 1.4; color: var(--mp-text-muted); white-space: nowrap; }
+.mp-who-name { min-width: 0; font-size: 16px; font-weight: 600; line-height: 1.4; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
 .mp-coins {
   position: relative; display: flex; align-items: center; gap: 8px;
@@ -137,6 +135,36 @@
 .mp-cam[data-state="on"] { background: var(--mp-primary); color: var(--mp-text-on-primary); }
 .mp-cam[data-state="error"] { background: var(--mp-bg-danger-light); color: var(--mp-text-warn); box-shadow: inset 0 0 0 1.5px var(--mp-need-low-ring); }
 @keyframes mp-spin { to { transform: rotate(360deg); } }
+
+/* S3 lamp: light theme shows the lit bulb ("ปิดไฟ"), dark theme the unlit bulb ("เปิดไฟ") */
+.mp-lamp .mp-ico { transition: transform var(--mp-dur) var(--mp-ease); }
+
+/* Tooltip for icon-only controls ([data-tip]); mouse hover or keyboard focus only */
+.mp-tip::after {
+  content: attr(data-tip); position: absolute; top: calc(100% + 8px); left: 50%; z-index: 4;
+  transform: translate(-50%, -4px); padding: 4px 10px; border-radius: var(--mp-r-full);
+  background: var(--mp-coach-bg); color: var(--mp-coach-text);
+  font-family: var(--mp-font-th); font-size: var(--mp-fs-sm); font-weight: 500; line-height: 1.4; white-space: nowrap;
+  opacity: 0; pointer-events: none;
+  transition: opacity var(--mp-dur-fast) var(--mp-ease), transform var(--mp-dur-fast) var(--mp-ease);
+}
+.mp-who.mp-tip::after { left: 6px; transform: translate(0, -4px); }
+.mp-tip:focus-visible::after { opacity: 1; transform: translate(-50%, 0); }
+.mp-who.mp-tip:focus-visible::after { transform: none; }
+@media (hover: hover) and (pointer: fine) {
+  .mp-tip:hover::after { opacity: 1; transform: translate(-50%, 0); transition-delay: 300ms; }
+  .mp-who.mp-tip:hover::after { transform: none; }
+}
+
+/* S3 theme switch: a short colour cross-fade while wire flips data-theme (class set by hud.setTheme) */
+@media (prefers-reduced-motion: no-preference) {
+  .mp-hud.is-theming, .mp-hud.is-theming *, .mp-hud.is-theming *::before, .mp-hud.is-theming *::after {
+    transition-property: background-color, color, border-color, box-shadow, fill, stroke, opacity !important;
+    transition-duration: var(--mp-dur) !important;
+    transition-timing-function: var(--mp-ease-inout) !important;
+    transition-delay: 0s !important;
+  }
+}
 
 /* ---------- need meters ---------- */
 .mp-meters {
@@ -521,8 +549,9 @@
 .mp-buy-actions { grid-column: 1 / -1; display: grid; grid-template-columns: 1fr 1.4fr; gap: 10px; }
 .mp-buy-actions button { height: 52px; font-size: var(--mp-fs-md); padding: 0 12px; }
 
-/* ---------- minigame "ฝนขนม" (S2-08) ---------- */
-.mp-hud.is-game .mp-col { visibility: hidden; }
+/* ---------- minigame "ฝนขนม" (S2-08, S3 intro + control chip) ---------- */
+.mp-game-col > .mp-toast { pointer-events: auto; flex-shrink: 0; }
+.mp-hud.is-game .mp-col, .mp-hud.is-intro .mp-col { visibility: hidden; }
 .mp-game { position: absolute; inset: 0; z-index: 2; pointer-events: none; }
 .mp-game-col {
   position: absolute; inset: 0; max-width: var(--mp-col-max); margin: 0 auto;
@@ -534,7 +563,14 @@
   border-radius: var(--mp-r-full); background: var(--mp-surface-glass); color: var(--mp-text); pointer-events: auto;
 }
 .mp-game-mid { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 4px; }
-.mp-game-title { font-size: var(--mp-fs-md); font-weight: 600; line-height: 1.4; }
+.mp-game-head { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.mp-game-title { font-size: var(--mp-fs-md); font-weight: 600; line-height: 1.4; white-space: nowrap; }
+.mp-game-ctl {
+  display: flex; align-items: center; gap: 4px; min-width: 0; height: 24px; padding: 0 10px 0 6px;
+  border-radius: var(--mp-r-full); background: var(--mp-bg-primary-light); color: var(--mp-text);
+  font-size: var(--mp-fs-xs); font-weight: 500; line-height: 1.4; white-space: nowrap;
+}
+.mp-game-ctl span { overflow: hidden; text-overflow: ellipsis; }
 .mp-game-time {
   height: 10px; border-radius: var(--mp-r-full); overflow: hidden;
   background: var(--mp-meter-ground); box-shadow: inset 0 0 0 1.5px var(--mp-border-primary);
@@ -573,6 +609,48 @@
   background: var(--mp-coach-bg); color: var(--mp-coach-text); font-size: 14px; font-weight: 500; line-height: 1.4; text-align: center;
 }
 .mp-game.is-result .mp-game-top, .mp-game.is-result .mp-game-sub { opacity: 0.4; }
+
+/* S3 intro card: pick the control, then "เริ่มเลย". Bottom card; the pet stays visible above it. */
+.mp-game.is-intro .mp-game-top, .mp-game.is-intro .mp-game-sub, .mp-game.is-intro .mp-game-center { visibility: hidden; }
+.mp-intro { position: absolute; left: 0; right: 0; bottom: 0; display: flex; justify-content: center; pointer-events: auto;
+  padding: 0 calc(var(--mp-safe-right) + var(--mp-gutter)) calc(var(--mp-safe-bottom) + 20px) calc(var(--mp-safe-left) + var(--mp-gutter)); }
+.mp-intro-card {
+  width: 100%; display: flex; flex-direction: column; gap: 14px;
+  padding: 16px 16px 16px 20px; border-radius: var(--mp-r-2xl); color: var(--mp-text);
+  border: 3px solid transparent;
+  background: linear-gradient(var(--mp-bg), var(--mp-bg)) padding-box, var(--mp-gradient) border-box;
+  box-shadow: var(--mp-shadow); animation: mp-tray-in var(--mp-dur-slow) var(--mp-ease);
+}
+.mp-intro-head { display: flex; align-items: flex-start; gap: 8px; }
+.mp-intro-titles { flex: 1; min-width: 0; display: flex; flex-direction: column; padding-top: 2px; }
+.mp-intro-title { margin: 0; font-size: var(--mp-fs-lg); font-weight: 600; line-height: 1.4; }
+.mp-intro-sub { margin: 0; font-size: 14px; line-height: 1.4; color: var(--mp-text-muted); }
+.mp-intro-opts { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; margin-right: 4px; }
+.mp-opt {
+  position: relative; display: flex; flex-direction: column; align-items: flex-start; gap: 4px; min-height: 44px;
+  padding: 12px; text-align: left; border: 2px solid var(--mp-line); border-radius: var(--mp-r-lg);
+  background: var(--mp-bg-light); color: var(--mp-text);
+  transition: background-color var(--mp-dur-fast) var(--mp-ease), border-color var(--mp-dur-fast) var(--mp-ease), transform var(--mp-dur-fast) var(--mp-ease);
+}
+.mp-opt:active { transform: scale(0.98); }
+.mp-opt.is-on { border-color: var(--mp-primary); background: var(--mp-bg-primary-light); }
+.mp-opt-pic {
+  width: 52px; height: 48px; margin-bottom: 4px; border-radius: var(--mp-blob-2);
+  display: flex; align-items: center; justify-content: center; background: var(--mp-bg); color: var(--mp-text);
+}
+.mp-opt.is-on .mp-opt-pic { background: var(--mp-gradient); color: #1E1E1E; } /* on gradient: 6.5:1+ */
+.mp-opt-label { font-size: var(--mp-fs-md); font-weight: 600; line-height: 1.4; }
+.mp-opt-hint { font-size: var(--mp-fs-sm); line-height: 1.4; color: var(--mp-text-muted); }
+.mp-opt.is-on .mp-opt-hint { color: var(--mp-text); }   /* muted on the selected ground is 4.2:1 in dark */
+.mp-opt-check {
+  position: absolute; right: 10px; top: 10px; width: 24px; height: 24px; border-radius: var(--mp-r-full);
+  display: flex; align-items: center; justify-content: center; border: 2px solid var(--mp-border-primary); background: var(--mp-bg);
+}
+.mp-opt.is-on .mp-opt-check { border-color: var(--mp-primary); background: var(--mp-primary); color: var(--mp-text-on-primary); }
+.mp-opt-check .mp-ico { stroke-width: 2.25; }
+@media (hover: hover) and (pointer: fine) { .mp-opt:not(.is-on):hover { background: var(--mp-bg-primary-light); } }
+.mp-intro-go { width: calc(100% - 4px); display: flex; align-items: center; justify-content: center; gap: 8px; }
+@media (max-width: 374px) { .mp-opt { padding: 10px; } .mp-opt-label { font-size: 15px; } }
 .mp-result { position: absolute; left: 0; right: 0; bottom: 0; display: flex; justify-content: center; pointer-events: auto;
   padding: 0 calc(var(--mp-safe-right) + var(--mp-gutter)) calc(var(--mp-safe-bottom) + 20px) calc(var(--mp-safe-left) + var(--mp-gutter)); }
 .mp-result-card {
@@ -614,7 +692,7 @@
   .mp-cards { grid-template-columns: repeat(3, minmax(0, 1fr)); }
   .mp-ward { bottom: 24px; }
   .mp-ward-panel { border-radius: var(--mp-r-2xl); padding: 14px 20px 18px; box-shadow: var(--mp-shadow); max-height: min(45vh, 420px); }
-  .mp-result { padding-bottom: 28px; }
+  .mp-result, .mp-intro { padding-bottom: 28px; }
   .mp-game-col { padding-top: calc(var(--mp-safe-top) + 24px); }
   .mp-game-top { box-shadow: var(--mp-shadow); }
 }
@@ -631,22 +709,21 @@
   .mp-game-time-fill { transition: none !important; }
 }
 
-/* ---------- dark theme extras (colours come from tokens.css) ---------- */
-@media (prefers-color-scheme: dark) {
-  .mp-hud { --mp-bar-fill: #9BB0DE; }   /* time bar: 6.4:1 on #2C2C2C */
-  .mp-ward-panel { box-shadow: 0 -6px 24px rgba(0, 0, 0, 0.4), inset 0 1px 0 var(--mp-line); }
-  .mp-who, .mp-coins, .mp-iconbtn:not(.mp-iconbtn--ghost), .mp-camview, .mp-cam-msg, .mp-toast { box-shadow: inset 0 0 0 1px var(--mp-line); }
-  .mp-cam[data-state="on"] { box-shadow: none; }
-  .mp-cam[data-state="error"] { box-shadow: inset 0 0 0 1.5px var(--mp-need-low-fill); }
-  .mp-dot.is-on span { box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.15); }
-}
+/* ---------- dark theme extras (colours come from tokens.css; S3: data-theme, not the OS) ---------- */
+:root[data-theme="dark"] .mp-hud { --mp-bar-fill: #9BB0DE; }   /* time bar: 6.4:1 on #2C2C2C */
+:root[data-theme="dark"] .mp-ward-panel { box-shadow: 0 -6px 24px rgba(0, 0, 0, 0.4), inset 0 1px 0 var(--mp-line); }
+:root[data-theme="dark"] :is(.mp-who, .mp-coins, .mp-iconbtn:not(.mp-iconbtn--ghost), .mp-camview, .mp-cam-msg, .mp-toast) { box-shadow: inset 0 0 0 1px var(--mp-line); }
+:root[data-theme="dark"] .mp-cam[data-state="on"] { box-shadow: none; }
+:root[data-theme="dark"] .mp-cam[data-state="error"] { box-shadow: inset 0 0 0 1.5px var(--mp-need-low-fill); }
+:root[data-theme="dark"] .mp-dot.is-on span { box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.15); }
 
 /* ---------- forced colours (Windows High Contrast etc.) ---------- */
 @media (forced-colors: active) {
   .mp-hud { forced-color-adjust: auto; }
   .mp-who, .mp-coins, .mp-iconbtn, .mp-ctx, .mp-btn-primary, .mp-btn-outline, .mp-camview, .mp-toast, .mp-cam-msg,
   .mp-meters, .mp-tray, .mp-food, .mp-card, .mp-item, .mp-ward-panel, .mp-ward-tab, .mp-result-card, .mp-game-top,
-  .mp-game-sub > span, .mp-coach, .mp-game-hint, .mp-bubble-text, .mp-mic-label { border: 1px solid CanvasText; }
+  .mp-game-sub > span, .mp-coach, .mp-game-hint, .mp-bubble-text, .mp-mic-label, .mp-intro-card, .mp-opt, .mp-game-ctl { border: 1px solid CanvasText; }
+  .mp-opt.is-on { outline: 3px solid Highlight; outline-offset: -3px; }
   .mp-mic { border: 2px solid ButtonText; }
   .mp-ward-tab.is-on, .mp-item.is-on, .mp-card.is-on, .mp-dot.is-on span { outline: 3px solid Highlight; outline-offset: -3px; }
   .mp-blob { forced-color-adjust: none; }

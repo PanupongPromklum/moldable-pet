@@ -1,7 +1,8 @@
 /**
- * Moldable Pet — in-game HUD (owner: glaze). Stories S1-04, S2-01..04, S2-08.
+ * Moldable Pet — in-game HUD (owner: glaze). Stories S1-04, S2-01..04, S2-08, S3.
  *
- * Implements "HUD — glaze" + "Sprint 2 additions" in docs/architecture/module-contracts.md.
+ * Implements "HUD — glaze" + "Sprint 2 additions" + "Sprint 3 additions" in
+ * docs/architecture/module-contracts.md.
  * Display only: the HUD never changes game state; it reports intent through the
  * handlers passed to createHUD and shows what wire tells it to show.
  *
@@ -25,6 +26,24 @@
  *           endMinigame()
  *           setCoins(n) now counts up/down with a "+N"/"−N" float (instant with reduced motion).
  *
+ * ── Sprint 3 API changes (for wire) ─────────────────────────────────────────
+ * Chip      avatar + pet name only (no room line); still a button, aria "เปลี่ยนตัวละคร…".
+ * Handlers  onThemeToggle()              lamp button next to the camera ("ปิดไฟ" / "เปิดไฟ")
+ *           onMinigameControl(id)        intro card: player picked 'touch' | 'head'
+ *           onMinigameReady()            intro card: "เริ่มเลย"
+ *           onMinigameExit()             also fired by the intro card's close (X / Escape); the card
+ *                                        has already hidden itself
+ * Methods   setTheme('light'|'dark')     updates the lamp (icon, aria-label, tooltip) and runs a short
+ *                                        colour cross-fade (skipped with reduced motion). Wire sets
+ *                                        <html data-theme> in the SAME tick; CSS reads only data-theme.
+ *           showMinigameIntro({ controls: [{ id, label, hint }], selected })   normal HUD hides
+ *           hideMinigameIntro()          startMinigame() and endMinigame() also close it
+ *           startMinigame({ title, durationSec, countdown, control? })  control defaults to the
+ *                                        intro choice; the countdown hint follows the control
+ *           updateMinigame({ control })  small chip next to the title (e.g. fall back to 'touch')
+ *           toast() now shows inside the minigame/intro layer while those are open.
+ *           setCamera() shows no hand-play message while the minigame or intro is open.
+ *
  * ── Toilet flow (S2-03) — one control at a time ─────────────────────────────
  * Chosen rule: `setFlushVisible(true)` is the "sitting" stage. It clears the coach mark,
  * hides room navigation and shows ONE centred primary "กดชักโครก" button. While it is
@@ -41,6 +60,9 @@ export const HUD_ROOMS = ['living', 'kitchen', 'bathroom'];
 
 /** Need ids in display order. */
 export const HUD_NEEDS = ['hunger', 'toilet', 'fun', 'social'];
+
+/** Minigame control ids (contract, Sprint 3) → line icon. */
+export const HUD_CONTROL_ICONS = { touch: 'finger', head: 'head-tilt' };
 
 /** Wardrobe slots in display order (contract). */
 export const HUD_SLOTS = ['head', 'eyes', 'body'];
@@ -69,6 +91,8 @@ export const HUD_STRINGS = {
   urgent: 'ด่วน',
   coins: (n) => `เหรียญ ${n}`,
   chip: (n) => `เปลี่ยนตัวละคร ตอนนี้คือ${n}`,
+  chipTip: 'เปลี่ยนตัวละคร',
+  lamp: { light: 'ปิดไฟ', dark: 'เปิดไฟ' },
   prevRoom: 'ห้องก่อนหน้า',
   nextRoom: 'ห้องถัดไป',
   roomsGroup: 'ห้อง',
@@ -131,6 +155,16 @@ export const HUD_STRINGS = {
     go: 'เริ่ม!',
     hintTouch: 'ลากนิ้วซ้ายขวาเพื่อรับขนม',
     hintMouse: 'ขยับเมาส์หรือกดลูกศรซ้ายขวาเพื่อรับขนม',
+    hintHead: 'หน้าตรงไว้ก่อน แล้วเอียงหัวซ้ายขวาเพื่อรับขนม',
+    controls: {
+      touch: { label: 'นิ้ว / เมาส์', hint: 'ลากนิ้วหรือขยับเมาส์ซ้ายขวา' },
+      head: { label: 'เอียงหัว', hint: 'ใช้กล้อง เอียงหัวซ้ายขวา' },
+    },
+    introSub: 'เลือกวิธีเล่น',
+    introGroup: 'วิธีเล่น',
+    ready: 'เริ่มเลย',
+    introClose: 'กลับห้อง',
+    ctlAria: (label) => `วิธีเล่น ${label}`,
     resultTitle: 'จบรอบแล้ว',
     newBest: 'สถิติใหม่!',
     best: 'สถิติสูงสุด',
@@ -208,6 +242,9 @@ export function wardrobeItemState(item, w) {
  * @param {() => void} [handlers.onMinigameExit]
  * @param {() => void} [handlers.onMinigameAgain]
  * @param {(n: number) => void} [handlers.onMinigameTick]
+ * @param {() => void} [handlers.onThemeToggle]
+ * @param {(id: string) => void} [handlers.onMinigameControl]
+ * @param {() => void} [handlers.onMinigameReady]
  * @param {object} [options] optional, not part of the contract
  * @param {object} [options.needs] `needs.json` → `needs` (labels, good/low/urgent per need)
  * @param {object} [options.strings] partial override of HUD_STRINGS
@@ -230,6 +267,7 @@ export function createHUD(root, handlers = {}, options = {}) {
     coins: null, coinShown: 0, coinRaf: 0, flush: false, trayOpen: true, needs: {}, coachText: null,
     bubble: { on: false, x: -1, y: -1, w: 0, h: 0, timer: 0 },
     toastTimer: 0, camMsgTimer: 0, select: null, ward: null, game: null,
+    theme: null, themeTimer: 0, intro: null, control: null, controlDefs: {},
   };
 
   root.classList.add('mp-hud');
@@ -238,9 +276,9 @@ export function createHUD(root, handlers = {}, options = {}) {
   <div class="mp-col">
     <div class="mp-top">
       <div class="mp-bar">
-        <button type="button" class="mp-who">
+        <button type="button" class="mp-who mp-tip" data-tip="${esc(S.chipTip)}">
           <span class="mp-who-ava"><img alt="" src="${portrait('flower')}"></span>
-          <span class="mp-who-text"><span class="mp-who-name"></span><span class="mp-who-room"></span></span>
+          <span class="mp-who-name"></span>
           <span class="mp-who-more">${icon('chevron-down', 16)}</span>
         </button>
         <div class="mp-bar-end">
@@ -249,6 +287,7 @@ export function createHUD(root, handlers = {}, options = {}) {
             <span class="mp-coin-n mp-num">0</span>
             <span class="mp-coin-plus mp-num" aria-hidden="true"></span>
           </div>
+          <button type="button" class="mp-iconbtn mp-lamp mp-tip" data-theme="light">${icon('lamp', 22)}</button>
           <button type="button" class="mp-iconbtn mp-cam" data-state="off" aria-pressed="false">${icon('camera', 22)}<span class="mp-cam-spin" aria-hidden="true"></span></button>
         </div>
       </div>
@@ -321,7 +360,7 @@ export function createHUD(root, handlers = {}, options = {}) {
       <div class="mp-game-top">
         <button type="button" class="mp-iconbtn mp-game-x" aria-label="${esc(S.game.exit)}">${icon('close', 20)}</button>
         <div class="mp-game-mid">
-          <div class="mp-game-title"></div>
+          <div class="mp-game-head"><span class="mp-game-title"></span><span class="mp-game-ctl" hidden></span></div>
           <div class="mp-game-time" role="progressbar" aria-valuemin="0"><span class="mp-game-time-fill"></span></div>
         </div>
         <div class="mp-game-score"><span class="mp-game-score-l">${esc(S.game.score)}</span><span class="mp-game-score-n mp-num">0</span></div>
@@ -336,6 +375,7 @@ export function createHUD(root, handlers = {}, options = {}) {
         <div class="mp-game-hint" hidden></div>
       </div>
       <section class="mp-result" role="dialog" aria-modal="true" hidden></section>
+      <section class="mp-intro" role="dialog" aria-modal="true" hidden></section>
     </div>
   </div>
   <div class="mp-select" role="dialog" aria-modal="true" hidden></div>`;
@@ -343,7 +383,7 @@ export function createHUD(root, handlers = {}, options = {}) {
   const $ = (sel) => root.querySelector(sel);
   const el = {
     col: $('.mp-col'), top: $('.mp-top'), bottom: $('.mp-bottom'),
-    who: $('.mp-who'), name: $('.mp-who-name'), roomName: $('.mp-who-room'), ava: $('.mp-who-ava img'),
+    who: $('.mp-who'), name: $('.mp-who-name'), ava: $('.mp-who-ava img'), lamp: $('.mp-lamp'), status: $('.mp-status'),
     coins: $('.mp-coins'), coinN: $('.mp-coin-n'), coinPlus: $('.mp-coin-plus'),
     cam: $('.mp-cam'), camView: $('.mp-camview'), camMsg: $('.mp-cam-msg'),
     toast: $('.mp-toast'), toastIco: $('.mp-toast-ico'), toastText: $('.mp-toast-text'), toastX: $('.mp-toast-x'),
@@ -358,7 +398,8 @@ export function createHUD(root, handlers = {}, options = {}) {
     game: $('.mp-game'), gameX: $('.mp-game-x'), gameTitle: $('.mp-game-title'), gameTime: $('.mp-game-time'),
     gameTimeFill: $('.mp-game-time-fill'), gameScore: $('.mp-game-score-n'), gameCoins: $('.mp-game-coins-n'),
     gameStreak: $('.mp-game-streak'), gameSecs: $('.mp-game-secs .mp-num'), gameCount: $('.mp-game-count'),
-    gameHint: $('.mp-game-hint'), result: $('.mp-result'),
+    gameHint: $('.mp-game-hint'), result: $('.mp-result'), gameCol: $('.mp-game-col'), gameCenter: $('.mp-game-center'),
+    gameCtl: $('.mp-game-ctl'), intro: $('.mp-intro'),
     select: $('.mp-select'),
     meters: Object.fromEntries(HUD_NEEDS.map((id) => [id, root.querySelector(`.mp-meter[data-need="${id}"]`)])),
   };
@@ -372,6 +413,7 @@ export function createHUD(root, handlers = {}, options = {}) {
     else call('onSettings'); // transitional fallback for a Sprint 1 main.js
   });
   el.cam.addEventListener('click', () => call('onCamera'));
+  el.lamp.addEventListener('click', () => call('onThemeToggle'));
   el.camView.addEventListener('click', () => call('onCameraView', !state.camHidden));
   el.mic.addEventListener('click', () => call('onMic'));
   el.toastX.addEventListener('click', () => hideToast());
@@ -413,7 +455,6 @@ export function createHUD(root, handlers = {}, options = {}) {
   function renderRoom() {
     const room = state.room;
     root.setAttribute('data-room', room);
-    el.roomName.textContent = S.rooms[room] || '';
     el.dots.forEach((d) => {
       const on = d.dataset.room === room;
       d.classList.toggle('is-on', on);
@@ -719,6 +760,118 @@ export function createHUD(root, handlers = {}, options = {}) {
     el.gameCount.hidden = true;
   }
 
+  // ---------- minigame intro + control (S3) ----------
+  /** Control definition for an id: wire's label/hint first, then the default copy. */
+  function controlDef(id) {
+    const d = (S.game.controls && S.game.controls[id]) || {};
+    const w = state.controlDefs[id] || {};
+    return { id, label: w.label || d.label || id, hint: w.hint || d.hint || '' };
+  }
+
+  function renderCtl() {
+    const id = state.control;
+    el.gameCtl.hidden = !id;
+    if (!id) return;
+    const c = controlDef(id);
+    el.gameCtl.title = S.game.ctlAria(c.label);
+    el.gameCtl.innerHTML = `${icon(HUD_CONTROL_ICONS[id] || 'finger', 16)}<span>${esc(c.label)}</span>`;
+  }
+
+  function gameHintText() {
+    if (state.control === 'head') return S.game.hintHead;
+    return finePointer.matches ? S.game.hintMouse : S.game.hintTouch;
+  }
+
+  /** While the minigame or its intro is open the normal column is hidden, so the toast moves into the game layer. */
+  function placeToast() {
+    const inGame = !!(state.game || state.intro);
+    if (inGame && el.toast.parentElement !== el.gameCol) el.gameCol.insertBefore(el.toast, el.gameCenter);
+    else if (!inGame && el.toast.parentElement !== el.status) el.status.appendChild(el.toast);
+  }
+
+  function renderIntro(focus) {
+    const it = state.intro;
+    if (!it) return;
+    const g = S.game;
+    const opts = it.controls.map((c) => {
+      const on = c.id === it.selected;
+      return `
+        <button type="button" class="mp-opt${on ? ' is-on' : ''}" role="radio" aria-checked="${on}" tabindex="${on ? 0 : -1}" data-control="${esc(c.id)}"
+          aria-label="${esc(c.label)}" aria-describedby="mp-opt-hint-${esc(c.id)}">
+          <span class="mp-opt-pic" aria-hidden="true">${icon(HUD_CONTROL_ICONS[c.id] || 'finger', 30)}</span>
+          <span class="mp-opt-check" aria-hidden="true">${on ? icon('check', 14) : ''}</span>
+          <span class="mp-opt-label">${esc(c.label)}</span>
+          <span class="mp-opt-hint" id="mp-opt-hint-${esc(c.id)}">${esc(c.hint)}</span>
+        </button>`;
+    }).join('');
+    el.intro.setAttribute('aria-labelledby', 'mp-intro-title');
+    el.intro.innerHTML = `
+      <div class="mp-intro-card">
+        <div class="mp-intro-head">
+          <div class="mp-intro-titles">
+            <h2 class="mp-intro-title" id="mp-intro-title">${esc(it.title)}</h2>
+            <p class="mp-intro-sub">${esc(g.introSub)}</p>
+          </div>
+          <button type="button" class="mp-iconbtn mp-iconbtn--soft mp-intro-x" aria-label="${esc(g.introClose)}">${icon('close', 20)}</button>
+        </div>
+        <div class="mp-intro-opts" role="radiogroup" aria-label="${esc(g.introGroup)}">${opts}</div>
+        <button type="button" class="mp-btn-primary mp-intro-go">${icon('fun', 22)}<span>${esc(g.ready)}</span></button>
+      </div>`;
+    if (focus) {
+      const f = el.intro.querySelector(focus);
+      if (f) f.focus({ preventScroll: true });
+    }
+  }
+
+  function pickControl(id) {
+    const it = state.intro;
+    if (!it || !it.controls.some((c) => c.id === id)) return;
+    const changed = it.selected !== id;
+    it.selected = id;
+    state.control = id;
+    renderIntro(`.mp-opt[data-control="${CSS.escape(id)}"]`);
+    if (changed) call('onMinigameControl', id);
+  }
+
+  function closeIntro(restoreFocus) {
+    const it = state.intro;
+    if (!it) return;
+    state.intro = null;
+    el.intro.hidden = true;
+    el.intro.innerHTML = '';
+    el.game.classList.remove('is-intro');
+    root.classList.remove('is-intro');
+    if (!state.game) {
+      el.game.hidden = true;
+      el.col.inert = false; el.col.removeAttribute('aria-hidden');
+      if (restoreFocus && it.returnFocus && it.returnFocus.focus && document.contains(it.returnFocus) && !it.returnFocus.closest('[hidden]')) {
+        it.returnFocus.focus({ preventScroll: true });
+      }
+    }
+    placeToast();
+    measure();
+  }
+
+  el.intro.addEventListener('click', (ev) => {
+    if (!state.intro) return;
+    if (ev.target.closest('.mp-intro-x')) { closeIntro(true); call('onMinigameExit'); return; }
+    if (ev.target.closest('.mp-intro-go')) { call('onMinigameReady'); return; }
+    const opt = ev.target.closest('.mp-opt');
+    if (opt) pickControl(opt.dataset.control);
+  });
+  el.intro.addEventListener('keydown', (ev) => {
+    const it = state.intro;
+    if (!it) return;
+    if (ev.key === 'Escape') { ev.stopPropagation(); closeIntro(true); call('onMinigameExit'); return; }
+    const keys = { ArrowRight: 1, ArrowDown: 1, ArrowLeft: -1, ArrowUp: -1 };
+    if (keys[ev.key] && ev.target.closest('.mp-opt')) {
+      ev.preventDefault(); ev.stopPropagation();
+      const ids = it.controls.map((c) => c.id);
+      const i = ids.indexOf(it.selected);
+      pickControl(ids[(i + keys[ev.key] + ids.length) % ids.length]);
+    }
+  });
+
   // ---------- public API ----------
   const api = {
     /** @param {{hunger?:number, toilet?:number, fun?:number, social?:number}} needs 0..1 */
@@ -847,10 +1000,65 @@ export function createHUD(root, handlers = {}, options = {}) {
       el.cam.setAttribute('aria-pressed', String(state.camera === 'on'));
       el.cam.setAttribute('aria-busy', String(state.camera === 'loading'));
       el.cam.querySelector('.mp-ico').outerHTML = icon(state.camera === 'error' ? 'camera-off' : 'camera', 22);
-      const msg = message ?? c.msg;
+      const msg = (state.game || state.intro) ? '' : (message ?? c.msg); // S3: no hand-play hint during the minigame
       setCamMsg(msg, state.camera === 'on' ? 4000 : state.camera === 'off' ? 2500 : 0);
       renderCamView();
     },
+
+    /**
+     * Reflect the theme on the lamp button (S3). 'light' shows the lit bulb and "ปิดไฟ";
+     * 'dark' shows the unlit bulb and "เปิดไฟ". A change after the first call adds a short
+     * colour cross-fade (skipped with reduced motion). Wire sets <html data-theme> in the same tick.
+     * @param {'light'|'dark'} theme
+     */
+    setTheme(theme) {
+      const t = theme === 'dark' ? 'dark' : 'light';
+      const changed = state.theme !== null && state.theme !== t;
+      state.theme = t;
+      const label = S.lamp[t];
+      el.lamp.dataset.theme = t;
+      el.lamp.dataset.tip = label;
+      el.lamp.setAttribute('aria-label', label);
+      el.lamp.querySelector('.mp-ico').outerHTML = icon(t === 'dark' ? 'lamp-off' : 'lamp', 22);
+      if (changed && !reducedMotion.matches) {
+        clearTimeout(state.themeTimer);
+        root.classList.add('is-theming');
+        state.themeTimer = setTimeout(() => root.classList.remove('is-theming'), 420);
+      }
+    },
+
+    /**
+     * Snack Rain intro card (S3): pick the control, then "เริ่มเลย" (onMinigameReady).
+     * Picking an option calls onMinigameControl(id) and marks it at once. Close (X / Escape)
+     * hides the card and calls onMinigameExit. The normal HUD hides while it is open.
+     * @param {{controls?: {id:string, label?:string, hint?:string}[], selected?:string, title?:string}} opts
+     */
+    showMinigameIntro(opts = {}) {
+      if (state.ward) api.hideWardrobe();
+      const list = Array.isArray(opts.controls) && opts.controls.length ? opts.controls
+        : Object.keys(S.game.controls).map((id) => ({ id }));
+      for (const c of list) if (c && c.id) state.controlDefs[c.id] = { label: c.label, hint: c.hint };
+      const controls = list.filter((c) => c && c.id).map((c) => controlDef(c.id));
+      const ids = controls.map((c) => c.id);
+      const selected = ids.includes(opts.selected) ? opts.selected : ids.includes(state.control) ? state.control : ids[0];
+      const firstOpen = !state.intro;
+      state.intro = {
+        controls, selected, title: opts.title || S.game.title,
+        returnFocus: firstOpen ? document.activeElement : state.intro.returnFocus,
+      };
+      state.control = selected;
+      el.game.hidden = false;
+      el.game.classList.add('is-intro');
+      root.classList.add('is-intro');
+      el.col.inert = true; el.col.setAttribute('aria-hidden', 'true');
+      el.intro.hidden = false;
+      renderIntro(`.mp-opt[data-control="${CSS.escape(selected)}"]`);
+      renderCtl();
+      placeToast();
+    },
+
+    /** Close the intro card without firing a handler. */
+    hideMinigameIntro() { closeIntro(!state.game); },
 
     /**
      * Reflect the camera view choice (S2-04). The toggle shows only while the camera is 'on'.
@@ -972,12 +1180,15 @@ export function createHUD(root, handlers = {}, options = {}) {
     /**
      * Start the minigame HUD: hides the normal HUD, runs a 3-2-1 countdown.
      * Calls onMinigameTick(3), (2), (1), (0 = go) for sfx.
-     * @param {{title?:string, durationSec:number, countdown?:number}} opts
+     * @param {{title?:string, durationSec:number, countdown?:number, control?:string}} opts
      * @returns {Promise<void>} resolves when "go" shows — start the round then
      */
     startMinigame(opts = {}) {
       if (state.game) clearCountdown();
       if (state.ward) api.hideWardrobe();
+      if (opts.control) state.control = opts.control;
+      if (!state.control) state.control = 'touch';
+      if (state.intro) { state.game = { countTimers: [] }; closeIntro(false); }
       const durationSec = Math.max(1, Number(opts.durationSec) || 45);
       const count = Math.max(0, Math.floor(opts.countdown ?? 3));
       state.game = { durationSec, timeLeft: durationSec, score: 0, coins: 0, streak: 0, started: false, countTimers: [] };
@@ -988,8 +1199,10 @@ export function createHUD(root, handlers = {}, options = {}) {
       el.game.classList.remove('is-late', 'is-result');
       root.classList.add('is-game');
       el.col.inert = true; el.col.setAttribute('aria-hidden', 'true');
-      el.gameHint.textContent = finePointer.matches ? S.game.hintMouse : S.game.hintTouch;
+      el.gameHint.textContent = gameHintText();
       el.gameHint.hidden = false;
+      renderCtl();
+      placeToast();
       renderGameNumbers();
       measure();
       const show = (n) => {
@@ -1015,10 +1228,15 @@ export function createHUD(root, handlers = {}, options = {}) {
       });
     },
 
-    /** @param {{score?:number, timeLeft?:number, streak?:number, coins?:number}} u */
+    /** @param {{score?:number, timeLeft?:number, streak?:number, coins?:number, control?:string}} u */
     updateMinigame(u = {}) {
       const g = state.game;
       if (!g) return;
+      if (u.control && u.control !== state.control) {
+        state.control = u.control;
+        renderCtl();
+        if (!el.gameHint.hidden) el.gameHint.textContent = gameHintText();
+      }
       if (u.score != null && int0(u.score) !== g.score) {
         if (int0(u.score) > g.score) bump(el.gameScore, 'is-pop');
         g.score = int0(u.score);
@@ -1065,6 +1283,7 @@ export function createHUD(root, handlers = {}, options = {}) {
 
     /** Leave the minigame HUD and restore the normal HUD. */
     endMinigame() {
+      if (state.intro) closeIntro(!state.game);
       if (!state.game) return;
       clearCountdown();
       state.game = null;
@@ -1072,6 +1291,7 @@ export function createHUD(root, handlers = {}, options = {}) {
       el.result.hidden = true; el.result.innerHTML = '';
       root.classList.remove('is-game');
       el.col.inert = false; el.col.removeAttribute('aria-hidden');
+      placeToast();
       measure();
     },
 
@@ -1081,7 +1301,7 @@ export function createHUD(root, handlers = {}, options = {}) {
      * @returns {string|null} food id
      */
     foodElementAt(x, y) {
-      if (el.tray.hidden || state.select || state.ward || state.game) return null;
+      if (el.tray.hidden || state.select || state.ward || state.game || state.intro) return null;
       for (const b of el.trayGrid.querySelectorAll('[data-food-id]')) {
         const r = b.getBoundingClientRect();
         if (x >= r.left && x <= r.right && y >= r.top && y <= r.bottom) return b.dataset.foodId;
@@ -1098,11 +1318,11 @@ export function createHUD(root, handlers = {}, options = {}) {
     /** Remove listeners and DOM. */
     dispose() {
       window.removeEventListener('resize', measure);
-      clearTimeout(state.toastTimer); clearTimeout(state.camMsgTimer); clearTimeout(state.bubble.timer);
+      clearTimeout(state.toastTimer); clearTimeout(state.camMsgTimer); clearTimeout(state.bubble.timer); clearTimeout(state.themeTimer);
       cancelAnimationFrame(state.coinRaf);
       clearCountdown();
       root.innerHTML = '';
-      root.classList.remove('mp-hud', 'is-selecting', 'is-wardrobe', 'is-game', 'is-flush');
+      root.classList.remove('mp-hud', 'is-selecting', 'is-wardrobe', 'is-game', 'is-flush', 'is-intro', 'is-theming');
     },
   };
 
@@ -1117,6 +1337,7 @@ export function createHUD(root, handlers = {}, options = {}) {
   el.coins.setAttribute('aria-label', S.coins('0'));
   api.setNeeds({ hunger: 1, toilet: 1, fun: 1, social: 1 });
   api.setCamera('off', '');
+  api.setTheme(document.documentElement.dataset.theme === 'dark' ? 'dark' : 'light');
   renderMic();
   renderRoom();
   requestAnimationFrame(measure);

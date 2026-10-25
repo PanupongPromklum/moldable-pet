@@ -52,6 +52,13 @@ export const LINE_ICONS = {
   heart: '<path d="M12 19s-7-4.3-7-9.2A3.8 3.8 0 0 1 12 7.6a3.8 3.8 0 0 1 7 2.2c0 4.9-7 9.2-7 9.2z"/>',
   star: '<path d="M12 3.5l2.3 5.3 5.8.6-4.4 3.8 1.3 5.7-5-3-5 3 1.3-5.7-4.4-3.8 5.8-.6z"/>',
   timer: '<circle cx="12" cy="13" r="7.5"/><path d="M12 9.5V13l2.5 1.5M10 3.5h4"/>',
+  /** S3 ปิดไฟ / เปิดไฟ — a bulb; `lamp` = light on (rays), `lamp-off` = light off. NEW, waiting for owner approval. */
+  lamp: '<path d="M10 16v-1.2c0-1.4-2.5-2.6-2.5-5.3a4.5 4.5 0 0 1 9 0c0 2.7-2.5 3.9-2.5 5.3V16z"/><path d="M10 18.5h4M10.8 21h2.4"/><path d="M12 1.75v1.5M5.6 3.6l1.1 1.1M18.4 3.6l-1.1 1.1M3.5 9.5H5M19 9.5h1.5"/>',
+  'lamp-off': '<path d="M10 16v-1.2c0-1.4-2.5-2.6-2.5-5.3a4.5 4.5 0 0 1 9 0c0 2.7-2.5 3.9-2.5 5.3V16z"/><path d="M10 18.5h4M10.8 21h2.4"/><path d="M10.6 8a1.8 1.8 0 0 1 1.4-.9"/>',
+  /** S3 minigame control "นิ้ว / เมาส์" — a pointing finger with a tap arc. NEW, waiting for owner approval. */
+  finger: '<path d="M8.2 4.2a3.2 3.2 0 0 1 5.6 0"/><path d="M9.5 16.5V7a1.5 1.5 0 0 1 3 0v5"/><path d="M12.5 12v-1a1.5 1.5 0 0 1 3 0v1"/><path d="M15.5 12.5a1.5 1.5 0 0 1 3 0V16a5.5 5.5 0 0 1-5.5 5.5h-1a4.8 4.8 0 0 1-4-2.1l-2.6-3.7a1.4 1.4 0 0 1 2.2-1.7l1.9 2.5"/>',
+  /** S3 minigame control "เอียงหัว" — a tilted face under a two-way arc. NEW, waiting for owner approval. */
+  'head-tilt': '<circle cx="12" cy="14.5" r="6.5"/><circle cx="9.6" cy="13.4" r=".95" fill="currentColor" stroke="none"/><circle cx="14.6" cy="14.9" r=".95" fill="currentColor" stroke="none"/><path d="M10.6 17.6c1 .5 2 .6 3 .3"/><path d="M5 8.5a9 9 0 0 1 14 0"/><path d="M7.3 7.85L5 8.5l.15-2.4M16.7 7.85L19 8.5l-.15-2.4"/>',
 };
 LINE_ICONS.bowl = LINE_ICONS.hunger;
 LINE_ICONS.ball = LINE_ICONS.fun;
@@ -124,4 +131,4 @@ export function accessoryIcon(id, size = 40) {
 }
 
 /** Names of all new line icons (for the icon sheet / demo). */
-export const NEW_ICON_NAMES = ['hunger', 'toilet', 'fun', 'social', 'coin', 'gear', 'mic', 'stop', 'wave', 'camera', 'camera-off', 'arrow-left', 'arrow-right', 'chevron-down', 'flush', 'hand', 'check', 'lock', 'close', 'eye', 'eye-off', 'shirt', 'none', 'heart', 'star', 'timer'];
+export const NEW_ICON_NAMES = ['hunger', 'toilet', 'fun', 'social', 'coin', 'gear', 'mic', 'stop', 'wave', 'camera', 'camera-off', 'arrow-left', 'arrow-right', 'chevron-down', 'flush', 'hand', 'check', 'lock', 'close', 'eye', 'eye-off', 'shirt', 'none', 'heart', 'star', 'timer', 'lamp', 'lamp-off', 'finger', 'head-tilt'];

@@ -3,8 +3,8 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<meta name="color-scheme" content="light dark">
-<title>HUD demo — Moldable Pet (S1-04, S2)</title>
+<meta name="color-scheme" content="only light">
+<title>HUD demo — Moldable Pet (S1-04, S2, S3)</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Prompt:wght@400;500;600&family=Poppins:wght@400;500;600&display=swap">
@@ -14,13 +14,13 @@
   /* Fake room: stands in for the 3D scene. Dark = prop's evening look (S2-05), approximated. */
   :root { --room-living: #F2F1FB; --floor-living: #E6E4F6; --room-kitchen: #FBF0F4; --floor-kitchen: #F4E1E9;
     --room-bathroom: #EDF4F6; --floor-bathroom: #DCEAEE; --room-blob: #FFFFFF; }
-  @media (prefers-color-scheme: dark) {
-    :root { --room-living: #2A2838; --floor-living: #222030; --room-kitchen: #33282F; --floor-kitchen: #2A2127;
-      --room-bathroom: #243035; --floor-bathroom: #1C272B; --room-blob: #3A3850; }
-  }
+  :root[data-theme="dark"] { --room-living: #2A2838; --floor-living: #222030; --room-kitchen: #33282F; --floor-kitchen: #2A2127;
+    --room-bathroom: #243035; --floor-bathroom: #1C272B; --room-blob: #3A3850; }
   html, body { margin: 0; height: 100%; overflow: hidden; background: var(--room-living); font-family: 'Prompt', 'Poppins', sans-serif; }
   #room { position: fixed; inset: 0; transition: background-color .4s cubic-bezier(0.22,1,0.36,1); }
   #room .floor { position: absolute; left: 0; right: 0; top: 62%; bottom: 0; transition: background-color .4s; }
+  #room .blob { transition: background-color .4s; }
+  @media (prefers-reduced-motion: reduce) { #room, #room .floor, #room .blob { transition: none; } }
   #room .blob { position: absolute; border-radius: 54% 46% 52% 48% / 48% 54% 46% 52%; opacity: .7; background: var(--room-blob); }
   #room[data-room="living"] { background: var(--room-living); } #room[data-room="living"] .floor { background: var(--floor-living); }
   #room[data-room="kitchen"] { background: var(--room-kitchen); } #room[data-room="kitchen"] .floor { background: var(--floor-kitchen); }
@@ -69,7 +69,9 @@
   <b>Screens</b>
   <button data-a="select">หน้าเลือกตัวละคร (เปิดเกม)</button>
   <button data-a="ward">ตู้เสื้อผ้า</button>
-  <button data-a="game">มินิเกม ฝนขนม</button>
+  <button data-a="game">มินิเกม ฝนขนม (การ์ดเลือกวิธีเล่น)</button>
+  <button data-a="theme">สลับไฟ (light / dark)</button>
+  <button data-a="camfail">กล้องใช้ไม่ได้ → กลับเป็นนิ้ว</button>
 </div>
 
 <script type="module">
@@ -105,6 +107,7 @@ try { WARD = await (await fetch('../../assets/data/wardrobe.json')).json(); } ca
 
 const s = { room: HUD_ROOMS.indexOf(q.get('room')) >= 0 ? q.get('room') : 'living', preset: 0, mic: 0, cam: 0, camHidden: false,
   coins: 240, toilet: 'idle', coach: false, char: CHARS[5], needs: { ...PRESETS[0] }, best: 38,
+  theme: 'light', control: q.get('ctl') || 'touch',
   owned: WARD.items.filter((i) => i.starter).map((i) => i.id), outfit: { head: null, eyes: 'glasses-round', body: null }, game: null };
 
 const roomEl = document.getElementById('room');
@@ -120,7 +123,7 @@ const hud = createHUD(document.getElementById('hud'), {
     applyRoom();
   },
   onAction(id) {
-    if (id === 'play') startGame();
+    if (id === 'play') openIntro();
     if (id === 'flush') { s.needs.toilet = 1; hud.setNeeds(s.needs); s.toilet = 'idle'; hud.setFlushVisible(false); hud.say('โล่งเลย'); }
   },
   onMic() { s.mic = s.mic === 0 ? 1 : 0; hud.setMic(MICS[s.mic]); },
@@ -143,6 +146,9 @@ const hud = createHUD(document.getElementById('hud'), {
   },
   onMinigameExit() { stopGame(); hud.endMinigame(); },
   onMinigameAgain() { startGame(); },
+  onMinigameControl(id) { s.control = id; },
+  onMinigameReady() { startGame(); },
+  onThemeToggle() { applyTheme(s.theme === 'dark' ? 'light' : 'dark'); },
   onFoodPointerDown(id, ev) {
     ghost.innerHTML = foodIcon(id, 64); ghost.style.display = 'block';
     const mv = (e) => { ghost.style.transform = `translate(${e.clientX - 32}px, ${e.clientY - 32}px) rotate(-12deg) scale(1.1)`; };
@@ -159,6 +165,19 @@ const hud = createHUD(document.getElementById('hud'), {
   },
 }, { needs: null });
 
+/** Theme as wire should drive it (S3): <html data-theme>, meta, then hud.setTheme in the same tick. */
+function applyTheme(t) {
+  s.theme = t;
+  document.documentElement.dataset.theme = t;
+  document.querySelector('meta[name="color-scheme"]').content = t === 'dark' ? 'only dark' : 'only light';
+  hud.setTheme(t);
+}
+const CONTROLS = [
+  { id: 'touch', label: 'นิ้ว / เมาส์', hint: 'ลากนิ้วหรือขยับเมาส์ซ้ายขวา' },
+  { id: 'head', label: 'เอียงหัว', hint: 'ใช้กล้อง เอียงหัวซ้ายขวา' },
+];
+function openIntro() { stopGame(); hud.showMinigameIntro({ controls: CONTROLS, selected: s.control }); }
+
 /** Toilet flow as wire should drive it (S2-03): coach only before sitting; button only while sitting. */
 function applyRoom() {
   roomEl.dataset.room = s.room;
@@ -174,7 +193,8 @@ async function startGame() {
   stopGame();
   const dur = 45;
   const g = s.game = { score: 0, coins: 0, streak: 0, t: dur, timer: 0 };
-  await hud.startMinigame({ title: 'ฝนขนม', durationSec: dur });
+  hud.hideMinigameIntro();
+  await hud.startMinigame({ title: 'ฝนขนม', durationSec: dur, control: s.control });
   if (s.game !== g) return;
   g.timer = setInterval(() => {
     g.t = Math.max(0, g.t - 0.5);
@@ -193,6 +213,7 @@ function endRound() {
 }
 function stopGame() { if (s.game) clearInterval(s.game.timer); s.game = null; }
 
+applyTheme(q.get('theme') === 'dark' ? 'dark' : 'light');
 hud.setFoods(FOODS);
 hud.setCharacter(s.char);
 pet.src = `../../assets/ui/characters/${PORTRAIT[s.char.key]}.png`;
@@ -211,11 +232,12 @@ if (q.get('ward')) {
   if (q.get('ward') === 'body' || q.get('ward') === 'buy') document.querySelector('.mp-ward-tab[data-slot="body"]')?.click();
   if (q.get('ward') === 'buy') document.querySelector('.mp-item[data-id="scarf"]')?.click();
 }
+if (q.get('game') === 'intro') openIntro();
 if (q.get('game') === 'play') {
-  hud.startMinigame({ title: 'ฝนขนม', durationSec: 45, countdown: 0 });
+  hud.startMinigame({ title: 'ฝนขนม', durationSec: 45, countdown: 0, control: s.control });
   hud.updateMinigame({ score: 128, timeLeft: 31.4, streak: 7, coins: 6 });
 }
-if (q.get('game') === 'count') hud.startMinigame({ title: 'ฝนขนม', durationSec: 45 });
+if (q.get('game') === 'count') hud.startMinigame({ title: 'ฝนขนม', durationSec: 45, control: s.control });
 if (q.get('game') === 'result') {
   hud.startMinigame({ title: 'ฝนขนม', durationSec: 45, countdown: 0 });
   hud.updateMinigame({ score: 214, timeLeft: 0, streak: 0, coins: 12 });
@@ -262,7 +284,9 @@ panel.addEventListener('click', (e) => {
   if (a === 'coins-') hud.setCoins(s.coins = Math.max(0, s.coins - 50));
   if (a === 'select') hud.showSelect(CHARS);
   if (a === 'ward') { if (s.room !== 'living') { s.room = 'living'; applyRoom(); } hud.showWardrobe(wardData()); }
-  if (a === 'game') startGame();
+  if (a === 'game') openIntro();
+  if (a === 'theme') applyTheme(s.theme === 'dark' ? 'light' : 'dark');
+  if (a === 'camfail') { s.control = 'touch'; hud.updateMinigame({ control: 'touch' }); hud.toast('เปิดกล้องไม่ได้ เลยเล่นด้วยนิ้วแทนนะ', 4000, { icon: 'camera-off', tone: 'warn' }); }
 });
 window.__hud = hud;
 </script>
