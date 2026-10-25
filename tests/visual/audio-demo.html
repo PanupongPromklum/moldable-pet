@@ -1,0 +1,123 @@
+<!doctype html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Audio Demo — Moldable Pet</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600&family=Prompt:wght@400;600&display=swap" rel="stylesheet">
+<style>
+  /* Test page only (S1-05). Colours from design/art/moldable-design.md §3. */
+  :root {
+    --bg: #F5F5F5; --card: #FFFFFF; --ink: #1E1E1E; --muted: #6B6B78;
+    --primary: #5A68B5; --primary-light: #E7EFF8; --low: #E8B4C4;
+    --grad: linear-gradient(118deg, #7FA9B1 0%, #9BB0DE 35%, #CBA5D1 70%, #EB92B3 100%);
+    --radius: 20px;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--ink); font-family: 'Prompt', 'Poppins', system-ui, sans-serif; }
+  main { max-width: 560px; margin: 0 auto; padding: 20px 16px 48px; }
+  h1 { font-size: 22px; margin: 0 0 4px; }
+  h1 span { background: var(--grad); -webkit-background-clip: text; background-clip: text; color: transparent; }
+  p.note { color: var(--muted); font-size: 13px; margin: 0 0 16px; }
+  section { background: var(--card); border-radius: var(--radius); padding: 16px; margin-bottom: 14px; box-shadow: 0 2px 10px rgba(64,73,111,.06); }
+  h2 { font-size: 15px; margin: 0 0 12px; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(96px, 1fr)); gap: 8px; }
+  button { font: inherit; font-family: 'Poppins', 'Prompt', sans-serif; font-size: 14px; border: 0; border-radius: 14px; padding: 12px 8px;
+    background: var(--primary-light); color: var(--primary); cursor: pointer; transition: transform .2s cubic-bezier(.22,1,.36,1), background .2s; }
+  button:active { transform: scale(.96); }
+  button.primary { background: var(--primary); color: #fff; padding: 14px 20px; font-family: 'Prompt', sans-serif; }
+  button.on { background: var(--grad); color: #fff; }
+  .row { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; font-size: 14px; }
+  label { display: flex; align-items: center; gap: 8px; }
+  input[type=range] { accent-color: var(--primary); width: 140px; }
+  .meter { height: 14px; border-radius: 7px; background: var(--bg); overflow: hidden; flex: 1; min-width: 120px; }
+  .meter > i { display: block; height: 100%; width: 0; background: var(--grad); transition: width .04s linear; }
+  .meter.mic > i { background: var(--primary); }
+  .state { font-family: 'Poppins', sans-serif; font-weight: 600; padding: 4px 10px; border-radius: 10px; background: var(--primary-light); color: var(--primary); }
+  .mouth-wrap { display: flex; justify-content: center; padding: 8px 0 4px; }
+  .face { width: 120px; height: 120px; border-radius: 48% 52% 50% 50%; background: var(--grad); position: relative; }
+  .face::before, .face::after { content: ''; position: absolute; top: 40px; width: 12px; height: 16px; border-radius: 6px; background: #1E1E1E; }
+  .face::before { left: 34px; } .face::after { right: 34px; }
+  .mouth { position: absolute; left: 50%; top: 72px; width: 28px; height: 4px; transform: translateX(-50%); border-radius: 14px; background: #40496F; transition: height .05s linear; }
+  .err { color: #9C4A63; font-size: 13px; min-height: 18px; margin-top: 8px; }
+  .log { font-family: 'Poppins', monospace; font-size: 12px; color: var(--muted); margin-top: 8px; }
+</style>
+</head>
+<body>
+<main>
+  <h1>เสียง <span>Moldable Pet</span></h1>
+  <p class="note">หน้าทดสอบเสียง (S1-05) · กดปุ่มใดก็ได้ครั้งแรกเพื่อเปิดเสียง · พูดตามต้องเปิดผ่าน https หรือ localhost</p>
+
+  <section>
+    <h2>เสียงเอฟเฟกต์</h2>
+    <div class="row" style="margin-bottom:12px">
+      <label><input type="checkbox" id="sfxOn" checked> เปิดเสียงเอฟเฟกต์</label>
+      <label>ความดัง <input type="range" id="vol" min="0" max="2" step="0.05" value="1"> <span id="volV">1.00</span></label>
+    </div>
+    <div class="grid" id="sfxGrid"></div>
+    <div class="row" style="margin-top:12px">
+      <button id="stack">ซ้อน 12 เสียงพร้อมกัน</button>
+    </div>
+    <div class="log" id="sfxLog">—</div>
+  </section>
+
+  <section>
+    <h2>พูดตาม (Talk-back)</h2>
+    <div class="row">
+      <button class="primary" id="tbBtn">เปิดไมค์</button>
+      <span class="state" id="tbState">off</span>
+    </div>
+    <div class="row" style="margin-top:12px"><span style="width:84px">ไมค์</span><div class="meter mic"><i id="micM"></i></div></div>
+    <div class="row" style="margin-top:8px"><span style="width:84px">ปาก (เล่น)</span><div class="meter"><i id="outM"></i></div></div>
+    <div class="mouth-wrap"><div class="face"><div class="mouth" id="mouth"></div></div></div>
+    <div class="err" id="tbErr"></div>
+  </section>
+</main>
+
+<script type="module">
+  import { sfx, SFX_NAMES } from '../../src/audio/sfx.js';
+  import { createTalkback } from '../../src/audio/talkback.js';
+
+  const $ = (id) => document.getElementById(id);
+  let played = 0;
+  const vol = () => Number($('vol').value);
+
+  // Unlock on the first gesture anywhere.
+  const unlock = () => { sfx.unlock(); };
+  window.addEventListener('pointerdown', unlock, { capture: true });
+  window.addEventListener('keydown', unlock, { capture: true });
+
+  for (const name of SFX_NAMES) {
+    const b = document.createElement('button');
+    b.textContent = name; b.dataset.sfx = name;
+    b.addEventListener('click', () => { sfx.play(name, { volume: vol() }); $('sfxLog').textContent = `played: ${name} (#${++played})`; });
+    $('sfxGrid').appendChild(b);
+  }
+  $('stack').addEventListener('click', () => {
+    ['pop', 'boing', 'flush', 'sparkle', 'whoosh', 'chew', 'gulp', 'giggle', 'squish', 'slap', 'yawn', 'tap']
+      .forEach((n) => sfx.play(n, { volume: 2 }));
+    $('sfxLog').textContent = 'stacked 12 sounds at volume 2 (limiter should keep it clean)';
+  });
+  $('sfxOn').addEventListener('change', (e) => sfx.setEnabled(e.target.checked));
+  $('vol').addEventListener('input', () => { $('volV').textContent = vol().toFixed(2); });
+
+  const LABEL = { off: 'off', listening: 'กำลังฟัง…', recording: 'กำลังอัด', playing: 'กำลังพูดตาม' };
+  const tb = createTalkback({
+    onState(s) {
+      $('tbState').textContent = LABEL[s] || s;
+      $('tbBtn').textContent = s === 'off' ? 'เปิดไมค์' : 'ปิดไมค์';
+      $('tbBtn').classList.toggle('on', s !== 'off');
+    },
+    onLevel(l) { $('outM').style.width = (l * 100).toFixed(0) + '%'; $('mouth').style.height = (4 + l * 30).toFixed(1) + 'px'; },
+    onInputLevel(l) { $('micM').style.width = (l * 100).toFixed(0) + '%'; },
+    onError(e) { $('tbErr').textContent = 'เปิดไมค์ไม่ได้: ' + (e && e.message ? e.message : e); },
+  });
+  $('tbBtn').addEventListener('click', () => {
+    $('tbErr').textContent = '';
+    if (tb.isOn()) tb.stop(); else tb.start();
+  });
+  window.__audioDemo = { sfx, tb, names: SFX_NAMES };
+</script>
+</body>
+</html>
