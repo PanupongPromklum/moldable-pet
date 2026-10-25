@@ -1,0 +1,197 @@
+<!doctype html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>HUD demo — Moldable Pet (S1-04)</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Prompt:wght@400;500;600&family=Poppins:wght@400;500;600&display=swap">
+<link rel="stylesheet" href="../../src/ui/tokens.css">
+<link rel="stylesheet" href="../../src/ui/hud.css">
+<style>
+  html, body { margin: 0; height: 100%; overflow: hidden; background: #F2F1FB; font-family: 'Prompt', 'Poppins', sans-serif; }
+  /* Fake room: stands in for the 3D scene */
+  #room { position: fixed; inset: 0; transition: background-color .4s cubic-bezier(0.22,1,0.36,1); }
+  #room .floor { position: absolute; left: 0; right: 0; top: 62%; bottom: 0; transition: background-color .4s; }
+  #room .blob { position: absolute; border-radius: 54% 46% 52% 48% / 48% 54% 46% 52%; opacity: .7; }
+  #room[data-room="living"] { background: #F2F1FB; } #room[data-room="living"] .floor { background: #E6E4F6; }
+  #room[data-room="kitchen"] { background: #FBF0F4; } #room[data-room="kitchen"] .floor { background: #F4E1E9; }
+  #room[data-room="bathroom"] { background: #EDF4F6; } #room[data-room="bathroom"] .floor { background: #DCEAEE; }
+  #pet { position: fixed; left: 50%; width: 200px; height: 190px; margin-left: -100px; object-fit: contain; pointer-events: none; }
+  #ghost { position: fixed; left: 0; top: 0; width: 64px; height: 64px; pointer-events: none; z-index: 20; display: none; transform-origin: center; }
+  /* Demo panel (not part of the HUD) */
+  #demo-toggle { position: fixed; left: 0; top: 50%; z-index: 30; transform: translateY(-50%); border: none; border-radius: 0 12px 12px 0;
+    background: #252941; color: #fff; font: 600 12px/1.4 'Poppins', sans-serif; padding: 10px 6px; writing-mode: vertical-rl; cursor: pointer; }
+  #demo { position: fixed; left: 12px; top: 50%; transform: translateY(-50%); z-index: 31; width: 210px; max-height: 80vh; overflow: auto;
+    background: #fff; border-radius: 20px; padding: 12px; box-shadow: 0 8px 30px rgba(37,41,65,.16); display: flex; flex-direction: column; gap: 6px;
+    font-size: 13px; line-height: 1.4; color: #252941; }
+  #demo[hidden] { display: none; }
+  #demo b { font-family: 'Poppins', sans-serif; font-size: 12px; color: #5C5F75; margin-top: 4px; }
+  #demo button { min-height: 36px; border: 1px solid #D9D6EA; border-radius: 12px; background: #F5F5F5; font: 500 13px/1.4 'Prompt', sans-serif; color: #252941; cursor: pointer; text-align: left; padding: 6px 10px; }
+  #demo .row { display: flex; gap: 6px; } #demo .row button { flex: 1; }
+</style>
+</head>
+<body>
+<div id="room" data-room="living" aria-hidden="true">
+  <div class="floor"></div>
+  <div class="blob" style="left:8%; top:24%; width:28vw; max-width:140px; height:150px; background:#fff;"></div>
+  <div class="blob" style="right:9%; top:26%; width:22vw; max-width:100px; height:100px; background:#fff;"></div>
+</div>
+<img id="pet" alt="">
+<div id="ghost"></div>
+<div id="hud"></div>
+
+<button id="demo-toggle" type="button">DEMO</button>
+<div id="demo" hidden>
+  <b>Needs</b>
+  <button data-a="needs">วนสถานะ ความต้องการ</button>
+  <b>Room</b>
+  <div class="row"><button data-a="room-1">ก่อน</button><button data-a="room+1">ถัด</button></div>
+  <button data-a="flushvis">สลับ ปุ่มชักโครก</button>
+  <b>Mic / Camera</b>
+  <button data-a="mic">วน ไมค์</button>
+  <button data-a="cam">วน กล้อง (รวม error)</button>
+  <b>Messages</b>
+  <button data-a="say">ลูกโป่งคำพูด</button>
+  <button data-a="toast">Toast ปวดห้องน้ำ</button>
+  <button data-a="toast2">Toast ทั่วไป</button>
+  <button data-a="coach">สลับ coach mark</button>
+  <button data-a="coins">+20 เหรียญ</button>
+  <b>Screens</b>
+  <button data-a="select">หน้าเลือกตัวละคร (เปิดเกม)</button>
+  <button data-a="select2">หน้าเลือกตัวละคร (จากตั้งค่า)</button>
+</div>
+
+<script type="module">
+import { createHUD, HUD_ROOMS } from '../../src/ui/hud.js';
+import { foodIcon } from '../../src/ui/icons.js';
+
+const q = new URLSearchParams(location.search);
+const CHARS = [
+  { key: 'splat', name: 'ใหม่', role: 'CI / Branding', mbti: 'INFJ' },
+  { key: 'pill', name: 'ปาม', locked: true },
+  { key: 'gumdrop', name: 'มิน', role: 'CEO · ดูแลภาพรวม', mbti: 'ENFJ' },
+  { key: 'diamond', name: 'แอ๊ค', role: 'UI / Motion', mbti: 'ISFJ' },
+  { key: 'cloud', name: 'ฟ้า', role: 'Frontend · Handoff', mbti: 'INFJ' },
+  { key: 'flower', name: 'ไผ่', role: 'UX / CX', mbti: 'ENFP' },
+];
+const FOODS = [
+  { id: 'onigiri', name: 'ข้าวปั้น' }, { id: 'banana', name: 'กล้วย' }, { id: 'cupcake', name: 'คัพเค้ก' },
+  { id: 'apple', name: 'แอปเปิล' }, { id: 'bun', name: 'ซาลาเปา' }, { id: 'milk', name: 'นม' },
+];
+const PORTRAIT = { splat: 'char_mai', pill: 'char_two', gumdrop: 'char_min', diamond: 'char_ack', cloud: 'char_fah', flower: 'char_pai' };
+const PRESETS = [
+  { hunger: 0.8, toilet: 0.65, fun: 0.55, social: 0.2 },
+  { hunger: 0.22, toilet: 0.6, fun: 0.7, social: 0.75 },
+  { hunger: 0.7, toilet: 0.08, fun: 0.5, social: 0.6 },
+  { hunger: 1, toilet: 1, fun: 1, social: 1 },
+  { hunger: 0.05, toilet: 0.18, fun: 0.4, social: 0.9 },
+];
+const MICS = ['off', 'listening', 'recording', 'playing'];
+const CAMS = ['off', 'loading', 'on', 'error'];
+
+const s = { room: HUD_ROOMS.indexOf(q.get('room')) >= 0 ? q.get('room') : 'living', preset: 0, mic: 0, cam: 0,
+  coins: 1240, flush: false, coach: false, char: CHARS[5], needs: { ...PRESETS[0] } };
+
+const roomEl = document.getElementById('room');
+const pet = document.getElementById('pet');
+const ghost = document.getElementById('ghost');
+
+const hud = createHUD(document.getElementById('hud'), {
+  onRoom(d) {
+    const i = HUD_ROOMS.indexOf(s.room);
+    s.room = typeof d === 'number' ? HUD_ROOMS[(i + d + HUD_ROOMS.length) % HUD_ROOMS.length] : d;
+    applyRoom();
+  },
+  onAction(id) {
+    if (id === 'play') { hud.say('เล่นกันเถอะ!'); s.needs.fun = Math.min(1, s.needs.fun + 0.2); hud.setNeeds(s.needs); }
+    if (id === 'flush') { s.needs.toilet = 1; hud.setNeeds(s.needs); s.flush = false; hud.setFlushVisible(false); hud.say('โล่งเลย'); }
+  },
+  onMic() { s.mic = s.mic === 0 ? 1 : 0; hud.setMic(MICS[s.mic]); },
+  onCamera() {
+    if (CAMS[s.cam] === 'on') { s.cam = 0; hud.setCamera('off'); return; }
+    s.cam = 1; hud.setCamera('loading');
+    setTimeout(() => { s.cam = 2; hud.setCamera('on'); }, 1200);
+  },
+  onSettings() { hud.showSelect(CHARS, s.char.key); },
+  onSelect(key) { s.char = CHARS.find((c) => c.key === key); hud.setCharacter(s.char); pet.src = `../../assets/ui/characters/${PORTRAIT[key]}.png`; hud.hideSelect(); hud.say(`สวัสดี ${s.char.name}เอง`); },
+  onFoodPointerDown(id, ev) {
+    ghost.innerHTML = foodIcon(id, 64); ghost.style.display = 'block';
+    const mv = (e) => { ghost.style.transform = `translate(${e.clientX - 32}px, ${e.clientY - 32}px) rotate(-12deg) scale(1.1)`; };
+    mv(ev);
+    const up = (e) => {
+      window.removeEventListener('pointermove', mv); window.removeEventListener('pointerup', up);
+      ghost.style.display = 'none';
+      const r = pet.getBoundingClientRect();
+      if (e.clientX > r.left && e.clientX < r.right && e.clientY > r.top && e.clientY < r.bottom) {
+        s.needs.hunger = Math.min(1, s.needs.hunger + 0.3); hud.setNeeds(s.needs); hud.say('อร่อยจัง'); hud.coach(null);
+      }
+    };
+    window.addEventListener('pointermove', mv); window.addEventListener('pointerup', up);
+  },
+}, { needs: null });
+
+function applyRoom() {
+  roomEl.dataset.room = s.room;
+  hud.setRoom(s.room);
+  hud.setFlushVisible(s.room === 'bathroom' && s.flush);
+  if (s.room === 'kitchen') hud.coach('ลากอาหารไปที่ปาก');
+  else if (s.room === 'bathroom' && !s.flush) hud.coach('กดค้างที่ตัวแล้วลากมาที่ชักโครก');
+  else hud.coach(s.coach ? 'ลูบหัวไผ่เบาๆ' : null);
+}
+
+hud.setFoods(FOODS);
+hud.setCharacter(s.char);
+pet.src = `../../assets/ui/characters/${PORTRAIT[s.char.key]}.png`;
+hud.setCoins(s.coins);
+hud.setNeeds(s.needs);
+applyRoom();
+if (q.get('mic')) hud.setMic(q.get('mic'));
+if (q.get('cam')) hud.setCamera(q.get('cam'));
+if (q.get('flush')) { s.flush = true; applyRoom(); }
+if (q.get('preset')) { s.needs = { ...PRESETS[+q.get('preset')] }; hud.setNeeds(s.needs); }
+if (q.get('toast')) hud.toast('ไผ่ปวดห้องน้ำแล้ว', 60000, { icon: 'toilet' });
+if (q.get('select')) hud.showSelect(CHARS, q.get('select') === 'settings' ? s.char.key : undefined);
+hud.say(q.get('say') || 'มาคุยกับไผ่หน่อยสิ', 600000);
+
+// Fake pet: sits between the HUD bands; bubble follows its head top every frame.
+function frame(t) {
+  const vh = window.innerHeight;
+  const kitchenTray = s.room === 'kitchen';
+  const base = kitchenTray ? vh * 0.36 : vh * 0.5;
+  const top = base - 95 + Math.sin(t / 700) * 3;
+  pet.style.top = `${top}px`;
+  hud.placeBubble(window.innerWidth / 2 + 30, top + 6);
+  requestAnimationFrame(frame);
+}
+requestAnimationFrame(frame);
+
+// Keyboard ← → (wire's input layer does this in the game)
+window.addEventListener('keydown', (e) => {
+  if (e.key === 'ArrowLeft') { s.room = HUD_ROOMS[(HUD_ROOMS.indexOf(s.room) + 2) % 3]; applyRoom(); }
+  if (e.key === 'ArrowRight') { s.room = HUD_ROOMS[(HUD_ROOMS.indexOf(s.room) + 1) % 3]; applyRoom(); }
+});
+
+// Demo panel
+const panel = document.getElementById('demo');
+document.getElementById('demo-toggle').onclick = () => { panel.hidden = !panel.hidden; };
+panel.addEventListener('click', (e) => {
+  const a = e.target.closest('button')?.dataset.a; if (!a) return;
+  if (a === 'needs') { s.preset = (s.preset + 1) % PRESETS.length; s.needs = { ...PRESETS[s.preset] }; hud.setNeeds(s.needs); }
+  if (a === 'room-1' || a === 'room+1') { const d = a === 'room-1' ? 2 : 1; s.room = HUD_ROOMS[(HUD_ROOMS.indexOf(s.room) + d) % 3]; applyRoom(); }
+  if (a === 'flushvis') { s.flush = !s.flush; if (s.room !== 'bathroom') { s.room = 'bathroom'; } applyRoom(); }
+  if (a === 'mic') { s.mic = (s.mic + 1) % MICS.length; hud.setMic(MICS[s.mic]); }
+  if (a === 'cam') { s.cam = (s.cam + 1) % CAMS.length; hud.setCamera(CAMS[s.cam], CAMS[s.cam] === 'error' ? 'ไม่ได้รับสิทธิ์ใช้กล้อง' : undefined); }
+  if (a === 'say') hud.say(['หิวจังเลย', 'มาคุยกับไผ่หน่อยสิ', 'วันนี้เหนื่อยนิดหน่อย แต่ดีใจที่เธอมาหานะ'][Math.floor(Math.random() * 3)]);
+  if (a === 'toast') hud.toast('ไผ่ปวดห้องน้ำแล้ว', 4000, { icon: 'toilet' });
+  if (a === 'toast2') hud.toast('บันทึกแล้ว');
+  if (a === 'coach') { s.coach = !s.coach; applyRoom(); }
+  if (a === 'coins') { s.coins += 20; hud.setCoins(s.coins); }
+  if (a === 'select') hud.showSelect(CHARS);
+  if (a === 'select2') hud.showSelect(CHARS, s.char.key);
+});
+window.__hud = hud;
+</script>
+</body>
+</html>

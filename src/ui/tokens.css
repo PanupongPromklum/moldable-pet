@@ -1,0 +1,91 @@
+/*
+ * Moldable Pet — UI tokens (light theme). Owner: glaze.
+ * Source: design/art/moldable-design.md §3–§10 + owner decisions 2026-10-25.
+ * Legend:  [DS]   value from the Moldable Design System
+ *          [OK]   proposed by glaze, approved by the owner
+ *          [เสนอ] proposal, waiting for owner approval
+ */
+:root {
+  /* ---- Brand ---- */
+  --mp-gradient: linear-gradient(118deg, #7FA9B1 0%, #9BB0DE 35%, #CBA5D1 70%, #EB92B3 100%); /* [DS] Decorations/Gradient 1 */
+  --mp-gradient-soft: linear-gradient(#F5F5F5, #E6E6E6);   /* [DS] Decorations/Gradient 2 */
+
+  /* ---- Surfaces ---- */
+  --mp-bg: #FFFFFF;                 /* [DS] background/default/default */
+  --mp-bg-light: #F5F5F5;           /* [DS] background/default/light */
+  --mp-bg-primary-light: #E7EFF8;   /* [DS] background/primary/light */
+  --mp-bg-danger-light: #FFEBEB;    /* [DS] background/danger/light — low/bad ground */
+  --mp-surface-glass: rgba(255, 255, 255, 0.8);   /* [เสนอ] meter panel over the room */
+  --mp-surface-glass-2: rgba(255, 255, 255, 0.75);/* [เสนอ] nav pills over the room */
+  --mp-tray-handle: #D9D6EA;        /* [เสนอ] */
+
+  /* ---- Text ---- */
+  --mp-text: #252941;               /* [DS] text/primary/default (light) */
+  --mp-text-muted: #5C5F75;         /* [เสนอ] secondary copy, 6.4:1 on white */
+  --mp-text-warn: #45121D;          /* [DS] text/secondary/default (light) — low/urgent copy and "!" badge */
+  --mp-text-on-primary: #FFFFFF;
+  --mp-text-on-dark: #FFFFFF;
+
+  /* ---- Actions ---- */
+  --mp-primary: #5A68B5;            /* [OK] background/primary/default — white text 5.2:1 */
+  --mp-primary-hover: #4E5BA3;      /* [เสนอ] */
+  --mp-border-primary: #6978C2;     /* [DS] border/primary/default (dots, outline buttons) */
+  --mp-dark-pill: #252941;          /* coach marks, locked badge */
+  --mp-focus: #5A68B5;
+
+  /* ---- Needs ([DS] gradient stops, mapping [OK]) ---- */
+  --mp-need-hunger: #EB92B3;
+  --mp-need-toilet: #7FA9B1;
+  --mp-need-fun: #CBA5D1;
+  --mp-need-social: #9BB0DE;
+  --mp-need-low-ring: #E8A6B8;      /* [OK] low/urgent ring + fill */
+  --mp-need-low-ground: #FFEBEB;    /* [DS] */
+  --mp-need-fill-opacity: 0.7;
+
+  /* ---- Type ([DS] families; sizes for a 390 px screen) ---- */
+  --mp-font-th: 'Prompt', 'Poppins', system-ui, sans-serif;
+  --mp-font-en: 'Poppins', 'Prompt', system-ui, sans-serif;
+  --mp-fs-xl: 28px;   /* screen title */
+  --mp-fs-lg: 20px;   /* sheet title */
+  --mp-fs-md: 16px;   /* bubble, buttons */
+  --mp-fs-sm: 13px;   /* captions, tray labels */
+  --mp-fs-xs: 12px;   /* meter labels — minimum */
+  --mp-lh-th: 1.4;    /* Thai line-height floor */
+  --mp-lh-body: 1.5;
+
+  /* ---- Radii ([DS] rounded-2xl 16, rounded-4xl 32, full 999) ---- */
+  --mp-r-sm: 14px;
+  --mp-r-md: 20px;
+  --mp-r-lg: 24px;
+  --mp-r-xl: 28px;
+  --mp-r-2xl: 32px;
+  --mp-r-full: 999px;
+  --mp-blob-1: 54% 46% 52% 48% / 48% 54% 46% 52%;
+  --mp-blob-2: 48% 52% 46% 54% / 54% 48% 52% 46%;
+  --mp-blob-3: 52% 48% 54% 46% / 46% 52% 48% 54%;
+  --mp-blob-4: 46% 54% 48% 52% / 52% 46% 54% 48%;
+
+  /* ---- Sizes ---- */
+  --mp-touch: 44px;     /* minimum target */
+  --mp-meter: 52px;
+  --mp-mic: 80px;
+  --mp-col-max: 520px;  /* desktop centred column */
+  --mp-gutter: 16px;
+
+  /* ---- Shadow ([เสนอ] very soft; DS says no heavy shadow) ---- */
+  --mp-shadow: 0 6px 20px rgba(37, 41, 65, 0.08);
+
+  /* ---- Motion ([DS] §10) ---- */
+  --mp-ease: cubic-bezier(0.22, 1, 0.36, 1);
+  --mp-ease-inout: cubic-bezier(0.65, 0, 0.35, 1);
+  --mp-dur-fast: 160ms;
+  --mp-dur: 280ms;
+  --mp-dur-slow: 480ms;
+  --mp-pulse: 1.6s;     /* urgent ring period */
+
+  /* ---- Safe area ---- */
+  --mp-safe-top: env(safe-area-inset-top, 0px);
+  --mp-safe-right: env(safe-area-inset-right, 0px);
+  --mp-safe-bottom: env(safe-area-inset-bottom, 0px);
+  --mp-safe-left: env(safe-area-inset-left, 0px);
+}
