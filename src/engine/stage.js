@@ -170,6 +170,8 @@ export function createStage({ container, overlay, hudReserve = { top: 120, botto
 
   return {
     renderer, scene, camera, canvas, coarse, size,
+    /** The stage lights, for Prop's `applyStageLights(theme, lights)`. */
+    lights: { hemi, key, fill, rim },
     /** Overlay 2D context (hand skeletons), or null. */
     overlayCtx: ovCtx,
     /** Register a per-frame callback run before render: fn(dt, time). */

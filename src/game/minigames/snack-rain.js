@@ -20,7 +20,8 @@ export * from './snack-rain-rules.js';
 
 /** Presentation feel (not balance): mouth opening, fades, pet body. */
 const FEEL = { mouthFar: 2.4, mouthNear: 0.5, returnSeconds: 0.5, fadeSeconds: 0.35, hudEvery: 0.1, petHalf: 0.9, itemZAhead: 0.05, spin: 1.6, coinSpin: 2.2, handLostSeconds: 1 };
-const HAND_HINT = 'ยกมือให้กล้องเห็น';
+/** Hint when the camera control (head tilt) loses the player; main may pass its own. */
+const LOST_HINT = 'หันหน้าเข้ากล้องนะ';
 const lerp = (a, b, t) => a + (b - a) * t;
 const clamp01 = (v) => (v < 0 ? 0 : v > 1 ? 1 : v);
 const smooth = (a, b, x) => { const t = clamp01((x - a) / (b - a)); return t * t * (3 - 2 * t); };
@@ -33,14 +34,19 @@ const smooth = (a, b, x) => { const t = clamp01((x - a) / (b - a)); return t * t
  *   makeMesh: (kind: string, foodId?: string) => THREE.Object3D,   // sized; userData.baseScale optional
  *   foodIds: string[], isLiked?: (foodId: string) => boolean,
  *   getPersona?: () => object,
- *   getHandX?: () => number|null,
+ *   getControlX?: () => number|null,   // camera control (head tilt) → client x; null = not tracking
+ *   getControl?: () => string,         // active control id for the HUD chip ('touch' | 'head')
+ *   lostHint?: string,
  *   onNeedsChanged?: () => void, onCoins?: (total: number) => void,
  *   onStateChange?: (active: boolean) => void,
  *   random?: () => number, keyTarget?: EventTarget,
  * }} deps
  */
 export function createSnackRain(deps) {
-  const { stage, game, hud, sfx, mood, getPet, getHome, cfg, makeMesh, getHandX, onNeedsChanged, onCoins, onStateChange } = deps;
+  const { stage, game, hud, sfx, mood, getPet, getHome, cfg, makeMesh, onNeedsChanged, onCoins, onStateChange } = deps;
+  // Sprint 3: the camera control is head tilt (hand x is no longer a minigame control)
+  const getControlX = deps.getControlX || deps.getHandX || null;
+  const lostHint = deps.lostHint || LOST_HINT;
   const random = deps.random || Math.random;
   const keyTarget = deps.keyTarget || window;
   const foods = (Array.isArray(cfg.items.snack?.foods) && cfg.items.snack.foods.length ? cfg.items.snack.foods : deps.foodIds) || ['onigiri'];
@@ -59,7 +65,7 @@ export function createSnackRain(deps) {
   let topY = 4, worldH = 6, itemZ = 0.9, sizeW = 0, sizeH = 0;
   let petX = 0, targetX = 0, keyDir = 0, lane = 0;
   const held = { l: false, r: false };
-  let source = 'none', lastHandX = null, handLostT = 0, hint = '';
+  let source = 'none', lastCamX = null, camLostT = 0, hint = '';
   let demonLineT = -99, returnFrom = 0, returnT = 0;
 
   function persona() { return deps.getPersona?.() || {}; }
@@ -138,7 +144,7 @@ export function createSnackRain(deps) {
       multiplier: streakMultiplier(st.streak, cfg.streak),
       timeLeft: Math.max(0, cfg.durationSec - elapsed),
       countdown: phase === 'countdown' ? Math.max(0, Math.ceil(countLeft)) : 0,
-      paused, hint,
+      paused, hint, control: deps.getControl?.() || 'touch',
     });
   }
 
@@ -200,7 +206,7 @@ export function createSnackRain(deps) {
     phase = 'countdown'; countLeft = seconds; lastCount = -1;
     const token = ++countToken;
     let p = null;
-    try { p = hud.startMinigame?.({ title: cfg.title, durationSec: cfg.durationSec, countdown: seconds }); } catch (e) { console.error('[snack-rain] hud', e); }
+    try { p = hud.startMinigame?.({ title: cfg.title, durationSec: cfg.durationSec, countdown: seconds, control: deps.getControl?.() || 'touch' }); } catch (e) { console.error('[snack-rain] hud', e); }
     hudDriven = !!(p && typeof p.then === 'function');
     if (hudDriven) p.then(() => { if (token === countToken) go(); });
     pushHud(true);
@@ -214,7 +220,7 @@ export function createSnackRain(deps) {
     st = newRoundState();
     elapsed = 0; spawnAcc = 0; sinceSpawn = 99; demonsInARow = 0; paused = false; pausedBy = ''; hint = '';
     petX = pet.object3d.position.x; targetX = clampTarget(getHome().x); lane = area.lanes ? nearestLane(targetX - centre, area) : 0;
-    keyDir = 0; held.l = held.r = false; source = 'none'; lastHandX = null; handLostT = 0;
+    keyDir = 0; held.l = held.r = false; source = 'none'; lastCamX = null; camLostT = 0;
     mood.hold?.('minigame', true);
     runCountdown(cfg.countdownSec);
     mood.say?.(cfg.lines.start, true);
@@ -304,10 +310,10 @@ export function createSnackRain(deps) {
     const pet = getPet(); if (!pet) return;
     // the camera eases out during the countdown; re-measure until play (no allocation)
     if (phase === 'countdown' || stage.size.w !== sizeW || stage.size.h !== sizeH) { measure(); targetX = clampTarget(targetX); }
-    const hx = getHandX ? getHandX() : null;
-    if (hx != null) { handLostT = 0; if (hx !== lastHandX) { lastHandX = hx; setScreenX(hx, 'hand'); } }
-    else if (source === 'hand') handLostT += dt;
-    const h = source === 'hand' && handLostT > FEEL.handLostSeconds ? HAND_HINT : '';
+    const cx = getControlX ? getControlX() : null;
+    if (cx != null) { camLostT = 0; if (cx !== lastCamX) { lastCamX = cx; setScreenX(cx, 'camera'); } }
+    else if (source === 'camera') camLostT += dt;
+    const h = source === 'camera' && camLostT > FEEL.handLostSeconds ? lostHint : '';
     if (h !== hint) { hint = h; pushHud(true); }
     if (keyDir) targetX = clampTarget(targetX + keyDir * cfg.move.keySpeed * 2 * area.half * dt);
     petX += (targetX - petX) * (1 - Math.exp(-cfg.move.followPerSec * dt));

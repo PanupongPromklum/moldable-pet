@@ -9,7 +9,7 @@
  * Loop can move them into `assets/data/` later.
  * @module game/mood
  */
-import { pickNeedMood, needState, pickReturnStyle } from './needs.js';
+import { pickNeedMood, needState, pickReturnStyle, applyPet } from './needs.js';
 
 const TUNE = {
   sayKindCooldown: 3.5, sayGlobalCooldown: 1.4, bubbleMs: 2300,
@@ -146,12 +146,15 @@ export function createMood({ data, game, hud, sfx, timers, getPet, random = Math
       sfx.play('pop');
       return spam;
     },
-    /** Rubbing above the head, called every frame it happens. */
+    /**
+     * Petting (mouse rub above the head, finger stroke over the head), called for
+     * every counted frame. Social tapers near full, fun does not (needs GDD 4.2).
+     */
     onPetTick(dt, time) {
       const p = P(); touch(time);
       m.joy += dt * TUNE.joyPet * p.petGain; m.annoy -= dt * TUNE.annoyPetCalm; m.shy += dt * TUNE.shyPet; m.petT = time;
-      game.bump('social', A.petPerSecond.social * p.petGain * dt);
-      game.bump('fun', A.petPerSecond.fun * p.petGain * dt);
+      const levels = game.needs();
+      if (levels) applyPet(levels, A, p.petGain, dt);
       say('pet');
       if (time - chirpT > TUNE.chirpEvery) { chirpT = time; sfx.play('chirp'); }
     },

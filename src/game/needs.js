@@ -107,6 +107,62 @@ export function addNeed(levels, need, amount) {
   levels[need] = clamp01(levels[need] + amount);
 }
 
+/** Defaults used only when needs.json lacks a Sprint 3 petting key (GDD 4.2). */
+const PET_DEFAULTS = Object.freeze({ petSocialTaperStart: 0.7, petSocialTaperMin: 0.35, petStrokeMinSpeed: 0.12, petStrokeMaxSpeed: 4, petStrokeGraceSeconds: 0.25, petHeadZoneFromTop: 0.4 });
+
+/**
+ * A Sprint 3 petting number from `needs.json › actions`, or its default.
+ * @param {object} actions @param {keyof typeof PET_DEFAULTS} key
+ */
+export function petNumber(actions, key) {
+  const v = actions && Number(actions[key]);
+  return Number.isFinite(v) ? v : PET_DEFAULTS[key];
+}
+
+/**
+ * Petting social taper (GDD 4.2): 1 up to `petSocialTaperStart`, then linear down
+ * to `petSocialTaperMin` at social 1.0. Fun has no taper.
+ * @param {number} level current social 0..1 @param {object} actions needs.json actions
+ */
+export function petTaper(level, actions) {
+  const s = petNumber(actions, 'petSocialTaperStart'), m = petNumber(actions, 'petSocialTaperMin');
+  if (!(level > s) || s >= 1) return 1;
+  return 1 - (1 - m) * Math.min(1, (level - s) / (1 - s));
+}
+
+/**
+ * Apply one petting tick in place (GDD 4.2): social with taper, fun without.
+ * @param {Record<string, number>} levels @param {object} actions @param {number} petGain @param {number} dt s
+ */
+export function applyPet(levels, actions, petGain, dt) {
+  const r = actions.petPerSecond || {};
+  if ('social' in levels) addNeed(levels, 'social', (r.social || 0) * petGain * petTaper(levels.social, actions) * dt);
+  addNeed(levels, 'fun', (r.fun || 0) * petGain * dt);
+}
+
+/**
+ * Does a stroke frame count as petting (GDD 3.x "Petting stroke")? Inside
+ * [petStrokeMinSpeed, petStrokeMaxSpeed] body-heights/s it counts; outside it still
+ * counts within `petStrokeGraceSeconds` of the last counted frame (finger turning).
+ * @param {number} speed body-heights per second
+ * @param {number} sinceCounted s since the last counted frame (Infinity if none)
+ * @param {object} actions needs.json actions
+ */
+export function strokeCounts(speed, sinceCounted, actions) {
+  if (speed >= petNumber(actions, 'petStrokeMinSpeed') && speed <= petNumber(actions, 'petStrokeMaxSpeed')) return true;
+  if (speed > petNumber(actions, 'petStrokeMaxSpeed')) return false;   // too fast is never petting
+  return sinceCounted <= petNumber(actions, 'petStrokeGraceSeconds');
+}
+
+/**
+ * Is a point in the head zone (top `petHeadZoneFromTop` of the body height)?
+ * @param {number} y world y of the point @param {number} feetY @param {number} headY @param {object} actions
+ */
+export function inHeadZone(y, feetY, headY, actions) {
+  const h = headY - feetY;
+  return h > 0 && y <= headY + h * 0.05 && y >= headY - h * petNumber(actions, 'petHeadZoneFromTop');
+}
+
 /**
  * Food reaction kind for a character: 'like' | 'dislike' | 'ok' (GDD 3.4 step 4).
  * @param {object} foodsCfg parsed foods.json

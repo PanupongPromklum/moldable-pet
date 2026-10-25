@@ -3,9 +3,21 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
-<meta name="theme-color" content="#F5F5F5" media="(prefers-color-scheme: light)">
-<meta name="theme-color" content="#1E1E1E" media="(prefers-color-scheme: dark)">
-<meta name="color-scheme" content="light dark">
+<meta name="theme-color" content="#F5F5F5">
+<meta name="color-scheme" content="only light">
+<script>
+  // Manual light/dark (Sprint 3): apply the saved theme before first paint. main.js owns it after boot.
+  (function () {
+    var t = 'light';
+    try { var s = JSON.parse(localStorage.getItem('moldable-pet:v1') || 'null'); if (s && s.settings && s.settings.theme === 'dark') t = 'dark'; } catch (e) { /* storage blocked */ }
+    var q = /[?&]theme=(light|dark)/.exec(location.search); if (q) t = q[1];
+    document.documentElement.setAttribute('data-theme', t);
+    if (t === 'dark') {
+      document.querySelector('meta[name="theme-color"]').setAttribute('content', '#1E1E1E');
+      document.querySelector('meta[name="color-scheme"]').setAttribute('content', 'only dark');
+    }
+  })();
+</script>
 <meta name="description" content="Moldable Pet — เลี้ยงก้อนนุ่มของ Moldable ป้อนข้าว พาเข้าห้องน้ำ ลูบหัว ยืด บี้ เล่นด้วยมือผ่านกล้องได้">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -18,16 +30,13 @@
 <link rel="stylesheet" href="src/ui/hud.css">
 <style>
   /* Shell layout only (wire). Visual tokens and HUD styles live in src/ui/. */
-  /* Declared so browsers never auto-invert ("force dark") the page; the real dark
-     theme comes from tokens.css (glaze) + room.setTheme (prop) + stage lights (wire). */
-  :root { color-scheme: light dark;
+  /* The theme is manual (lamp button, saved): only data-theme switches it, never the
+     system scheme. color-scheme follows it so browsers never auto-invert ("force dark");
+     the real dark theme comes from tokens.css (glaze) + room.setTheme (prop) + stage lights (wire). */
+  :root { color-scheme: only light;
     --shell-stage-a: #FFFFFF; --shell-stage-b: #E7EFF8; --shell-veil: rgba(245, 245, 245, .38);
     --shell-load-ink: #45121D; --shell-select-bg: rgba(255, 255, 255, .92); --shell-select-ink: #1E1E1E; --shell-select-line: rgba(30, 30, 30, .12); }
-  @media (prefers-color-scheme: dark) {
-    :root:not([data-theme="light"]) { --shell-stage-a: #2E3150; --shell-stage-b: #191A2A; --shell-veil: rgba(20, 21, 34, .42);
-      --shell-load-ink: #F3E9F7; --shell-select-bg: rgba(38, 40, 62, .94); --shell-select-ink: #F5F5F5; --shell-select-line: rgba(255, 255, 255, .18); }
-  }
-  :root[data-theme="dark"] { --shell-stage-a: #2E3150; --shell-stage-b: #191A2A; --shell-veil: rgba(20, 21, 34, .42);
+  :root[data-theme="dark"] { color-scheme: only dark; --shell-stage-a: #2E3150; --shell-stage-b: #191A2A; --shell-veil: rgba(20, 21, 34, .42);
     --shell-load-ink: #F3E9F7; --shell-select-bg: rgba(38, 40, 62, .94); --shell-select-ink: #F5F5F5; --shell-select-line: rgba(255, 255, 255, .18); }
   html, body { margin: 0; height: 100%; overflow: hidden; overscroll-behavior: none; }
   body {

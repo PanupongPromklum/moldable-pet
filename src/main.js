@@ -9,6 +9,11 @@
  * toggle, outfits (owned / per-character outfit / buy / equip) and the Snack
  * Rain minigame. Every Sprint 2 call into a teammate's module is optional
  * (`?.`) so the build keeps running while pieces land.
+ *
+ * Sprint 3 (module-contracts.md › Sprint 3 additions): manual light/dark lamp
+ * (saved `settings.theme`, the system scheme no longer decides), Snack Rain
+ * intro card with the control choice (touch / head tilt via `input/head.js`,
+ * saved `settings.minigameControl`), head-stroke petting (gestures).
  * @module main
  */
 import * as THREE from 'three';
@@ -21,6 +26,7 @@ import { createTimers } from './game/timers.js';
 import { createGestures } from './input/gestures.js';
 import { attachPointer } from './input/pointer.js';
 import { createHands } from './input/hands.js';
+import { createHeadControl } from './input/head.js';
 import { equipItem, buyItem, wearReaction } from './game/wardrobe.js';
 import { createSnackRain, resolveConfig } from './game/minigames/snack-rain.js';
 import { createCharacter, CHARACTER_KEYS } from './characters/character.js';
@@ -53,6 +59,15 @@ const MINIGAME_VIEW = { extraWidth: 2.6, frameSeconds: 0.45 };
 /** HUD bands: normal play vs Snack Rain (the pet sits lower so snacks fall through most of the screen). */
 const HUD_RESERVE = { normal: { top: 120, bottom: 160 }, minigame: { top: 260, bottom: 30 } };
 const THEME_COLOR = { light: '#F5F5F5', dark: '#1E1E1E' };
+/** Snack Rain control choices for the intro card (labels: glaze's copy in hud.js wins when these are absent). */
+const MINIGAME_CONTROLS = [
+  { id: 'touch', label: 'นิ้ว / เมาส์', hint: 'ลากนิ้วหรือขยับเมาส์ซ้ายขวา' },
+  { id: 'head', label: 'เอียงหัว', hint: 'ใช้กล้อง เอียงหัวซ้ายขวา' },
+];
+const MSG = {
+  headFail: 'เปิดกล้องไม่ได้ ใช้นิ้วเล่นแทนนะ',
+  headOpening: 'กำลังเปิดกล้อง… ครั้งแรกต้องโหลดโมเดลสักครู่',
+};
 
 const $ = (id) => document.getElementById(id);
 
@@ -156,8 +171,14 @@ async function boot() {
     onRoom(dirOrId) { if (!minigame?.active) rooms.go(dirOrId); },
     onAction(id) {
       if (id === 'flush') care.flush();
-      else if (id === 'play') startMinigame();
+      else if (id === 'play') openMinigameIntro();
     },
+    /** Lamp button: "ปิดไฟ" (dark) / "เปิดไฟ" (light), saved. */
+    onThemeToggle() { setTheme(game.settings.theme === 'dark' ? 'light' : 'dark', true); },
+    /** Intro card: control picked ('touch' | 'head'), saved. */
+    onMinigameControl(id) { game.setSetting('minigameControl', id); game.persist(); },
+    /** Intro card "เริ่มเลย". */
+    onMinigameReady() { readyMinigame(); },
     onMic() { toggleTalk(); },
     onCamera() { hands?.toggle(); },
     /** Camera view toggle "ซ่อนภาพกล้อง / แสดงภาพกล้อง"; no arg = flip. */
@@ -168,7 +189,7 @@ async function boot() {
     onWardrobe() { openWardrobe(); },
     onEquip(slot, id) { equip(slot, id ?? null); },
     onBuy(id) { buy(id); },
-    onMinigameExit() { minigame?.exit(); },
+    onMinigameExit() { if (headStarting) headCancel = true; minigame?.exit(); },
     /** HUD countdown 3, 2, 1, then 0 = go. */
     onMinigameTick(n) { sfx.play(n > 0 ? 'tick' : 'go'); },
     onMinigameAgain() { minigame?.again(); },
@@ -178,6 +199,10 @@ async function boot() {
       gestures.startFoodDrag(id, foodId, e.clientX, e.clientY, stage.now(), e.pointerType === 'mouse' ? 'mouse' : 'touch');
     },
   };
+  // <html data-theme> must be right before the HUD reads it (index.html sets it from the save too)
+  const themeParam = new URLSearchParams(location.search).get('theme');
+  const bootTheme = themeParam === 'dark' || themeParam === 'light' ? themeParam : game.settings.theme;
+  document.documentElement.dataset.theme = bootTheme;
   hud = createHUD($('hud'), handlers);
   hud.setCoins(game.coins);
   hud.setCameraView?.(!!game.settings.cameraHidden);
@@ -225,7 +250,7 @@ async function boot() {
     isPaused: () => !!minigame?.active,
     onToiletStage(st) { app.classList.toggle('toilet-sitting', st === 'sitting' || st === 'flushing'); },
   });
-  gestures = createGestures({ stage, getPet, care, mood, rooms, canInteract: () => !app.classList.contains('selecting') && !minigame?.active });
+  gestures = createGestures({ stage, getPet, care, mood, rooms, actions: needs.actions, canInteract: () => !app.classList.contains('selecting') && !minigame?.active });
   pointer = attachPointer({ canvas: stage.canvas, gestures, getTime: () => stage.now(), onFirstGesture: unlock });
   hands = createHands({
     video: $('cam'), overlay: $('ov'), app, picker: $('cam-select'), stage, hud, gestures, mood, rooms, getTime: () => stage.now(),
@@ -233,20 +258,26 @@ async function boot() {
     onView(hidden) { game.setSetting('cameraHidden', hidden); game.persist(); hud.setCameraView?.(hidden); },
   });
 
-  // 7b. theme: prefers-color-scheme (live), ?theme=light|dark overrides for testing
-  const themeParam = new URLSearchParams(location.search).get('theme');
-  const darkMq = matchMedia('(prefers-color-scheme: dark)');
-  function applyTheme() {
-    const t = themeParam === 'dark' || themeParam === 'light' ? themeParam : darkMq.matches ? 'dark' : 'light';
+  // 7b. theme (Sprint 3 #2): manual lamp, saved in settings.theme (default light).
+  // The system colour scheme never decides; ?theme=light|dark pins one for tests (not saved).
+  /**
+   * Apply a theme everywhere in one tick: <html data-theme>, color-scheme and
+   * theme-color metas, current + future rooms, stage lights, soft hands, lamp.
+   * @param {'light'|'dark'} theme @param {boolean} [save]
+   */
+  function setTheme(theme, save = false) {
+    const t = theme === 'dark' ? 'dark' : 'light';
     document.documentElement.dataset.theme = t;
-    rooms.setTheme(t);
+    for (const meta of document.querySelectorAll('meta[name="color-scheme"]')) meta.setAttribute('content', `only ${t}`);
+    for (const meta of document.querySelectorAll('meta[name="theme-color"]')) { meta.removeAttribute('media'); meta.setAttribute('content', THEME_COLOR[t]); }
+    rooms.setTheme(t);          // the room manager also creates every new room in this theme
     stage.setTheme(t, propLights(t));
+    try { RoomsMod.applyStageLights?.(t, stage.lights); } catch (e) { console.error('[theme] stage lights', e); }
     hands.setTheme(t);
-    // the two media-scoped metas already follow the OS; a ?theme override pins both
-    if (themeParam) for (const meta of document.querySelectorAll('meta[name="theme-color"]')) meta.setAttribute('content', THEME_COLOR[t]);
+    hud.setTheme?.(t);
+    if (save) { game.setSetting('theme', t); game.persist(); }
   }
-  if (darkMq.addEventListener) darkMq.addEventListener('change', applyTheme); else darkMq.addListener?.(applyTheme);
-  applyTheme();
+  setTheme(bootTheme);
 
   // 7c. wardrobe (owned shared, outfit per character)
   const wardrobeView = () => ({
@@ -308,7 +339,9 @@ async function boot() {
   minigame = createSnackRain({
     stage, game, hud, sfx, mood, getPet, cfg: snackCfg, foodIds,
     getHome: () => rooms.room?.petSpot || ORIGIN,
-    getHandX: () => hands.primaryX(),
+    // head tilt is the camera control (Sprint 3 #3); hands are not a minigame control any more
+    getControlX: () => (control === 'head' ? headCtl.clientX(stage.size.left, stage.size.w) : null),
+    getControl: () => control,
     getPersona: () => personas[game.selected],
     isLiked: (foodId) => (foods.likes?.[game.selected] || []).includes(foodId),
     makeMesh(kind, foodId) {
@@ -324,7 +357,7 @@ async function boot() {
       app.classList.toggle('minigame', active);
       hands.setPassive(active);
       gestures.reset();
-      if (active) care.clearCoach(); else care.syncControls();
+      if (active) care.clearCoach(); else { care.syncControls(); endHeadControl(); }
     },
   });
   const frame = { now: 0, from: 0, to: 0, t: 1 };
@@ -337,12 +370,76 @@ async function boot() {
     const spot = rooms.room?.petSpot;
     if (spot) stage.setFocus(spot, frame.now);
   }
+  const canStartMinigame = () => !minigame.active && rooms.id === 'living' && !rooms.moving && !care.carrying;
   function startMinigame() {
-    if (minigame.active || rooms.id !== 'living' || rooms.moving || care.carrying) return;
+    if (!canStartMinigame()) return false;
     hud.hideWardrobe?.();
     gestures.reset();
     unlock();
-    minigame.start();
+    const ok = minigame.start();
+    if (ok) {
+      hud.updateMinigame?.({ control });
+      // calibrate from the very first countdown frame (trackPhase handles "again" / resume)
+      if (control === 'head') headCtl.beginCalibration();
+      lastPhase = minigame.phase;
+    }
+    return ok;
+  }
+
+  // 7e. Snack Rain control (intro card → touch or head tilt)
+  /** Active control of the current / next round: 'touch' | 'head'. */
+  let control = 'touch', headStarting = false, headCancel = false;
+  const headCtl = createHeadControl({ getTime: () => stage.now() });
+  /** "เล่น": the intro card with the saved choice (no intro card yet → touch round). */
+  function openMinigameIntro() {
+    if (!canStartMinigame() || headStarting) return;
+    hud.hideWardrobe?.();
+    if (!hud.showMinigameIntro) { control = 'touch'; startMinigame(); return; }
+    hud.showMinigameIntro({ controls: MINIGAME_CONTROLS, selected: game.settings.minigameControl });
+  }
+  /**
+   * "เริ่มเลย": touch starts at once; head opens the camera (or shares the hand
+   * camera) and loads the model first, then the countdown calibrates neutral.
+   * Camera denied / unavailable → Thai toast and a touch round.
+   */
+  async function readyMinigame() {
+    if (headStarting || minigame.active) return;
+    unlock();
+    control = game.settings.minigameControl === 'head' ? 'head' : 'touch';
+    if (control === 'head') {
+      headStarting = true; headCancel = false;
+      hud.toast(MSG.headOpening, 2600);
+      const shared = hands.on ? hands.video : null;
+      let r;
+      try { r = await headCtl.start(shared); } catch (e) { console.warn('[head]', e); r = { ok: false }; }
+      headStarting = false;
+      if (headCancel) { headCancel = false; if (r.ok) headCtl.stop(); control = 'touch'; return; }   // intro closed meanwhile
+      if (r.ok) { if (shared) hands.setSuspended(true); }
+      else {
+        control = 'touch';
+        game.setSetting('minigameControl', 'touch'); game.persist();
+        hud.toast(MSG.headFail, 3200);
+      }
+    }
+    hud.hideMinigameIntro?.();
+    if (!startMinigame()) endHeadControl();
+  }
+  /** After a round: release the camera unless the player had it on before (hand camera). */
+  function endHeadControl() {
+    if (headCtl.on) headCtl.stop();
+    hands.setSuspended(false);
+    control = 'touch';
+  }
+  let lastPhase = 'idle';
+  /** Calibrate the neutral head pose while a countdown runs. */
+  function trackPhase() {
+    const ph = minigame.phase;
+    if (ph === lastPhase) return;
+    if (control === 'head') {
+      if (ph === 'countdown') headCtl.beginCalibration();
+      else if (lastPhase === 'countdown') headCtl.endCalibration();
+    }
+    lastPhase = ph;
   }
   // drag / touch anywhere, or mouse move: the pet follows x (normal gestures are off)
   window.addEventListener('pointerdown', (e) => { if (minigame.active && !hud.isHudPoint?.(e.clientX, e.clientY)) minigame.pointerX(e.clientX); }, { passive: true });
@@ -380,6 +477,8 @@ async function boot() {
   stage.onTick((dt, time) => {
     timers.update(time);
     hands.update(time);
+    if (headCtl.on) headCtl.update();
+    trackPhase();
     gestures.update(dt, time);
     care.update(dt, time);
     updateFrame(dt);
@@ -419,7 +518,7 @@ async function boot() {
   document.documentElement.dataset.boot = 'ok';
 
   if (new URLSearchParams(location.search).has('debug')) {
-    window.__moldablePet = { data, game, stage, rooms, mood, care, gestures, hands, hud, getPet, selectCharacter, minigame, startMinigame, equip, buy, openWardrobe, snackCfg };
+    window.__moldablePet = { data, game, stage, rooms, mood, care, gestures, hands, head: headCtl, hud, getPet, selectCharacter, minigame, startMinigame, openMinigameIntro, readyMinigame, setTheme, getControl: () => control, equip, buy, openWardrobe, snackCfg };
   }
 }
 

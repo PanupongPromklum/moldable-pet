@@ -2,15 +2,18 @@
  * Game state and save — needs per character key (owner decision 2026-10-25),
  * selected character, current room, wall-clock decay, localStorage save.
  *
- * Save key `moldable-pet:v1` (the key stays; `version` inside moves), shape v2:
- * { version: 2, selected, room, chosen, coins, savedAt,
+ * Save key `moldable-pet:v1` (the key stays; `version` inside moves), shape v3:
+ * { version: 3, selected, room, chosen, coins, savedAt,
  *   owned: [itemIds],                       // shared by every character (Sprint 2)
- *   settings: { cameraHidden: bool },       // camera view choice (S2-04)
+ *   settings: { cameraHidden: bool,         // camera view choice (S2-04)
+ *     theme: 'light'|'dark',                // manual lamp toggle (Sprint 3 #2), default light
+ *     minigameControl: 'touch'|'head' },    // Snack Rain control (Sprint 3 #3), default touch
  *   chars: { <key>: { needs: {…}, tLast,
  *     outfit: { head, eyes, body },         // per character (S2-11)
  *     best: { snackRain: number },          // best minigame score per character (snack-rain GDD 3.8)
  *     wearBonusAt: ms } } }                 // last outfit need bonus (economy GDD 3.5 cooldown)
- * v0 (prototype) and v1 (Sprint 1, no outfits / settings / best) saves migrate.
+ * v0 (prototype), v1 (Sprint 1, no outfits / settings / best) and v2 (Sprint 2,
+ * no theme / minigameControl → light / touch) saves migrate.
  *
  * The pure helpers (`newSave`, `migrateSave`, `tickSave`) are unit-tested in
  * `tests/unit/needs.test.mjs`. `createGameState` wraps them with an injected
@@ -21,7 +24,25 @@ import { startLevels, sanitizeLevels, decayNeeds, addNeed } from './needs.js';
 import { sanitizeOwned, sanitizeOutfit, emptyOutfit } from './wardrobe.js';
 
 export const SAVE_KEY = 'moldable-pet:v1';
-export const SAVE_VERSION = 2;
+export const SAVE_VERSION = 3;
+/** Allowed values of the Sprint 3 settings (first = default). */
+export const THEMES = Object.freeze(['light', 'dark']);
+export const MINIGAME_CONTROLS = Object.freeze(['touch', 'head']);
+
+/**
+ * Valid settings object from anything (missing / unknown values → defaults).
+ * The system colour scheme never decides the theme (Sprint 3 #2).
+ * @param {any} s
+ * @returns {{ cameraHidden: boolean, theme: 'light'|'dark', minigameControl: 'touch'|'head' }}
+ */
+export function sanitizeSettings(s) {
+  const o = s && typeof s === 'object' ? s : {};
+  return {
+    cameraHidden: !!o.cameraHidden,
+    theme: THEMES.includes(o.theme) ? o.theme : THEMES[0],
+    minigameControl: MINIGAME_CONTROLS.includes(o.minigameControl) ? o.minigameControl : MINIGAME_CONTROLS[0],
+  };
+}
 export const DEFAULT_CHARACTER = 'flower';
 export const DEFAULT_ROOM = 'living';
 
@@ -47,7 +68,7 @@ export function newSave(data, now) {
   return {
     version: SAVE_VERSION, selected: DEFAULT_CHARACTER, room: DEFAULT_ROOM, chosen: false,
     coins: Number.isFinite(start) && start > 0 ? Math.floor(start) : 0, savedAt: now,
-    owned: sanitizeOwned(null, wardrobe), settings: { cameraHidden: false }, chars,
+    owned: sanitizeOwned(null, wardrobe), settings: sanitizeSettings(null), chars,
   };
 }
 
@@ -85,7 +106,7 @@ export function migrateSave(raw, data, now, roomIds) {
   out.savedAt = Number.isFinite(src.savedAt) ? src.savedAt : now;
   const wardrobe = data.wardrobe || null;
   out.owned = sanitizeOwned(src.owned, wardrobe);
-  out.settings = { cameraHidden: !!(src.settings && src.settings.cameraHidden) };
+  out.settings = sanitizeSettings(src.settings);
   const score = (b) => (b && Number.isFinite(b.snackRain) && b.snackRain > 0 ? Math.floor(b.snackRain) : 0);
   for (const k of keys) {
     const c = src.chars && src.chars[k];
@@ -174,8 +195,8 @@ export function createGameState({ data, storage, now = () => Date.now(), roomIds
       const c = save.chars[key]; if (!c) return 0;
       const b = Math.max(c.best[game] || 0, Math.floor(score) || 0); c.best[game] = b; return b;
     },
-    /** Change one setting (e.g. cameraHidden). */
-    setSetting(k, v) { save.settings[k] = v; },
+    /** Change one setting (cameraHidden, theme, minigameControl); invalid values fall back to defaults. */
+    setSetting(k, v) { save.settings[k] = v; save.settings = sanitizeSettings(save.settings); },
     /** Live levels of the selected character (mutated in place by `bump`). */
     needs(key = save.selected) { return save.chars[key]?.needs; },
     /** Add to one need of the selected character, clamped. */

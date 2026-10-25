@@ -24,9 +24,13 @@ const TIPS = [8, 12, 16, 20], PIPS = [6, 10, 14, 18], PALM = [0, 5, 9, 13, 17];
 /** Finger chains for the soft hand (thumb … pinky), and the palm outline. */
 const FINGERS = [[1, 2, 3, 4], [5, 6, 7, 8], [9, 10, 11, 12], [13, 14, 15, 16], [17, 18, 19, 20]];
 const PALM_RING = [0, 1, 5, 9, 13, 17];
-/** Soft-hand look: widths are shares of the wrist→middle-knuckle length. */
+/**
+ * Soft-hand look: widths are shares of the wrist→middle-knuckle length.
+ * Sprint 3 #4: slimmer (about 65% of the Sprint 2 weight) — thinner fingers, a
+ * palm pulled in toward its centre, and a small round bulb on every fingertip.
+ */
 const SOFT = {
-  finger: 0.34, thumb: 0.38, palmRound: 0.42, outline: 3,
+  finger: 0.21, thumb: 0.24, palmRound: 0.26, palmShrink: 0.82, tip: 0.6, outline: 2.5,
   light: { fill: '#9BB0DE', shade: 'rgba(52, 58, 110, .30)', outline: '#FFFFFF', cursor: '#5A68B5' },
   dark: { fill: '#B7C1E4', shade: 'rgba(0, 0, 0, .35)', outline: 'rgba(255, 255, 255, .92)', cursor: '#E9E0EF' },
 };
@@ -63,7 +67,7 @@ const clamp = (v, a, b) => (v < a ? a : v > b ? b : v);
 export function createHands({ video, overlay, app, picker, stage, hud, gestures, mood, rooms, getTime, cameraHidden = false, onView }) {
   const ctx = overlay ? overlay.getContext('2d') : null;
   let landmarker = null, stream = null, on = false, starting = false, lastVT = -1, drew = false;
-  let hidden = !!cameraHidden, passive = false, theme = 'light';
+  let hidden = !!cameraHidden, passive = false, suspended = false, theme = 'light';
   const hands = new Map();
   const palms = [0, 1, 2, 3].map(() => ({ x: 0, y: 0, petX: 0, feetY: 0, headY: 0, hw: 1 }));
   let palmCount = 0;
@@ -155,7 +159,7 @@ export function createHands({ video, overlay, app, picker, stage, hud, gestures,
   }
   function update() {
     const t = getTime();
-    if (!on || !landmarker || video.readyState < 2 || video.currentTime === lastVT) return;
+    if (!on || suspended || !landmarker || video.readyState < 2 || video.currentTime === lastVT) return;
     lastVT = video.currentTime;
     let res;
     try { res = landmarker.detectForVideo(video, performance.now()); } catch { return; }
@@ -214,10 +218,24 @@ export function createHands({ video, overlay, app, picker, stage, hud, gestures,
     ctx.moveTo(P[ids[0]].x, P[ids[0]].y);
     for (let i = 1; i < ids.length; i++) ctx.lineTo(P[ids[i]].x, P[ids[i]].y);
   }
+  /** Palm outline pulled toward its centroid by `SOFT.palmShrink` (no allocation). */
   function palmPath(P) {
-    ctx.moveTo(P[PALM_RING[0]].x, P[PALM_RING[0]].y);
-    for (let i = 1; i < PALM_RING.length; i++) ctx.lineTo(P[PALM_RING[i]].x, P[PALM_RING[i]].y);
+    let cx = 0, cy = 0;
+    for (let i = 0; i < PALM_RING.length; i++) { cx += P[PALM_RING[i]].x; cy += P[PALM_RING[i]].y; }
+    cx /= PALM_RING.length; cy /= PALM_RING.length;
+    const k = SOFT.palmShrink;
+    for (let i = 0; i < PALM_RING.length; i++) {
+      const p = P[PALM_RING[i]], x = cx + (p.x - cx) * k, y = cy + (p.y - cy) * k;
+      if (i) ctx.lineTo(x, y); else ctx.moveTo(x, y);
+    }
     ctx.closePath();
+  }
+  /** Round fingertip bulbs (radius = share of the finger width) as one path. */
+  function tipsPath(P, fw, tw, extra) {
+    for (let f = 0; f < FINGERS.length; f++) {
+      const p = P[FINGERS[f][3]], r = (f === 0 ? tw : fw) * SOFT.tip + extra;
+      ctx.moveTo(p.x + r, p.y); ctx.arc(p.x, p.y, r, 0, Math.PI * 2);
+    }
   }
   /**
    * Stylized clay hand: three passes (soft shadow + outline, fill, cursor).
@@ -234,14 +252,16 @@ export function createHands({ video, overlay, app, picker, stage, hud, gestures,
     ctx.strokeStyle = c.outline; ctx.fillStyle = c.outline;
     ctx.beginPath(); palmPath(P); ctx.lineWidth = pr + o * 2; ctx.stroke(); ctx.fill();
     for (let f = 0; f < FINGERS.length; f++) { ctx.beginPath(); chain(FINGERS[f], P); ctx.lineWidth = (f === 0 ? tw : fw) + o * 2; ctx.stroke(); }
+    ctx.beginPath(); tipsPath(P, fw, tw, o); ctx.fill();
     ctx.restore();
     // pass 2: brand-tint body
     ctx.strokeStyle = c.fill; ctx.fillStyle = c.fill;
     ctx.beginPath(); palmPath(P); ctx.lineWidth = pr; ctx.stroke(); ctx.fill();
     for (let f = 0; f < FINGERS.length; f++) { ctx.beginPath(); chain(FINGERS[f], P); ctx.lineWidth = f === 0 ? tw : fw; ctx.stroke(); }
+    ctx.beginPath(); tipsPath(P, fw, tw, 0); ctx.fill();
     // pass 3: soft highlight on the palm + mode cursor
     ctx.globalAlpha = 0.35; ctx.fillStyle = '#FFFFFF';
-    ctx.beginPath(); ctx.arc((P[5].x + P[9].x + P[0].x) / 3, (P[5].y + P[9].y + P[0].y) / 3, size * 0.18, 0, Math.PI * 2); ctx.fill();
+    ctx.beginPath(); ctx.arc((P[5].x + P[9].x + P[0].x) / 3, (P[5].y + P[9].y + P[0].y) / 3, size * 0.12, 0, Math.PI * 2); ctx.fill();
     ctx.globalAlpha = 1;
     const cur = st.cursor;
     if (!passive && (st.mode === 'pinch' || st.mode === 'point')) {
@@ -360,6 +380,17 @@ export function createHands({ video, overlay, app, picker, stage, hud, gestures,
       passive = !!p;
       if (passive) { for (const st of hands.values()) releaseHand(st); gestures.setHandSquish(0, 0); }
     },
+    /**
+     * Stop hand detection (the stream stays open) — e.g. while the head-tilt
+     * minigame control reads the same camera. Tracked hands are dropped.
+     * @param {boolean} s
+     */
+    setSuspended(s) {
+      suspended = !!s;
+      if (suspended) { for (const st of hands.values()) releaseHand(st); hands.clear(); gestures.setHandSquish(0, 0); }
+    },
+    /** The camera video element (shared with head control while the camera is on). */
+    get video() { return video; },
     /** 'light' | 'dark' — soft-hand colours. */
     setTheme(t) { theme = t === 'dark' ? 'dark' : 'light'; readAccent(); },
     /**
