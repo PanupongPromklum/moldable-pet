@@ -18,7 +18,15 @@ import { getAudioContext, resumeAudio, getBus, peekBus, busDefaultGain, duckMusi
 export const SFX_NAMES = Object.freeze([
   'pop', 'pick', 'boing', 'chirp', 'squish', 'slap', 'chew', 'gulp',
   'flush', 'sparkle', 'whoosh', 'tap', 'giggle', 'yawn',
+  // Sprint 2 (S2-10): Snack Rain + wardrobe.
+  'coin', 'catch', 'bonk', 'tick', 'go', 'win', 'equip', 'buy',
 ]);
+
+/** F major pentatonic (C6 D6 F6 G6 A6 C7): rapid coins climb this, so a streak sounds like a tune. */
+const COIN_STEPS = [1046.5, 1174.7, 1396.9, 1568, 1760, 2093];
+/** Coins closer than this (s) count as one run (pitch climbs, each voice gets quieter). */
+const COIN_RUN_GAP = 0.3;
+let coinRun = 0, coinLast = -1;
 
 /** Same sound re-triggered faster than this (s) is skipped, so rapid pokes do not pile up. */
 const RETRIGGER_GAP = 0.035;
@@ -202,7 +210,92 @@ const RECIPES = {
     noise(c, o, t, 1.0, 0.012 * v, { type: 'bandpass', f0: 1200, f1: 600, q: 0.8, attack: 0.2, sustain: 0.5 }); // breath
     return 1.2;
   },
+
+  // Sprint 2 (S2-10).
+  coin: (c, o, t, v) => { // soft two-note "ding"; quick runs climb the pentatonic and thin out so 8 in 300 ms stay clean
+    coinRun = t - coinLast < COIN_RUN_GAP ? coinRun + 1 : 0;
+    coinLast = t;
+    const hz = COIN_STEPS[Math.min(coinRun, COIN_STEPS.length - 1)];
+    const k = v / (1 + 0.45 * Math.min(coinRun, 8)); // ~1/(1+0.45n): energy of a run stays roughly flat
+    tone(c, o, t, hz, hz, 0.16, 'sine', 0.06 * k, { attack: 0.003 });
+    tone(c, o, t + 0.05, hz * 1.335, hz * 1.335, 0.32, 'sine', 0.065 * k, { attack: 0.003 }); // up a fourth
+    return 0.37;
+  },
+  catch: (c, o, t, v) => { // round "bloop": mouth closes on a pop, tiny swallow bubble
+    tone(c, o, t, 560, 210, 0.07, 'sine', 0.12 * v, { attack: 0.004 });
+    noise(c, o, t, 0.035, 0.02 * v, { type: 'lowpass', f0: 1400, f1: 500, q: 0.7, attack: 0.002 });
+    tone(c, o, t + 0.065, 240, 420, 0.07, 'sine', 0.07 * v, { attack: 0.008 });
+    return 0.14;
+  },
+  bonk: (c, o, t, v) => { // soft cartoon bump with a little wobble, no edge (lowpassed, no square)
+    tone(c, o, t, 330, 150, 0.22, 'triangle', 0.1 * v, { lowpass: 900, attack: 0.005, vibrato: { rate: 14, depth: 18 } });
+    noise(c, o, t, 0.08, 0.04 * v, { type: 'lowpass', f0: 420, f1: 160, q: 0.8, attack: 0.003 }); // padded thud
+    tone(c, o, t + 0.14, 260, 200, 0.16, 'sine', 0.04 * v, { attack: 0.01 });
+    return 0.3;
+  },
+  tick: (c, o, t, v) => { // soft wood-block tick for 3-2-1
+    tone(c, o, t, 1320, 1240, 0.06, 'sine', 0.08 * v, { attack: 0.002 });
+    tone(c, o, t, 660, 640, 0.05, 'triangle', 0.03 * v, { attack: 0.002, lowpass: 2000 });
+    return 0.07;
+  },
+  go: (c, o, t, v) => { // rising chirp F5 → F6, then a short bright C7 tail
+    tone(c, o, t, 698.5, 1396.9, 0.18, 'triangle', 0.08 * v, { lowpass: 3000, attack: 0.01 });
+    tone(c, o, t + 0.16, 1396.9, 2093, 0.22, 'sine', 0.06 * v, { attack: 0.006 });
+    return 0.4;
+  },
+  win: (c, o, t, v) => { // warm F major fanfare ~1.2 s: F5 A5 C6 pickup, held F chord with bass
+    [698.5, 880, 1046.5].forEach((hz, i) => tone(c, o, t + i * 0.12, hz, hz, 0.17, 'triangle', 0.06 * v, { lowpass: 2400, attack: 0.008 }));
+    const h = t + 0.38;
+    [698.5, 880, 1046.5, 1396.9].forEach((hz, i) => tone(c, o, h, hz, hz * 1.003, 0.82, 'triangle', (i === 3 ? 0.03 : 0.04) * v,
+      { lowpass: 2200, attack: 0.03, vibrato: i === 3 ? { rate: 5, depth: 4 } : undefined }));
+    tone(c, o, h, 174.6, 174.6, 0.8, 'sine', 0.07 * v, { attack: 0.03 }); // F3 bass
+    return 1.22;
+  },
+  equip: (c, o, t, v) => { // fabric swish then a tiny two-note sparkle
+    const f = noise(c, o, t, 0.24, 0.065 * v, { type: 'bandpass', f0: 700, q: 1.1, attack: 0.07 });
+    f.frequency.setValueAtTime(700, t);
+    f.frequency.exponentialRampToValueAtTime(2600, t + 0.12);
+    f.frequency.exponentialRampToValueAtTime(1300, t + 0.24);
+    tone(c, o, t + 0.17, 1760, 1765, 0.22, 'sine', 0.04 * v, { attack: 0.003 });
+    tone(c, o, t + 0.23, 2349, 2353, 0.26, 'sine', 0.033 * v, { attack: 0.003 });
+    return 0.5;
+  },
+  buy: (c, o, t, v) => { // coin drops and settles (clinks get closer), then a soft A-C-F chime
+    [0, 0.09, 0.15, 0.19].forEach((dt, i) => {
+      const hz = 2200 - i * 40;
+      tone(c, o, t + dt, hz, hz * 0.995, 0.06, 'sine', 0.04 * v * (1 - i * 0.18), { attack: 0.001 });
+      tone(c, o, t + dt, hz * 1.5, hz * 1.5, 0.03, 'sine', 0.012 * v, { attack: 0.001 });
+    });
+    [880, 1046.5, 1396.9].forEach((hz, i) => tone(c, o, t + 0.26 + i * 0.07, hz, hz, 0.45, 'sine', 0.05 * v, { attack: 0.004 }));
+    return 0.85;
+  },
 };
+
+/* ---------- optional music bed (lo-fi ~100 BPM, F major; music bus is ducked under SFX) ---------- */
+
+/** Loops by name: per bar a bass root (Hz) and 8 eighth-note pluck steps (index into COIN_STEPS / 2, -1 = rest). */
+const LOOPS = {
+  snackRain: {
+    bpm: 100,
+    bars: [[87.3, [0, -1, 2, -1, 3, 2, -1, 1]], [73.4, [4, -1, 3, -1, 2, -1, 0, -1]],
+      [58.3, [2, -1, 3, 4, -1, 3, 2, -1]], [65.4, [1, -1, 0, -1, 1, 2, -1, -1]]],
+  },
+};
+let loop = null; // { name, timer, next, step }
+
+function scheduleLoop() {
+  const c = getAudioContext(), L = loop && LOOPS[loop.name];
+  if (!c || !L || !enabled || c.state !== 'running') return;
+  const out = getBus('music'), e = 30 / L.bpm; // eighth-note length (s)
+  if (!out) return;
+  if (loop.next < c.currentTime) loop.next = c.currentTime + 0.05;
+  while (loop.next < c.currentTime + 0.35) {
+    const [root, pat] = L.bars[(loop.step >> 3) % L.bars.length], s = loop.step & 7, n = pat[s], t = loop.next;
+    if (s === 0 || s === 4) tone(c, out, t, root, root, e * 3.6, 'sine', 0.09, { attack: 0.02 });
+    if (n >= 0) tone(c, out, t, COIN_STEPS[n] / 2, COIN_STEPS[n] / 2, e * 1.8, 'triangle', 0.035, { lowpass: 1600, attack: 0.006 });
+    loop.next += e; loop.step++;
+  }
+}
 
 /* ---------- public API ---------- */
 
@@ -265,4 +358,19 @@ export const sfx = {
 
   /** @returns {boolean} whether SFX are enabled. */
   isEnabled() { return enabled; },
+
+  /**
+   * Optional light music bed (synthesized loop on the music bus, ducked under SFX).
+   * Silent while SFX are disabled. Only one loop plays at a time.
+   * @param {'snackRain'} name loop name
+   * @param {boolean} on start (true) or stop (false)
+   */
+  music(name, on) {
+    try {
+      if (loop) { clearInterval(loop.timer); loop = null; }
+      if (!on || !LOOPS[name]) return;
+      loop = { name, next: 0, step: 0, timer: setInterval(scheduleLoop, 100) };
+      scheduleLoop();
+    } catch { /* never throw from audio */ }
+  },
 };

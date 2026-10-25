@@ -47,7 +47,7 @@
 <body>
 <main>
   <h1>เสียง <span>Moldable Pet</span></h1>
-  <p class="note">หน้าทดสอบเสียง (S1-05) · กดปุ่มใดก็ได้ครั้งแรกเพื่อเปิดเสียง · พูดตามต้องเปิดผ่าน https หรือ localhost</p>
+  <p class="note">หน้าทดสอบเสียง (S1-05, S2-10) · กดปุ่มใดก็ได้ครั้งแรกเพื่อเปิดเสียง · พูดตามต้องเปิดผ่าน https หรือ localhost</p>
 
   <section>
     <h2>เสียงเอฟเฟกต์</h2>
@@ -58,6 +58,9 @@
     <div class="grid" id="sfxGrid"></div>
     <div class="row" style="margin-top:12px">
       <button id="stack">ซ้อน 12 เสียงพร้อมกัน</button>
+      <button id="coins8">เหรียญ 8 เหรียญใน 300 ms</button>
+      <button id="countdown">นับ 3-2-1 แล้วเริ่ม</button>
+      <button id="musicBtn">เพลงฝนขนม: ปิด</button>
     </div>
     <div class="log" id="sfxLog">—</div>
   </section>
@@ -98,6 +101,21 @@
     ['pop', 'boing', 'flush', 'sparkle', 'whoosh', 'chew', 'gulp', 'giggle', 'squish', 'slap', 'yawn', 'tap']
       .forEach((n) => sfx.play(n, { volume: 2 }));
     $('sfxLog').textContent = 'stacked 12 sounds at volume 2 (limiter should keep it clean)';
+  });
+  $('coins8').addEventListener('click', () => {
+    for (let i = 0; i < 8; i++) setTimeout(() => sfx.play('coin', { volume: 2 }), i * 40);
+    $('sfxLog').textContent = '8 coins in 280 ms at volume 2 (pitch climbs, limiter keeps it clean)';
+  });
+  $('countdown').addEventListener('click', () => {
+    [0, 700, 1400].forEach((ms) => setTimeout(() => sfx.play('tick', { volume: vol() }), ms));
+    setTimeout(() => sfx.play('go', { volume: vol() }), 2100);
+    $('sfxLog').textContent = 'tick · tick · tick · go';
+  });
+  let musicOn = false;
+  $('musicBtn').addEventListener('click', () => {
+    musicOn = !musicOn; sfx.music('snackRain', musicOn);
+    $('musicBtn').textContent = 'เพลงฝนขนม: ' + (musicOn ? 'เปิด' : 'ปิด');
+    $('musicBtn').classList.toggle('on', musicOn);
   });
   $('sfxOn').addEventListener('change', (e) => sfx.setEnabled(e.target.checked));
   $('vol').addEventListener('input', () => { $('volV').textContent = vol().toFixed(2); });
