@@ -1,0 +1,138 @@
+<!doctype html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Furniture demo — S4-02 / S4-03</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Prompt:wght@400;500&family=Poppins:wght@400;500&display=swap">
+<style>
+  :root { --ink: #252941; --primary: #5A68B5; --panel: rgba(255, 255, 255, 0.86); }
+  html, body { margin: 0; height: 100%; overflow: hidden; background: #F2F1FB; color: var(--ink); font-family: 'Prompt', 'Poppins', sans-serif; }
+  body.dark { --ink: #F3F1FF; --panel: rgba(44, 42, 74, 0.86); background: #2C2A4A; }
+  #stage { position: fixed; inset: 0; }
+  #stage canvas { display: block; width: 100%; height: 100%; }
+  .bar { position: fixed; left: 50%; transform: translateX(-50%); display: flex; flex-wrap: wrap; justify-content: center; gap: 4px; padding: 6px; border-radius: 18px; background: var(--panel); max-width: calc(100vw - 32px); box-sizing: border-box; }
+  .top { top: 10px; } .bottom { bottom: 12px; }
+  button, select { font: inherit; font-size: 13px; border: 0; border-radius: 999px; padding: 6px 10px; background: transparent; color: var(--ink); cursor: pointer; }
+  select { background: rgba(127, 127, 160, 0.12); }
+  button[aria-pressed="true"] { background: var(--primary); color: #fff; }
+  #info { position: fixed; left: 12px; top: 64px; font: 11px 'Poppins', sans-serif; background: var(--panel); padding: 4px 10px; border-radius: 999px; }
+  .hud-band { position: fixed; left: 0; right: 0; pointer-events: none; background: rgba(90, 104, 181, 0.08); outline: 1px dashed rgba(90, 104, 181, 0.45); display: none; }
+  body.bands .hud-band { display: block; }
+</style>
+<script type="importmap">
+{ "imports": {
+  "three": "https://cdn.jsdelivr.net/npm/three@0.162.0/build/three.module.js",
+  "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.162.0/examples/jsm/"
+} }
+</script>
+</head>
+<body>
+<div id="stage"></div>
+<div class="bar top" id="rooms"></div>
+<div id="info">—</div>
+<div class="bar bottom" id="picker"></div>
+<div class="hud-band" style="top:0;height:120px"></div>
+<div class="hud-band" style="bottom:0;height:160px"></div>
+<script type="module">
+/*
+ * Query params: room=living|kitchen|bathroom · theme=light|dark · set=default|alt1|alt2|xmas
+ * f=slot:item,slot:item (overrides) · pet=flower|… or pet=0 · ui=0 · bands=1 · preview=itemId (thumbnail view)
+ * window.__demo: { room, setRoom, setTheme, setFurniture, stats() }
+ */
+import * as THREE from 'three';
+import { createStage } from '../../src/engine/stage.js';
+import { createCharacter } from '../../src/characters/character.js';
+import { createRoom, ROOM_IDS, ROOM_NAMES_TH, ROOM_THEME_LIGHTS, applyStageLights, FURNITURE_SLOTS, FURNITURE_ITEMS, createFurniturePreview } from '../../src/rooms/index.js';
+import { countDrawCalls } from '../../src/props/clay.js';
+
+const q = new URLSearchParams(location.search);
+const stage = createStage({ container: document.getElementById('stage'), hudReserve: { top: 120, bottom: 160 } });
+let theme = q.get('theme') === 'dark' ? 'dark' : 'light';
+let room = null, pet = null, preview = null;
+if (q.get('pet') !== '0') { pet = createCharacter(q.get('pet') || 'flower'); stage.scene.add(pet.object3d); }
+
+function itemsOf(roomId, slot) { return Object.entries(FURNITURE_ITEMS).filter(([, v]) => v.room === roomId && v.slot === slot).map(([k]) => k); }
+function setFor(roomId, set) {
+  if (!set || set === 'default') return {};
+  const k = { alt1: 1, alt2: 'basic2', xmas: 2 }[set];
+  const out = {};
+  for (const s of FURNITURE_SLOTS[roomId]) { const ids = itemsOf(roomId, s); out[s] = ids[k === 'basic2' ? 1 : k] ?? ids[0]; }
+  return out;
+}
+function parseF(str) { const o = {}; for (const p of (str || '').split(',').filter(Boolean)) { const [s, i] = p.split(':'); o[s] = i; } return o; }
+
+const roomBar = document.getElementById('rooms');
+for (const id of ROOM_IDS) {
+  const b = document.createElement('button'); b.type = 'button'; b.textContent = ROOM_NAMES_TH[id]; b.dataset.id = id; b.onclick = () => setRoom(id); roomBar.append(b);
+}
+const tb = document.createElement('button'); tb.type = 'button'; tb.textContent = 'กลางคืน'; tb.onclick = () => setTheme(theme === 'dark' ? 'light' : 'dark'); roomBar.append(tb);
+const bb = document.createElement('button'); bb.type = 'button'; bb.textContent = 'HUD'; bb.onclick = () => { const on = document.body.classList.toggle('bands'); bb.setAttribute('aria-pressed', String(on)); }; roomBar.append(bb);
+
+function buildPicker() {
+  const p = document.getElementById('picker'); p.innerHTML = '';
+  for (const s of FURNITURE_SLOTS[room.id]) {
+    const sel = document.createElement('select'); sel.title = s;
+    for (const id of itemsOf(room.id, s)) { const o = document.createElement('option'); o.value = id; o.textContent = id; sel.append(o); }
+    sel.value = room.furniture[s]; sel.onchange = () => { room.setFurniture({ [s]: sel.value }); };
+    p.append(sel);
+  }
+}
+function setRoom(id, furniture) {
+  if (room) room.dispose();
+  room = createRoom(id, { theme, furniture });
+  stage.scene.add(room.group);
+  if (pet) pet.object3d.position.copy(room.petSpot);
+  stage.setFocus(room.petSpot);
+  for (const b of roomBar.children) if (b.dataset.id) b.setAttribute('aria-pressed', String(b.dataset.id === id));
+  buildPicker();
+  window.__demo.room = room;
+}
+function setTheme(t) {
+  theme = t;
+  stage.setTheme(t, ROOM_THEME_LIGHTS[t]);
+  applyStageLights(t, stage.lights);
+  room && room.setTheme(t);
+  document.body.classList.toggle('dark', t === 'dark');
+  document.body.style.background = ROOM_THEME_LIGHTS[t].clear;
+  tb.setAttribute('aria-pressed', String(t === 'dark'));
+}
+function tris(root) {
+  let n = 0;
+  root.traverseVisible((o) => { if (o.isMesh) n += (o.geometry.index ? o.geometry.index.count : o.geometry.attributes.position.count) / 3; });
+  return Math.round(n);
+}
+function stats() {
+  return { static: { calls: countDrawCalls(room.staticGroup), tris: tris(room.staticGroup) }, live: { calls: countDrawCalls(room.liveGroup), tris: tris(room.liveGroup) },
+    total: room.drawCalls(), staticVersion: room.staticVersion, furniture: { ...room.furniture }, frameCalls: stage.renderer.info.render.calls };
+}
+window.__demo = { setRoom, setTheme, stats, stage, get pet() { return pet; }, setFurniture: (p) => room.setFurniture(p), createFurniturePreview, frames: 0 };
+
+setTheme(theme);
+const rid = ROOM_IDS.includes(q.get('room')) ? q.get('room') : 'living';
+setRoom(rid, { ...setFor(rid, q.get('set')), ...parseF(q.get('f')) });
+if (q.get('bands') === '1') bb.click();
+if (q.get('ui') === '0') for (const el of document.querySelectorAll('.bar,#info')) el.style.display = 'none';
+if (q.get('preview')) {
+  // thumbnail check: hide the room, frame one preview item
+  room.group.visible = false; if (pet) pet.object3d.visible = false;
+  preview = createFurniturePreview(q.get('preview'), { theme });
+  stage.scene.add(preview.object3d);
+  const { center, radius } = preview.fit;
+  stage.onTick(() => {
+    const cam = stage.camera; cam.clearViewOffset(); cam.aspect = innerWidth / innerHeight;
+    cam.position.set(center.x, center.y + radius * 0.25, center.z + radius / Math.tan(THREE.MathUtils.degToRad(15)) * 1.1);
+    cam.lookAt(center); cam.updateProjectionMatrix();
+  });
+}
+
+const info = document.getElementById('info');
+stage.onTick((dt, t) => { room.update(dt, t); pet && pet.update(dt, t); preview && preview.update(dt, t); });
+stage.onAfterRender(() => {
+  window.__demo.frames++;
+  if (window.__demo.frames % 20 === 1) { const s = stats(); info.textContent = `${room.id} · static ${s.static.calls} dc / ${s.static.tris} tri · live ${s.live.calls} dc / ${s.live.tris} tri · v${s.staticVersion}`; }
+});
+stage.start();
+</script>
+</body>
+</html>

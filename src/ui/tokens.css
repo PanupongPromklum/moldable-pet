@@ -1,5 +1,5 @@
 /*
- * Moldable Pet — UI tokens, light + dark. Owner: glaze. Story S1-04, S2-01, S3 (manual theme).
+ * Moldable Pet — UI tokens, light + dark. Owner: glaze. Story S1-04, S2-01, S3 (manual theme), S4-05.
  * Source: design/art/moldable-design.md §3–§10 + owner decisions 2026-10-25.
  * Legend:  [DS]   value from the Moldable Design System (light or dark mode of the variable)
  *          [OK]   proposed by glaze, approved by the owner
@@ -78,6 +78,18 @@
   --mp-acc-a: #EB92B3; --mp-acc-b: #9BB0DE; --mp-acc-c: #CBA5D1; --mp-acc-d: #7FA9B1;
   --mp-acc-lens: #252941;
   --mp-acc-fill-opacity: 0.55;
+
+  /* ---- S4 filled Moldable icons (samples, not live yet) — inks live in icons.js FILLED_INKS ---- */
+  --mp-fico-shadow: #252941;        /* [เสนอ] soft drop shadow under filled icons */
+  --mp-fico-shadow-a: 0.2;          /* [เสนอ] */
+  --mp-fico-low-opacity: 0.6;       /* [เสนอ] low state: icon fades … */
+  --mp-fico-low-saturate: 0.45;     /* [เสนอ] … and loses colour; the pink edge comes from the meter ring */
+  --mp-fico-low-ground: #FFEBEB;    /* [DS] background/danger/light — cup/tile behind a low filled icon */
+
+  /* ---- S4 decor / wardrobe sheets ---- */
+  --mp-thumb-ground: #F2F1FB;       /* [เสนอ] behind furniture thumbnails (same as --mp-ava-ground) */
+  --mp-preview-tag-bg: #252941;     /* "ลองดู" tag = coach pill colours, 14.9:1 */
+  --mp-preview-tag-text: #FFFFFF;
 
   /* ---- Type ([DS] families; sizes for a 390 px screen) ---- */
   --mp-font-th: 'Prompt', 'Poppins', system-ui, sans-serif;
@@ -177,6 +189,14 @@
 
   --mp-acc-lens: #1E1E1E;
   --mp-acc-fill-opacity: 0.7;
+
+  --mp-fico-shadow: #000000;        /* [เสนอ] */
+  --mp-fico-shadow-a: 0.5;          /* [เสนอ] */
+  --mp-fico-low-opacity: 0.65;      /* [เสนอ] dark needs less fade, or the icon turns grey */
+  --mp-fico-low-ground: #3A2E33;    /* [เสนอ] faint pink on #2C2C2C instead of #731412 (faded icons went muddy on it); #FFD1D1 edge 9.9:1 */
+  --mp-thumb-ground: #312F40;       /* [เสนอ] = --mp-tint-gumdrop (dark) */
+  --mp-preview-tag-bg: #D3E0F2;     /* [DS] text/primary/default (dark), inverted pill like the coach */
+  --mp-preview-tag-text: #252941;   /* 11.7:1 */
 
   --mp-shadow: 0 6px 20px rgba(0, 0, 0, 0.35);
 }

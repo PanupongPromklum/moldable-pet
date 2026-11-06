@@ -47,7 +47,7 @@
 <body>
 <main>
   <h1>เสียง <span>Moldable Pet</span></h1>
-  <p class="note">หน้าทดสอบเสียง (S1-05, S2-10) · กดปุ่มใดก็ได้ครั้งแรกเพื่อเปิดเสียง · พูดตามต้องเปิดผ่าน https หรือ localhost</p>
+  <p class="note">หน้าทดสอบเสียง (S1-05, S2-10, S4-07) · กดปุ่มใดก็ได้ครั้งแรกเพื่อเปิดเสียง · พูดตามต้องเปิดผ่าน https หรือ localhost</p>
 
   <section>
     <h2>เสียงเอฟเฟกต์</h2>
@@ -61,6 +61,12 @@
       <button id="coins8">เหรียญ 8 เหรียญใน 300 ms</button>
       <button id="countdown">นับ 3-2-1 แล้วเริ่ม</button>
       <button id="musicBtn">เพลงฝนขนม: ปิด</button>
+    </div>
+    <h2 style="margin-top:16px">ร้านแต่งห้อง (S4-07)</h2>
+    <div class="row">
+      <button id="shopBasic">ลอง → ซื้อ → วาง (พื้นฐาน)</button>
+      <button id="shopXmas">ลอง → ซื้อ → วาง (คริสต์มาส)</button>
+      <button id="previewRun">เลื่อนดู 6 การ์ดเร็วๆ</button>
     </div>
     <div class="log" id="sfxLog">—</div>
   </section>
@@ -110,6 +116,20 @@
     [0, 700, 1400].forEach((ms) => setTimeout(() => sfx.play('tick', { volume: vol() }), ms));
     setTimeout(() => sfx.play('go', { volume: vol() }), 2100);
     $('sfxLog').textContent = 'tick · tick · tick · go';
+  });
+  // Furniture shop flow: preview a card, buy it, it is set down in the room; Christmas items add the jingle.
+  const shopFlow = (xmas) => {
+    sfx.play('preview', { volume: vol() });
+    setTimeout(() => sfx.play('buy', { volume: vol() }), 900);
+    setTimeout(() => sfx.play('place', { volume: vol() }), 1800);
+    if (xmas) setTimeout(() => sfx.play('jingle', { volume: vol() }), 1880);
+    $('sfxLog').textContent = 'preview · buy · place' + (xmas ? ' + jingle' : '');
+  };
+  $('shopBasic').addEventListener('click', () => shopFlow(false));
+  $('shopXmas').addEventListener('click', () => shopFlow(true));
+  $('previewRun').addEventListener('click', () => {
+    for (let i = 0; i < 6; i++) setTimeout(() => sfx.play('preview', { volume: vol() }), i * 180);
+    $('sfxLog').textContent = '6 previews, 180 ms apart (should stay soft, never stack harshly)';
   });
   let musicOn = false;
   $('musicBtn').addEventListener('click', () => {

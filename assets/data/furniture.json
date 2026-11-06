@@ -1,0 +1,120 @@
+{
+  "_meta": {
+    "owner": "loop",
+    "story": "S4-01",
+    "version": 1,
+    "doc": "design/gdd/economy.md#10-room-decor-and-the-christmas-set-sprint-4",
+    "units": {
+      "price": "coins; 0 for default items",
+      "default": "true = the slot's default item: owned from the start, price 0, today's look; exactly one per slot",
+      "theme": "catalog filter: basic | xmas (Christmas set, on sale all year)",
+      "rooms.*.label / slots.*.label": "Thai label for the room title and the slot tab"
+    },
+    "notes": "items[] order = display order (default first, then basic, then xmas, per slot). Slot order inside rooms.*.slots = tab order and matches FURNITURE_SLOTS. Furniture is cosmetic only: no need effects, no likes. Ids are unique across furniture and wardrobe."
+  },
+  "rooms": {
+    "living": {
+      "label": "ห้องนั่งเล่น",
+      "slots": {
+        "sofa": {
+          "label": "โซฟา"
+        },
+        "rug": {
+          "label": "พรม"
+        },
+        "wall": {
+          "label": "ของแต่งผนัง"
+        },
+        "window": {
+          "label": "หน้าต่าง"
+        },
+        "corner": {
+          "label": "มุมห้อง"
+        },
+        "lamp": {
+          "label": "โคมไฟ"
+        },
+        "side": {
+          "label": "ข้างโซฟา"
+        }
+      }
+    },
+    "kitchen": {
+      "label": "ห้องครัว",
+      "slots": {
+        "fridge": {
+          "label": "ตู้เย็น"
+        },
+        "wall": {
+          "label": "ชั้นผนัง"
+        },
+        "rug": {
+          "label": "พรม"
+        }
+      }
+    },
+    "bathroom": {
+      "label": "ห้องน้ำ",
+      "slots": {
+        "mirror": {
+          "label": "กระจก"
+        },
+        "wall": {
+          "label": "ราวผ้า"
+        },
+        "rug": {
+          "label": "พรม"
+        }
+      }
+    }
+  },
+  "themes": {
+    "basic": {
+      "label": "พื้นฐาน"
+    },
+    "xmas": {
+      "label": "คริสต์มาส"
+    }
+  },
+  "items": [
+    {"id": "sofa-classic", "room": "living", "slot": "sofa", "name": "โซฟานุ่มนิ่ม", "price": 0, "theme": "basic", "default": true},
+    {"id": "sofa-cloud", "room": "living", "slot": "sofa", "name": "โซฟาก้อนเมฆ", "price": 140, "theme": "basic", "default": false},
+    {"id": "sofa-xmas", "room": "living", "slot": "sofa", "name": "โซฟาซานต้า", "price": 200, "theme": "xmas", "default": false},
+    {"id": "rug-round", "room": "living", "slot": "rug", "name": "พรมกลม", "price": 0, "theme": "basic", "default": true},
+    {"id": "rug-flower", "room": "living", "slot": "rug", "name": "พรมดอกไม้", "price": 90, "theme": "basic", "default": false},
+    {"id": "rug-snow", "room": "living", "slot": "rug", "name": "พรมเกล็ดหิมะ", "price": 130, "theme": "xmas", "default": false},
+    {"id": "frame-blob", "room": "living", "slot": "wall", "name": "รูปก้อนนุ่ม", "price": 0, "theme": "basic", "default": true},
+    {"id": "wall-books", "room": "living", "slot": "wall", "name": "ชั้นหนังสือ", "price": 100, "theme": "basic", "default": false},
+    {"id": "garland-xmas", "room": "living", "slot": "wall", "name": "พวงไฟวิบวับ", "price": 130, "theme": "xmas", "default": false},
+    {"id": "window-round", "room": "living", "slot": "window", "name": "หน้าต่างกลม", "price": 0, "theme": "basic", "default": true},
+    {"id": "window-arch", "room": "living", "slot": "window", "name": "หน้าต่างโค้ง", "price": 120, "theme": "basic", "default": false},
+    {"id": "window-snow", "room": "living", "slot": "window", "name": "หน้าต่างหิมะ", "price": 160, "theme": "xmas", "default": false},
+    {"id": "plant-pot", "room": "living", "slot": "corner", "name": "ต้นไม้กระถาง", "price": 0, "theme": "basic", "default": true},
+    {"id": "plant-tall", "room": "living", "slot": "corner", "name": "ต้นไม้ต้นสูง", "price": 80, "theme": "basic", "default": false},
+    {"id": "xmas-tree", "room": "living", "slot": "corner", "name": "ต้นคริสต์มาส", "price": 260, "theme": "xmas", "default": false},
+    {"id": "lamp-floor", "room": "living", "slot": "lamp", "name": "โคมไฟตั้งพื้น", "price": 0, "theme": "basic", "default": true},
+    {"id": "lamp-mushroom", "room": "living", "slot": "lamp", "name": "โคมไฟเห็ด", "price": 100, "theme": "basic", "default": false},
+    {"id": "lamp-star", "room": "living", "slot": "lamp", "name": "โคมไฟดาว", "price": 140, "theme": "xmas", "default": false},
+    {"id": "table-mug", "room": "living", "slot": "side", "name": "โต๊ะจิบโกโก้", "price": 0, "theme": "basic", "default": true},
+    {"id": "toy-box", "room": "living", "slot": "side", "name": "กล่องของเล่น", "price": 90, "theme": "basic", "default": false},
+    {"id": "fireplace-xmas", "room": "living", "slot": "side", "name": "เตาผิงอุ่นใจ", "price": 240, "theme": "xmas", "default": false},
+    {"id": "fridge-classic", "room": "kitchen", "slot": "fridge", "name": "ตู้เย็นคลาสสิก", "price": 0, "theme": "basic", "default": true},
+    {"id": "fridge-retro", "room": "kitchen", "slot": "fridge", "name": "ตู้เย็นย้อนยุค", "price": 140, "theme": "basic", "default": false},
+    {"id": "fridge-gingerbread", "room": "kitchen", "slot": "fridge", "name": "ตู้เย็นขนมปังขิง", "price": 200, "theme": "xmas", "default": false},
+    {"id": "shelf-jars", "room": "kitchen", "slot": "wall", "name": "ชั้นโหลขนม", "price": 0, "theme": "basic", "default": true},
+    {"id": "shelf-plants", "room": "kitchen", "slot": "wall", "name": "ชั้นกระถางจิ๋ว", "price": 90, "theme": "basic", "default": false},
+    {"id": "wreath-xmas", "room": "kitchen", "slot": "wall", "name": "พวงสนกระดิ่ง", "price": 120, "theme": "xmas", "default": false},
+    {"id": "mat-kitchen", "room": "kitchen", "slot": "rug", "name": "พรมห้องครัว", "price": 0, "theme": "basic", "default": true},
+    {"id": "mat-fruit", "room": "kitchen", "slot": "rug", "name": "พรมผลไม้", "price": 70, "theme": "basic", "default": false},
+    {"id": "mat-snow", "room": "kitchen", "slot": "rug", "name": "พรมมนุษย์หิมะ", "price": 100, "theme": "xmas", "default": false},
+    {"id": "mirror-oval", "room": "bathroom", "slot": "mirror", "name": "กระจกวงรี", "price": 0, "theme": "basic", "default": true},
+    {"id": "mirror-cloud", "room": "bathroom", "slot": "mirror", "name": "กระจกก้อนเมฆ", "price": 100, "theme": "basic", "default": false},
+    {"id": "mirror-holly", "room": "bathroom", "slot": "mirror", "name": "กระจกใบฮอลลี่", "price": 130, "theme": "xmas", "default": false},
+    {"id": "towel-rail", "room": "bathroom", "slot": "wall", "name": "ราวผ้าขนหนู", "price": 0, "theme": "basic", "default": true},
+    {"id": "towel-stripes", "room": "bathroom", "slot": "wall", "name": "ผ้าขนหนูลายทาง", "price": 70, "theme": "basic", "default": false},
+    {"id": "stocking-xmas", "room": "bathroom", "slot": "wall", "name": "ถุงเท้าซานต้า", "price": 100, "theme": "xmas", "default": false},
+    {"id": "mat-bath", "room": "bathroom", "slot": "rug", "name": "พรมห้องน้ำ", "price": 0, "theme": "basic", "default": true},
+    {"id": "mat-duck", "room": "bathroom", "slot": "rug", "name": "พรมเป็ดน้อย", "price": 80, "theme": "basic", "default": false},
+    {"id": "mat-snow-bath", "room": "bathroom", "slot": "rug", "name": "พรมหิมะฟูฟู", "price": 110, "theme": "xmas", "default": false}
+  ]
+}

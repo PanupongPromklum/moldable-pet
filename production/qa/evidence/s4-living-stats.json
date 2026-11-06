@@ -1,0 +1,24 @@
+{
+ "phone-default-light": {
+  "static": {
+   "calls": 4,
+   "tris": 22972
+  },
+  "live": {
+   "calls": 2,
+   "tris": 2212
+  },
+  "total": 6,
+  "staticVersion": 1,
+  "furniture": {
+   "sofa": "sofa-classic",
+   "rug": "rug-round",
+   "wall": "frame-blob",
+   "window": "window-round",
+   "corner": "plant-pot",
+   "lamp": "lamp-floor",
+   "side": "table-mug"
+  },
+  "frameCalls": 12
+ }
+}

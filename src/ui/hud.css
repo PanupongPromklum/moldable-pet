@@ -300,10 +300,13 @@
   .mp-kbd span { margin-left: 4px; }
 }
 
-/* ---------- actions row: [empty] mic [contextual] ---------- */
-.mp-actions { display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); align-items: center; gap: 12px; }
-.mp-actions-end { display: flex; justify-content: flex-end; padding-bottom: 23px; }
-.mp-actions-start { display: flex; justify-content: flex-start; padding-bottom: 23px; }
+/* ---------- actions row: [แต่งตัว / แต่งห้อง] mic [contextual] ----------
+ * S4: columns sit on the bottom edge and the LAST button of each side lines up with the mic
+ * centre (mic/2 + gap 6 + label 16.8 − button/2 26), so "แต่งห้อง" stays in the same spot in
+ * every room and "แต่งตัว" stacks above it in the living room. */
+.mp-actions { display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); align-items: end; gap: 12px; }
+.mp-actions-end { display: flex; justify-content: flex-end; padding-bottom: calc(var(--mp-mic) / 2 - 3px); }
+.mp-actions-start { display: flex; flex-direction: column; align-items: flex-start; gap: 8px; padding-bottom: calc(var(--mp-mic) / 2 - 3px); }
 .mp-mic-wrap { display: flex; flex-direction: column; align-items: center; gap: 6px; pointer-events: none; }
 .mp-mic {
   position: relative; width: var(--mp-mic); height: var(--mp-mic); padding: 4px;
@@ -347,7 +350,6 @@
 }
 @media (max-width: 374px) {
   .mp-hud { --mp-mic: 72px; }
-  .mp-actions-end { padding-bottom: 19px; }
 }
 
 /* ---------- kitchen tray ---------- */
@@ -549,6 +551,70 @@
 .mp-buy-actions { grid-column: 1 / -1; display: grid; grid-template-columns: 1fr 1.4fr; gap: 10px; }
 .mp-buy-actions button { height: 52px; font-size: var(--mp-fs-md); padding: 0 12px; }
 
+/* ---------- S4 theme chips (wardrobe + decor) ----------
+ * The button is a 44 px target; the visible pill inside is 34 px so the row stays light. */
+.mp-chips { display: flex; gap: 6px; margin: -4px 0; overflow-x: auto; scrollbar-width: none; flex-shrink: 0; }
+.mp-chips::-webkit-scrollbar { display: none; }
+.mp-chip { flex: 0 0 auto; height: 44px; min-width: 44px; padding: 5px 0; border: none; background: none; color: var(--mp-text); }
+.mp-chip > span {
+  display: flex; align-items: center; gap: 4px; height: 34px; padding: 0 14px; border-radius: var(--mp-r-full);
+  border: 1.5px solid var(--mp-line); background: var(--mp-bg); font-size: 14px; font-weight: 500; line-height: 1.4; white-space: nowrap;
+  transition: background-color var(--mp-dur-fast) var(--mp-ease), border-color var(--mp-dur-fast) var(--mp-ease);
+}
+.mp-chip.is-on > span { padding-left: 10px; border-color: var(--mp-border-primary); background: var(--mp-bg-primary-light); font-weight: 600; }
+.mp-chip .mp-ico { stroke-width: 2.25; }
+.mp-hud .mp-chip:focus-visible { outline: none; }
+.mp-hud .mp-chip:focus-visible > span { outline: 3px solid var(--mp-focus); outline-offset: 1px; }
+@media (hover: hover) and (pointer: fine) { .mp-chip:not(.is-on):hover > span { background: var(--mp-bg-primary-light); } }
+.mp-empty { margin: 4px 0 0; font-size: var(--mp-fs-sm); line-height: 1.4; color: var(--mp-text-muted); text-align: center; }
+.mp-sr { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
+
+/* ---------- S4 furniture shop "แต่งห้อง" (reuses the wardrobe sheet) ---------- */
+.mp-hud.is-decor .mp-bottom { visibility: hidden; }
+.mp-hud.is-decor .mp-toast { display: none; }
+.mp-decor-inner { display: contents; }
+.mp-decor-room { margin-left: 8px; font-size: 14px; font-weight: 500; color: var(--mp-text-muted); }
+/* Slot tabs scroll sideways when the room has many slots (living = 7); a soft fade shows there is more. */
+.mp-tabs-scroll { overflow-x: auto; scrollbar-width: none; scroll-snap-type: x proximity; flex-shrink: 0; }
+.mp-tabs-scroll::-webkit-scrollbar { display: none; }
+.mp-tabs-scroll .mp-ward-tab { flex: 1 0 auto; padding: 0 14px; scroll-snap-align: center; white-space: nowrap; }
+.mp-tabs-scroll.is-more { -webkit-mask-image: linear-gradient(90deg, #000 calc(100% - 28px), transparent); mask-image: linear-gradient(90deg, #000 calc(100% - 28px), transparent); }
+.mp-items--decor { grid-template-columns: repeat(auto-fill, minmax(100px, 1fr)); }
+.mp-item--decor { min-height: 0; padding: 6px 4px 6px; }
+.mp-item--decor.is-try { border-color: var(--mp-primary); background: var(--mp-bg); }
+.mp-thumb { width: 72px; height: 64px; border-radius: var(--mp-r-sm); background: var(--mp-thumb-ground); overflow: hidden; }
+.mp-thumb img { display: block; width: 100%; height: 100%; object-fit: contain; -webkit-user-drag: none; }
+.mp-thumb--lg { width: 80px; height: 80px; border-radius: var(--mp-r-lg); }
+.mp-thumb-ph {
+  width: 34px; height: 30px; border-radius: var(--mp-blob-2); background: var(--mp-line); opacity: 0.7;
+  animation: mp-ph 1.6s var(--mp-ease-inout) infinite;
+}
+@keyframes mp-ph { 0%, 100% { opacity: 0.45; transform: scale(0.94); } 50% { opacity: 0.8; transform: scale(1); } }
+.mp-try-tag {
+  position: absolute; left: 4px; top: 4px; padding: 0 7px; border-radius: var(--mp-r-full);
+  background: var(--mp-preview-tag-bg); color: var(--mp-preview-tag-text); font-size: var(--mp-fs-xs); font-weight: 600; line-height: 1.5;
+}
+/* "ลองดู" strip under the cards: what is being tried + stop + buy */
+.mp-try {
+  flex-shrink: 0; display: flex; align-items: center; gap: 6px; min-height: 52px; padding: 4px 4px 4px 6px;
+  border-radius: var(--mp-r-full); background: var(--mp-bg-primary-light); animation: mp-in var(--mp-dur) var(--mp-ease);
+}
+.mp-try-pill {
+  display: flex; align-items: center; gap: 4px; height: 28px; padding: 0 10px 0 8px; border-radius: var(--mp-r-full);
+  background: var(--mp-preview-tag-bg); color: var(--mp-preview-tag-text); font-size: 13px; font-weight: 600; line-height: 1.4; flex-shrink: 0;
+}
+.mp-try-name { flex: 1; min-width: 0; font-size: 15px; font-weight: 600; line-height: 1.4; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.mp-try-x { width: 44px; height: 44px; color: var(--mp-text); }
+.mp-try-buy { display: flex; align-items: center; gap: 6px; height: 44px; padding: 0 14px 0 16px; font-size: 15px; flex-shrink: 0; }
+.mp-try-buy .mp-coin-dot { width: 20px; height: 20px; }
+.mp-try-buy .mp-coin-dot span { width: 9px; height: 9px; }
+@media (max-width: 374px) {
+  .mp-try-pill span { display: none; }
+  .mp-try-pill { padding: 0 6px; }
+  .mp-items--decor { grid-template-columns: repeat(auto-fill, minmax(92px, 1fr)); }
+}
+.mp-ward-title { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
 /* ---------- minigame "ฝนขนม" (S2-08, S3 intro + control chip) ---------- */
 .mp-game-col > .mp-toast { pointer-events: auto; flex-shrink: 0; }
 .mp-hud.is-game .mp-col, .mp-hud.is-intro .mp-col { visibility: hidden; }
@@ -707,10 +773,13 @@
   .mp-mic[data-state="listening"] .mp-mic-ring, .mp-mic[data-state="recording"] .mp-mic-ring { animation: none !important; opacity: 0.6; }
   .mp-cam[data-state="loading"] .mp-cam-spin { animation: none !important; border-color: var(--mp-primary); border-style: dashed; }
   .mp-game-time-fill { transition: none !important; }
+  .mp-thumb-ph { animation: none !important; opacity: 0.6; }
 }
 
 /* ---------- dark theme extras (colours come from tokens.css; S3: data-theme, not the OS) ---------- */
 :root[data-theme="dark"] .mp-hud { --mp-bar-fill: #9BB0DE; }   /* time bar: 6.4:1 on #2C2C2C */
+:root[data-theme="dark"] .mp-chip > span { border-color: var(--mp-line); }
+:root[data-theme="dark"] .mp-chip.is-on > span { border-color: var(--mp-border-primary); }
 :root[data-theme="dark"] .mp-ward-panel { box-shadow: 0 -6px 24px rgba(0, 0, 0, 0.4), inset 0 1px 0 var(--mp-line); }
 :root[data-theme="dark"] :is(.mp-who, .mp-coins, .mp-iconbtn:not(.mp-iconbtn--ghost), .mp-camview, .mp-cam-msg, .mp-toast) { box-shadow: inset 0 0 0 1px var(--mp-line); }
 :root[data-theme="dark"] .mp-cam[data-state="on"] { box-shadow: none; }
@@ -722,7 +791,9 @@
   .mp-hud { forced-color-adjust: auto; }
   .mp-who, .mp-coins, .mp-iconbtn, .mp-ctx, .mp-btn-primary, .mp-btn-outline, .mp-camview, .mp-toast, .mp-cam-msg,
   .mp-meters, .mp-tray, .mp-food, .mp-card, .mp-item, .mp-ward-panel, .mp-ward-tab, .mp-result-card, .mp-game-top,
-  .mp-game-sub > span, .mp-coach, .mp-game-hint, .mp-bubble-text, .mp-mic-label, .mp-intro-card, .mp-opt, .mp-game-ctl { border: 1px solid CanvasText; }
+  .mp-game-sub > span, .mp-coach, .mp-game-hint, .mp-bubble-text, .mp-mic-label, .mp-intro-card, .mp-opt, .mp-game-ctl,
+  .mp-chip > span, .mp-try, .mp-try-pill, .mp-try-tag { border: 1px solid CanvasText; }
+  .mp-chip.is-on > span, .mp-item--decor.is-try { outline: 3px solid Highlight; outline-offset: -3px; }
   .mp-opt.is-on { outline: 3px solid Highlight; outline-offset: -3px; }
   .mp-mic { border: 2px solid ButtonText; }
   .mp-ward-tab.is-on, .mp-item.is-on, .mp-card.is-on, .mp-dot.is-on span { outline: 3px solid Highlight; outline-offset: -3px; }

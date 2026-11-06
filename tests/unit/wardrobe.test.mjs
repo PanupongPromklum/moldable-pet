@@ -117,9 +117,10 @@ test('not-liked item: wearOk line, no bonus', () => {
 
 const real = fileURLToPath(new URL('../../assets/data/wardrobe.json', import.meta.url));
 if (existsSync(real)) {
-  test('assets/data/wardrobe.json: 11 contract ids in the right slots, starters owned from the start', () => {
+  test('assets/data/wardrobe.json: 16 contract ids (11 S2 + 5 S4 Christmas) in the right slots, starters owned from the start', () => {
     const W = JSON.parse(readFileSync(real, 'utf8'));
-    const SLOT = { 'hat-beanie': 'head', 'hat-party': 'head', 'bow-ribbon': 'head', 'crown-flower': 'head', 'glasses-round': 'eyes', 'glasses-sun': 'eyes', 'glasses-star': 'eyes', 'tie-neck': 'body', 'tie-bow': 'body', scarf: 'body', 'badge-star': 'body' };
+    const SLOT = { 'hat-beanie': 'head', 'hat-party': 'head', 'bow-ribbon': 'head', 'crown-flower': 'head', 'glasses-round': 'eyes', 'glasses-sun': 'eyes', 'glasses-star': 'eyes', 'tie-neck': 'body', 'tie-bow': 'body', scarf: 'body', 'badge-star': 'body',
+      'hat-santa': 'head', antlers: 'head', 'glasses-snow': 'eyes', 'scarf-xmas': 'body', 'bell-collar': 'body' };
     deepEq(W.items.map((i) => i.id).sort(), Object.keys(SLOT).sort(), 'ids');
     for (const it of W.items) eq(it.slot, SLOT[it.id], it.id);
     const st = sanitizeOwned(undefined, W);

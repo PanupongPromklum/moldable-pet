@@ -1,5 +1,5 @@
 /**
- * Moldable Pet — in-game HUD (owner: glaze). Stories S1-04, S2-01..04, S2-08, S3.
+ * Moldable Pet — in-game HUD (owner: glaze). Stories S1-04, S2-01..04, S2-08, S3, S4-05.
  *
  * Implements "HUD — glaze" + "Sprint 2 additions" + "Sprint 3 additions" in
  * docs/architecture/module-contracts.md.
@@ -43,6 +43,32 @@
  *           updateMinigame({ control })  small chip next to the title (e.g. fall back to 'touch')
  *           toast() now shows inside the minigame/intro layer while those are open.
  *           setCamera() shows no hand-play message while the minigame or intro is open.
+ *
+ * ── Sprint 4 API changes (for wire) — S4-05 ────────────────────────────────
+ * Button    "แต่งห้อง" in every room: bottom-left of the actions row (in the living room it
+ *           sits under "แต่งตัว"); in the kitchen while the food tray is open, a round sofa
+ *           button in the tray head. Hidden while sitting on the toilet, in the minigame and
+ *           while a sheet is open. It shows only when handlers.onDecor is given.
+ * Handlers  onDecor()                    open the shop
+ *           onDecorPreview(slot, idOrNull) tap an UNOWNED card → wire shows it in the room at once;
+ *                                        null = back to the equipped item (tap the "ใช้อยู่" card,
+ *                                        or "เลิกลอง" on the preview strip)
+ *           onDecorEquip(slot, id)       tap an OWNED card that is not in use (no preview call)
+ *           onDecorBuy(id)               confirmed inside the sheet (tap the previewed card again
+ *                                        or "ซื้อ" on the preview strip → confirmation → "ซื้อ")
+ *           onDecorClose()               the sheet closed ITSELF (X, Escape, room change, minigame,
+ *                                        wardrobe opened). Wire reverts unbought previews. Not
+ *                                        called when wire closes it with hideDecor().
+ * Methods   showDecor({ room, slots:[{id,label}] | {id:{label}}, items:[{id, slot, name, price,
+ *           theme, thumb, default?, room?}], owned:[ids], furniture:{slot:id} | {room:{slot:id}},
+ *           coins, themes:{id:{label}} | [{id,label}] })   items of other rooms are ignored;
+ *                                        `default: true` items count as owned; a missing `thumb`
+ *                                        shows a soft placeholder until updateDecor brings it
+ *           updateDecor(partial)         any showDecor field; a pending confirmation closes once its
+ *                                        item is in `owned`; a preview clears once its item is owned
+ *           hideDecor()
+ * Wardrobe  showWardrobe/updateWardrobe accept `themes` (wardrobe.json → themes); items carry
+ *           `theme`. A theme chip row (ทั้งหมด / พื้นฐาน / คริสต์มาส) shows when ≥ 2 themes exist.
  *
  * ── Toilet flow (S2-03) — one control at a time ─────────────────────────────
  * Chosen rule: `setFlushVisible(true)` is the "sitting" stage. It clears the coach mark,
@@ -146,6 +172,35 @@ export const HUD_STRINGS = {
     cancel: 'ยกเลิก',
     itemAria: (name, meta) => `${name} ${meta}`,
   },
+  /** S4 theme filter chips (wardrobe + decor). Labels from the data files win. */
+  themes: {
+    group: 'เลือกชุด',
+    all: 'ทั้งหมด',
+    labels: { basic: 'พื้นฐาน', xmas: 'คริสต์มาส' },
+    empty: 'ช่องนี้ยังไม่มีของชุดนี้',
+  },
+  decorBtn: 'แต่งห้อง',
+  /** S4 furniture shop. */
+  decor: {
+    title: 'แต่งห้อง',
+    aria: (room) => `แต่งห้อง ${room}`,
+    close: 'ปิดแต่งห้อง',
+    slotsGroup: 'ช่องของแต่ง',
+    owned: 'มีแล้ว',
+    using: 'ใช้อยู่',
+    tryTag: 'ลองดู',
+    trying: (name) => `กำลังลองดู${name}`,
+    tabTrying: 'กำลังลองดู',
+    stopTry: 'เลิกลอง',
+    price: (p) => `${p} เหรียญ`,
+    ask: (name) => `ซื้อ${name}เลยไหม`,
+    after: (left) => `ซื้อแล้วเหลือ ${left} เหรียญ`,
+    short: (need) => `เหรียญยังไม่พอ ขาดอีก ${need}`,
+    earn: 'เล่นฝนขนมเพื่อรับเหรียญเพิ่ม',
+    buy: 'ซื้อ',
+    cancel: 'ยกเลิก',
+    itemAria: (name, meta) => `${name} ${meta}`,
+  },
   game: {
     title: 'ฝนขนม',
     exit: 'ออกจากเกม',
@@ -223,6 +278,39 @@ export function wardrobeItemState(item, w) {
 }
 
 /**
+ * State of one furniture card for display (S4). Pure, unit-testable.
+ * Default items always count as owned.
+ * @param {{id:string, slot:string, price?:number, default?:boolean}} item
+ * @param {{owned:Set<string>|string[], furniture:object, coins:number, preview?:object}} d
+ * @returns {{owned:boolean, equipped:boolean, previewing:boolean, affordable:boolean}}
+ */
+export function decorItemState(item, d) {
+  const has = d.owned instanceof Set ? d.owned.has(item.id) : (d.owned || []).includes(item.id);
+  const owned = has || !!item.default;
+  const equipped = !!d.furniture && d.furniture[item.slot] === item.id;
+  const previewing = !owned && !!d.preview && d.preview[item.slot] === item.id;
+  return { owned, equipped, previewing, affordable: owned || int0(d.coins) >= int0(item.price) };
+}
+
+/**
+ * Theme chips to show for a catalog (S4). Pure, unit-testable.
+ * Order: the `themes` data order, then any extra theme found on items. Items without a
+ * theme count as 'basic'. Returns [] when fewer than two themes are present (no chip row).
+ * @param {object|Array|null} themes `{ basic: {label}, xmas: {label} }` or `[{id, label}]`
+ * @param {{theme?:string}[]} items
+ * @param {{[id:string]:string}} [fallback] labels when the data has none
+ * @returns {{id:string, label:string}[]}
+ */
+export function themeChips(themes, items, fallback = HUD_STRINGS.themes.labels) {
+  const list = Array.isArray(themes) ? themes.filter((t) => t && t.id)
+    : Object.entries(themes || {}).map(([id, t]) => ({ id, label: t && t.label }));
+  const present = new Set((items || []).map((it) => it.theme || 'basic'));
+  const out = list.filter((t) => present.has(t.id)).map((t) => ({ id: t.id, label: t.label || fallback[t.id] || t.id }));
+  for (const id of present) if (!out.some((t) => t.id === id)) out.push({ id, label: fallback[id] || id });
+  return out.length >= 2 ? out : [];
+}
+
+/**
  * Create the HUD inside `root` (normally `<div id="hud">`).
  *
  * @param {HTMLElement} root container that covers the viewport
@@ -245,6 +333,11 @@ export function wardrobeItemState(item, w) {
  * @param {() => void} [handlers.onThemeToggle]
  * @param {(id: string) => void} [handlers.onMinigameControl]
  * @param {() => void} [handlers.onMinigameReady]
+ * @param {() => void} [handlers.onDecor]
+ * @param {(slot: string, id: string|null) => void} [handlers.onDecorPreview]
+ * @param {(slot: string, id: string) => void} [handlers.onDecorEquip]
+ * @param {(id: string) => void} [handlers.onDecorBuy]
+ * @param {() => void} [handlers.onDecorClose]
  * @param {object} [options] optional, not part of the contract
  * @param {object} [options.needs] `needs.json` → `needs` (labels, good/low/urgent per need)
  * @param {object} [options.strings] partial override of HUD_STRINGS
@@ -266,7 +359,7 @@ export function createHUD(root, handlers = {}, options = {}) {
     room: 'living', char: { key: 'flower', name: 'ไผ่' }, mic: 'off', camera: 'off', camHidden: false,
     coins: null, coinShown: 0, coinRaf: 0, flush: false, trayOpen: true, needs: {}, coachText: null,
     bubble: { on: false, x: -1, y: -1, w: 0, h: 0, timer: 0 },
-    toastTimer: 0, camMsgTimer: 0, select: null, ward: null, game: null,
+    toastTimer: 0, camMsgTimer: 0, select: null, ward: null, game: null, decor: null,
     theme: null, themeTimer: 0, intro: null, control: null, controlDefs: {},
   };
 
@@ -330,6 +423,7 @@ export function createHUD(root, handlers = {}, options = {}) {
       <div class="mp-actions">
         <div class="mp-actions-start">
           <button type="button" class="mp-ctx mp-ctx--outline mp-ward-btn" hidden>${icon('shirt', 22)}<span>${esc(S.wardrobe)}</span></button>
+          <button type="button" class="mp-ctx mp-ctx--outline mp-decor-btn" hidden>${icon('sofa', 22)}<span>${esc(S.decorBtn)}</span></button>
         </div>
         <div class="mp-mic-wrap">
           <button type="button" class="mp-mic" data-state="off">
@@ -347,6 +441,7 @@ export function createHUD(root, handlers = {}, options = {}) {
         <div class="mp-tray-head">
           <span class="mp-tray-title">${esc(S.tray)}</span>
           <span class="mp-tray-sub">${esc(S.traySub)}</span>
+          <button type="button" class="mp-iconbtn mp-iconbtn--soft mp-tray-decor mp-tip" data-tip="${esc(S.decorBtn)}" aria-label="${esc(S.decorBtn)}" hidden>${icon('sofa', 20)}</button>
           <button type="button" class="mp-iconbtn mp-iconbtn--soft mp-tray-x" aria-label="${esc(S.trayClose)}">${icon('chevron-down', 20)}</button>
         </div>
         <div class="mp-tray-grid"></div>
@@ -355,6 +450,7 @@ export function createHUD(root, handlers = {}, options = {}) {
   </div>
   <div class="mp-bubble" aria-live="polite" hidden><div class="mp-bubble-text"></div><span class="mp-bubble-tail" aria-hidden="true"></span></div>
   <section class="mp-ward" role="dialog" aria-modal="false" aria-label="${esc(S.ward.title)}" hidden></section>
+  <section class="mp-ward mp-decor" role="dialog" aria-modal="false" aria-label="${esc(S.decor.title)}" hidden><div class="mp-decor-inner"></div><span class="mp-sr" aria-live="polite"></span></section>
   <div class="mp-game" hidden>
     <div class="mp-game-col">
       <div class="mp-game-top">
@@ -391,10 +487,10 @@ export function createHUD(root, handlers = {}, options = {}) {
     flushRow: $('.mp-flush-row'), flush: $('.mp-flush'),
     prev: $('.mp-prev'), next: $('.mp-next'), dots: [...root.querySelectorAll('.mp-dot')],
     actions: $('.mp-actions'), mic: $('.mp-mic'), micIco: $('.mp-mic-ico'), micLabel: $('.mp-mic-label'),
-    ctx: $('.mp-ctx[data-ctx]'), wardBtn: $('.mp-ward-btn'),
+    ctx: $('.mp-ctx[data-ctx]'), wardBtn: $('.mp-ward-btn'), decorBtn: $('.mp-decor-btn'), trayDecor: $('.mp-tray-decor'),
     tray: $('.mp-tray'), trayGrid: $('.mp-tray-grid'), trayX: $('.mp-tray-x'),
     bubble: $('.mp-bubble'), bubbleText: $('.mp-bubble-text'), bubbleTail: $('.mp-bubble-tail'),
-    ward: $('.mp-ward'),
+    ward: $('.mp-ward:not(.mp-decor)'), decor: $('.mp-decor'), decorInner: $('.mp-decor-inner'), decorLive: $('.mp-decor .mp-sr'),
     game: $('.mp-game'), gameX: $('.mp-game-x'), gameTitle: $('.mp-game-title'), gameTime: $('.mp-game-time'),
     gameTimeFill: $('.mp-game-time-fill'), gameScore: $('.mp-game-score-n'), gameCoins: $('.mp-game-coins-n'),
     gameStreak: $('.mp-game-streak'), gameSecs: $('.mp-game-secs .mp-num'), gameCount: $('.mp-game-count'),
@@ -419,6 +515,8 @@ export function createHUD(root, handlers = {}, options = {}) {
   el.toastX.addEventListener('click', () => hideToast());
   el.flush.addEventListener('click', () => call('onAction', 'flush'));
   el.wardBtn.addEventListener('click', () => call('onWardrobe'));
+  el.decorBtn.addEventListener('click', () => call('onDecor'));
+  el.trayDecor.addEventListener('click', () => call('onDecor'));
   el.trayX.addEventListener('click', () => { state.trayOpen = false; renderRoom(); el.ctx.focus({ preventScroll: true }); });
   el.ctx.addEventListener('click', () => {
     const c = el.ctx.dataset.ctx;
@@ -467,6 +565,9 @@ export function createHUD(root, handlers = {}, options = {}) {
     root.classList.toggle('is-flush', sitting);
     el.flushRow.hidden = !sitting;
     el.wardBtn.hidden = room !== 'living';
+    const decorOn = typeof handlers.onDecor === 'function';
+    el.decorBtn.hidden = !decorOn || sitting;
+    el.trayDecor.hidden = !decorOn;
     let ctx = null;
     if (room === 'living') ctx = { id: 'play', ico: 'fun', text: S.play, kind: 'outline' };
     else if (room === 'kitchen') ctx = { id: 'tray', ico: 'hunger', text: S.tray, kind: 'outline' };
@@ -623,7 +724,9 @@ export function createHUD(root, handlers = {}, options = {}) {
     const s = S.ward;
     const slots = slotOrder();
     if (!slots.includes(w.tab)) w.tab = slots[0];
-    const items = (w.items || []).filter((it) => it.slot === w.tab);
+    const chips = themeChips(w.themes, w.items, S.themes.labels);
+    if (w.theme !== 'all' && !chips.some((c) => c.id === w.theme)) w.theme = 'all';
+    const items = (w.items || []).filter((it) => it.slot === w.tab && (w.theme === 'all' || (it.theme || 'basic') === w.theme));
     const equippedId = w.outfit ? w.outfit[w.tab] || null : null;
     const charName = state.char.name;
 
@@ -675,7 +778,7 @@ export function createHUD(root, handlers = {}, options = {}) {
           <span class="mp-item-meta">${meta}</span>
         </button>`);
       }
-      body = `<div class="mp-items">${tiles.join('')}</div>`;
+      body = `<div class="mp-items">${tiles.join('')}</div>${items.length ? '' : `<p class="mp-empty">${esc(S.themes.empty)}</p>`}`;
     }
 
     el.ward.innerHTML = `
@@ -686,6 +789,7 @@ export function createHUD(root, handlers = {}, options = {}) {
           <button type="button" class="mp-iconbtn mp-iconbtn--soft mp-ward-x" aria-label="${esc(s.close)}">${icon('close', 20)}</button>
         </div>
         <div class="mp-ward-tabs" role="tablist" aria-label="${esc(s.title)}">${tabs}</div>
+        ${confirmItem ? '' : chipRow(chips, w.theme)}
         <div class="mp-ward-body" id="mp-ward-panel" role="tabpanel" aria-labelledby="mp-ward-tab-${esc(w.tab)}">${body}</div>
       </div>`;
     if (focusSel) {
@@ -700,6 +804,8 @@ export function createHUD(root, handlers = {}, options = {}) {
     if (ev.target.closest('.mp-ward-x')) { api.hideWardrobe(); call('onWardrobeClose'); return; }
     const tab = ev.target.closest('.mp-ward-tab');
     if (tab) { w.tab = tab.dataset.slot; w.confirm = null; renderWardrobe(`.mp-ward-tab[data-slot="${CSS.escape(w.tab)}"]`); return; }
+    const chip = ev.target.closest('.mp-chip');
+    if (chip) { w.theme = chip.dataset.filter; renderWardrobe(`.mp-chip[data-filter="${CSS.escape(w.theme)}"]`); return; }
     if (ev.target.closest('.mp-buy-no')) {
       const id = w.confirm; w.confirm = null;
       renderWardrobe(`.mp-item[data-id="${CSS.escape(id || '')}"]`); return;
@@ -732,6 +838,216 @@ export function createHUD(root, handlers = {}, options = {}) {
       w.tab = slots[(i + (ev.key === 'ArrowRight' ? 1 : slots.length - 1)) % slots.length];
       w.confirm = null;
       renderWardrobe(`.mp-ward-tab[data-slot="${CSS.escape(w.tab)}"]`);
+    }
+  });
+
+  /** Theme filter chip row shared by the wardrobe and the decor sheet (S4). '' when no chips. */
+  function chipRow(chips, current) {
+    if (!chips.length) return '';
+    const all = [{ id: 'all', label: S.themes.all }, ...chips];
+    return `<div class="mp-chips" role="group" aria-label="${esc(S.themes.group)}">${all.map((c) => {
+      const on = c.id === current;
+      return `<button type="button" class="mp-chip${on ? ' is-on' : ''}" data-filter="${esc(c.id)}" aria-pressed="${on}"><span>${on ? icon('check', 14) : ''}${esc(c.label)}</span></button>`;
+    }).join('')}</div>`;
+  }
+
+  // ---------- furniture shop "แต่งห้อง" (S4-05) ----------
+  /** Normalise showDecor/updateDecor input into the open sheet's state. */
+  function decorApply(d, data) {
+    if (data.room) d.room = data.room;
+    if (data.slots) {
+      d.slots = Array.isArray(data.slots) ? data.slots.filter((x) => x && x.id).map((x) => ({ id: x.id, label: x.label || x.id }))
+        : Object.entries(data.slots).map(([id, x]) => ({ id, label: (x && x.label) || id }));
+    }
+    if (data.items) d.allItems = data.items;
+    if (data.owned) d.owned = new Set(data.owned);
+    if (data.furniture) {
+      const f = data.furniture;
+      d.furniture = { ...d.furniture, ...((f[d.room] && typeof f[d.room] === 'object') ? f[d.room] : f) };
+    }
+    if (data.coins != null) d.coins = data.coins;
+    if (data.themes) d.themes = data.themes;
+    const slotIds = d.slots.map((x) => x.id);
+    d.items = (d.allItems || []).filter((it) => (!it.room || it.room === d.room) && slotIds.includes(it.slot));
+    // A preview ends once its item is owned (bought → wire equips it).
+    for (const [slot, id] of Object.entries(d.preview)) {
+      const it = d.items.find((x) => x.id === id);
+      if (!it || d.owned.has(id) || it.default) delete d.preview[slot];
+    }
+  }
+  const decorState = (it) => decorItemState(it, state.decor);
+  const thumbMarkup = (it, size) => (it && it.thumb
+    ? `<img alt="" src="${esc(it.thumb)}" width="${size}" height="${size}" draggable="false">`
+    : '<span class="mp-thumb-ph" aria-hidden="true"></span>');
+
+  function renderDecor(focusSel) {
+    const d = state.decor;
+    if (!d) return;
+    const s = S.decor;
+    const slotIds = d.slots.map((x) => x.id);
+    if (!slotIds.includes(d.tab)) d.tab = slotIds[0];
+    const chips = themeChips(d.themes, d.items, S.themes.labels);
+    if (d.theme !== 'all' && !chips.some((c) => c.id === d.theme)) d.theme = 'all';
+    const items = d.items.filter((it) => it.slot === d.tab && (d.theme === 'all' || (it.theme || 'basic') === d.theme));
+    const roomName = S.rooms[d.room] || d.roomLabel || '';
+    el.decor.setAttribute('aria-label', s.aria(roomName));
+
+    const tabs = d.slots.map((x) => {
+      const on = x.id === d.tab;
+      const trying = !!d.preview[x.id];
+      return `<button type="button" class="mp-ward-tab${on ? ' is-on' : ''}" role="tab" id="mp-decor-tab-${esc(x.id)}" aria-controls="mp-decor-panel" aria-selected="${on}" tabindex="${on ? 0 : -1}" data-slot="${esc(x.id)}">
+        <span>${esc(x.label)}</span>${trying ? `<span class="mp-ward-tab-dot" aria-hidden="true"></span><span class="mp-sr">${esc(s.tabTrying)}</span>` : ''}</button>`;
+    }).join('');
+
+    let body;
+    let foot = '';
+    const confirmItem = d.confirm && d.items.find((it) => it.id === d.confirm);
+    if (confirmItem) {
+      const price = int0(confirmItem.price);
+      const coins = int0(d.coins);
+      const ok = coins >= price;
+      body = `
+        <div class="mp-buy" role="group" aria-labelledby="mp-dbuy-q">
+          <span class="mp-buy-pic mp-thumb mp-thumb--lg">${thumbMarkup(confirmItem, 72)}</span>
+          <div class="mp-buy-text">
+            <p class="mp-buy-q" id="mp-dbuy-q">${esc(s.ask(confirmItem.name))}</p>
+            <p class="mp-buy-price">${coinDot}<span class="mp-num">${fmt(price)}</span></p>
+            ${ok ? `<p class="mp-buy-sub">${esc(s.after(fmt(coins - price)))}</p>`
+              : `<p class="mp-buy-sub is-short">${esc(s.short(fmt(price - coins)))}</p><p class="mp-buy-sub">${esc(s.earn)}</p>`}
+          </div>
+          <div class="mp-buy-actions">
+            <button type="button" class="mp-btn-outline mp-buy-no">${esc(s.cancel)}</button>
+            <button type="button" class="mp-btn-primary mp-buy-yes" ${ok ? '' : 'disabled'}>${esc(s.buy)} <span class="mp-num">${fmt(price)}</span></button>
+          </div>
+        </div>`;
+    } else {
+      const cards = items.map((it) => {
+        const st = decorState(it);
+        const metaText = st.equipped ? s.using : st.owned ? s.owned : s.price(fmt(int0(it.price)));
+        const meta = st.equipped ? `${icon('check', 14)}<span>${esc(s.using)}</span>`
+          : st.owned ? `<span>${esc(s.owned)}</span>`
+          : `${coinDot}<span class="mp-num">${fmt(int0(it.price))}</span>`;
+        const cls = `mp-item mp-item--decor${st.equipped ? ' is-on' : ''}${st.owned ? ' is-owned' : ''}${st.previewing ? ' is-try' : ''}${st.affordable ? '' : ' is-short'}`;
+        return `
+        <button type="button" class="${cls}" data-id="${esc(it.id)}" aria-pressed="${st.equipped || st.previewing}" aria-label="${esc(s.itemAria(it.name, metaText + (st.previewing ? ' ' + s.tryTag : '')))}">
+          <span class="mp-item-pic mp-thumb">${thumbMarkup(it, 64)}${st.previewing ? `<span class="mp-try-tag" aria-hidden="true">${esc(s.tryTag)}</span>` : ''}</span>
+          <span class="mp-item-name">${esc(it.name)}</span>
+          <span class="mp-item-meta">${meta}</span>
+        </button>`;
+      }).join('');
+      body = items.length ? `<div class="mp-items mp-items--decor">${cards}</div>` : `<p class="mp-empty">${esc(S.themes.empty)}</p>`;
+      const tryId = d.preview[d.tab];
+      const tryItem = tryId && d.items.find((it) => it.id === tryId);
+      if (tryItem) {
+        foot = `
+        <div class="mp-try">
+          <span class="mp-try-pill">${icon('sparkle', 16)}<span>${esc(s.tryTag)}</span></span>
+          <span class="mp-try-name">${esc(tryItem.name)}</span>
+          <button type="button" class="mp-iconbtn mp-iconbtn--ghost mp-try-x mp-tip" data-tip="${esc(s.stopTry)}" aria-label="${esc(s.stopTry + ' ' + tryItem.name)}">${icon('close', 18)}</button>
+          <button type="button" class="mp-btn-primary mp-try-buy">${esc(s.buy)} ${coinDot}<span class="mp-num">${fmt(int0(tryItem.price))}</span></button>
+        </div>`;
+      }
+    }
+
+    el.decorInner.innerHTML = `
+      <div class="mp-ward-panel mp-decor-panel">
+        <div class="mp-ward-head">
+          <h2 class="mp-ward-title">${esc(s.title)}<span class="mp-decor-room">${esc(roomName)}</span></h2>
+          <span class="mp-ward-coins" aria-label="${esc(S.coins(fmt(int0(d.coins))))}">${coinDot}<span class="mp-num">${fmt(int0(d.coins))}</span></span>
+          <button type="button" class="mp-iconbtn mp-iconbtn--soft mp-decor-x" aria-label="${esc(s.close)}">${icon('close', 20)}</button>
+        </div>
+        <div class="mp-ward-tabs mp-tabs-scroll" role="tablist" aria-label="${esc(s.slotsGroup)}">${tabs}</div>
+        ${confirmItem ? '' : chipRow(chips, d.theme)}
+        <div class="mp-ward-body" id="mp-decor-panel" role="tabpanel" aria-labelledby="mp-decor-tab-${esc(d.tab)}">${body}</div>
+        ${foot}
+      </div>`;
+    const tabList = el.decorInner.querySelector('.mp-tabs-scroll');
+    const onTab = tabList.querySelector('.mp-ward-tab.is-on');
+    if (onTab) {
+      const l = onTab.offsetLeft - tabList.offsetLeft;
+      if (l < tabList.scrollLeft || l + onTab.offsetWidth > tabList.scrollLeft + tabList.clientWidth) {
+        tabList.scrollLeft = Math.max(0, l - (tabList.clientWidth - onTab.offsetWidth) / 2);
+      }
+    }
+    tabList.classList.toggle('is-more', tabList.scrollWidth > tabList.clientWidth + 1);
+    if (focusSel) {
+      const f = el.decorInner.querySelector(focusSel);
+      if (f) f.focus({ preventScroll: true });
+    }
+  }
+
+  /** The sheet closes itself (X, Escape, room change …): tell wire so unbought previews revert. */
+  function closeDecorSelf() {
+    if (!state.decor) return;
+    api.hideDecor();
+    call('onDecorClose');
+  }
+  function announce(text) { el.decorLive.textContent = ''; if (text) setTimeout(() => { el.decorLive.textContent = text; }, 30); }
+
+  el.decor.addEventListener('click', (ev) => {
+    const d = state.decor;
+    if (!d) return;
+    const s = S.decor;
+    if (ev.target.closest('.mp-decor-x')) { closeDecorSelf(); return; }
+    const tab = ev.target.closest('.mp-ward-tab');
+    if (tab) { d.tab = tab.dataset.slot; d.confirm = null; renderDecor(`.mp-ward-tab[data-slot="${CSS.escape(d.tab)}"]`); return; }
+    const chip = ev.target.closest('.mp-chip');
+    if (chip) { d.theme = chip.dataset.filter; renderDecor(`.mp-chip[data-filter="${CSS.escape(d.theme)}"]`); return; }
+    if (ev.target.closest('.mp-buy-no')) {
+      const id = d.confirm; d.confirm = null;
+      renderDecor(`.mp-item[data-id="${CSS.escape(id || '')}"]`); return;
+    }
+    if (ev.target.closest('.mp-buy-yes')) { if (d.confirm) call('onDecorBuy', d.confirm); return; }
+    if (ev.target.closest('.mp-try-x')) {
+      const slot = d.tab; const was = d.preview[slot];
+      delete d.preview[slot];
+      call('onDecorPreview', slot, null);
+      renderDecor(`.mp-item[data-id="${CSS.escape(was || '')}"]`); announce('');
+      return;
+    }
+    if (ev.target.closest('.mp-try-buy')) {
+      const id = d.preview[d.tab];
+      if (id) { d.confirm = id; renderDecor(decorState(d.items.find((x) => x.id === id) || {}).affordable ? '.mp-buy-yes' : '.mp-buy-no'); }
+      return;
+    }
+    const card = ev.target.closest('.mp-item');
+    if (!card) return;
+    const it = d.items.find((x) => x.id === card.dataset.id);
+    if (!it) return;
+    const st = decorState(it);
+    const focus = `.mp-item[data-id="${CSS.escape(it.id)}"]`;
+    if (st.equipped) {                                  // back to what is in use
+      if (d.preview[it.slot]) { delete d.preview[it.slot]; call('onDecorPreview', it.slot, null); renderDecor(focus); }
+      return;
+    }
+    if (st.owned) {                                     // owned → equip (ends any preview in this slot)
+      delete d.preview[it.slot];
+      call('onDecorEquip', it.slot, it.id);
+      renderDecor(focus);
+      return;
+    }
+    if (st.previewing) { d.confirm = it.id; renderDecor(st.affordable ? '.mp-buy-yes' : '.mp-buy-no'); return; }
+    d.preview[it.slot] = it.id;                         // try before you buy
+    call('onDecorPreview', it.slot, it.id);
+    renderDecor(focus);
+    announce(s.trying(it.name));
+  });
+  el.decor.addEventListener('keydown', (ev) => {
+    const d = state.decor;
+    if (!d) return;
+    if (ev.key === 'Escape') {
+      ev.stopPropagation();
+      if (d.confirm) { const id = d.confirm; d.confirm = null; renderDecor(`.mp-item[data-id="${CSS.escape(id)}"]`); }
+      else closeDecorSelf();
+      return;
+    }
+    if ((ev.key === 'ArrowLeft' || ev.key === 'ArrowRight') && ev.target.closest('.mp-ward-tab')) {
+      ev.preventDefault(); ev.stopPropagation();
+      const ids = d.slots.map((x) => x.id);
+      const i = ids.indexOf(d.tab);
+      d.tab = ids[(i + (ev.key === 'ArrowRight' ? 1 : ids.length - 1)) % ids.length];
+      d.confirm = null;
+      renderDecor(`.mp-ward-tab[data-slot="${CSS.escape(d.tab)}"]`);
     }
   });
 
@@ -901,6 +1217,7 @@ export function createHUD(root, handlers = {}, options = {}) {
       state.coins = v;
       el.coins.setAttribute('aria-label', S.coins(fmt(v)));
       if (state.ward) { state.ward.coins = v; renderWardrobe(); }
+      if (state.decor) { state.decor.coins = v; api.updateDecor({}); }
       if (prev === null || prev === v) { cancelAnimationFrame(state.coinRaf); state.coinShown = v; paintCoins(v); return; }
       const d = v - prev;
       el.coinPlus.textContent = d > 0 ? `+${fmt(d)}` : `−${fmt(-d)}`;
@@ -916,6 +1233,7 @@ export function createHUD(root, handlers = {}, options = {}) {
       if (id !== state.room && id === 'kitchen') state.trayOpen = true;
       state.room = id;
       if (id !== 'living' && state.ward) api.hideWardrobe();
+      if (state.decor && state.decor.room !== id) closeDecorSelf();
       renderRoom();
     },
 
@@ -1035,6 +1353,7 @@ export function createHUD(root, handlers = {}, options = {}) {
      */
     showMinigameIntro(opts = {}) {
       if (state.ward) api.hideWardrobe();
+      if (state.decor) closeDecorSelf();
       const list = Array.isArray(opts.controls) && opts.controls.length ? opts.controls
         : Object.keys(S.game.controls).map((id) => ({ id }));
       for (const c of list) if (c && c.id) state.controlDefs[c.id] = { label: c.label, hint: c.hint };
@@ -1133,11 +1452,13 @@ export function createHUD(root, handlers = {}, options = {}) {
      *          coins:number, charKey?:string}} data wardrobe.json + save state
      */
     showWardrobe(data = {}) {
+      if (state.decor) closeDecorSelf();
       const firstOpen = !state.ward;
       state.ward = {
         slots: data.slots || null, items: data.items || [], owned: new Set(data.owned || []),
         outfit: { ...(data.outfit || {}) }, coins: data.coins ?? state.coins ?? 0,
         charKey: data.charKey || state.char.key, tab: firstOpen ? null : state.ward.tab, confirm: null,
+        themes: data.themes || null, theme: firstOpen ? 'all' : state.ward.theme,
         returnFocus: firstOpen ? document.activeElement : state.ward.returnFocus,
       };
       if (!state.ward.tab) state.ward.tab = slotOrder()[0];
@@ -1160,6 +1481,7 @@ export function createHUD(root, handlers = {}, options = {}) {
       if (partial.outfit) w.outfit = { ...w.outfit, ...partial.outfit };
       if (partial.coins != null) w.coins = partial.coins;
       if (partial.charKey) w.charKey = partial.charKey;
+      if (partial.themes) w.themes = partial.themes;
       const active = document.activeElement;
       const activeId = active && el.ward.contains(active) && active.closest('.mp-item') ? active.dataset.id : undefined;
       let focus = activeId !== undefined ? `.mp-item[data-id="${CSS.escape(activeId)}"]` : null;
@@ -1178,6 +1500,63 @@ export function createHUD(root, handlers = {}, options = {}) {
     },
 
     /**
+     * Furniture shop "แต่งห้อง" (S4-05). Same sheet as the wardrobe: bottom ≤ 45 %, the room and
+     * the pet stay visible above it. Tabs = the current room's slots, theme chips, item cards.
+     * See the Sprint 4 block at the top of this file for the handler flow.
+     * @param {{room?:string, slots:Array|object, items:object[], owned?:string[], furniture?:object,
+     *          coins?:number, themes?:object|Array}} data
+     */
+    showDecor(data = {}) {
+      if (state.ward) { api.hideWardrobe(); call('onWardrobeClose'); }
+      const firstOpen = !state.decor;
+      const prev = state.decor;
+      const d = {
+        room: data.room || state.room, slots: [], allItems: [], items: [], owned: new Set(), furniture: {},
+        coins: data.coins ?? state.coins ?? 0, themes: null,
+        tab: firstOpen ? null : prev.tab, theme: firstOpen ? 'all' : prev.theme, preview: firstOpen ? {} : prev.preview,
+        confirm: null, returnFocus: firstOpen ? document.activeElement : prev.returnFocus,
+      };
+      if (!firstOpen && prev.room !== d.room) d.preview = {};
+      decorApply(d, data);
+      if (!d.slots.length) d.slots = [...new Set(d.items.map((it) => it.slot))].map((id) => ({ id, label: id }));
+      state.decor = d;
+      root.classList.add('is-decor');
+      el.decor.hidden = false;
+      renderDecor(firstOpen ? '.mp-ward-tab.is-on' : null);
+    },
+
+    /**
+     * Patch the open shop with any showDecor field (new thumbnails, owned, furniture, coins…).
+     * A pending buy confirmation closes once its item appears in `owned`.
+     * @param {object} partial
+     */
+    updateDecor(partial = {}) {
+      const d = state.decor;
+      if (!d) return;
+      const active = document.activeElement;
+      const inSheet = active && el.decor.contains(active);
+      const activeId = inSheet && active.closest('.mp-item') ? active.dataset.id : undefined;
+      let focus = activeId !== undefined ? `.mp-item[data-id="${CSS.escape(activeId)}"]`
+        : inSheet && active.closest('.mp-chip') ? `.mp-chip[data-filter="${CSS.escape(active.dataset.filter)}"]`
+        : inSheet && active.closest('.mp-ward-tab') ? `.mp-ward-tab[data-slot="${CSS.escape(active.dataset.slot)}"]` : null;
+      decorApply(d, partial);
+      if (d.confirm && d.owned.has(d.confirm)) { focus = `.mp-item[data-id="${CSS.escape(d.confirm)}"]`; d.confirm = null; }
+      renderDecor(focus);
+    },
+
+    /** Close the shop without calling a handler (wire reverts previews itself). */
+    hideDecor() {
+      if (!state.decor) return;
+      const rf = state.decor.returnFocus;
+      state.decor = null;
+      el.decor.hidden = true;
+      el.decorInner.innerHTML = '';
+      el.decorLive.textContent = '';
+      root.classList.remove('is-decor');
+      if (rf && rf.focus && document.contains(rf) && !rf.closest('[hidden]')) rf.focus({ preventScroll: true });
+    },
+
+    /**
      * Start the minigame HUD: hides the normal HUD, runs a 3-2-1 countdown.
      * Calls onMinigameTick(3), (2), (1), (0 = go) for sfx.
      * @param {{title?:string, durationSec:number, countdown?:number, control?:string}} opts
@@ -1186,6 +1565,7 @@ export function createHUD(root, handlers = {}, options = {}) {
     startMinigame(opts = {}) {
       if (state.game) clearCountdown();
       if (state.ward) api.hideWardrobe();
+      if (state.decor) closeDecorSelf();
       if (opts.control) state.control = opts.control;
       if (!state.control) state.control = 'touch';
       if (state.intro) { state.game = { countTimers: [] }; closeIntro(false); }
@@ -1301,7 +1681,7 @@ export function createHUD(root, handlers = {}, options = {}) {
      * @returns {string|null} food id
      */
     foodElementAt(x, y) {
-      if (el.tray.hidden || state.select || state.ward || state.game || state.intro) return null;
+      if (el.tray.hidden || state.select || state.ward || state.decor || state.game || state.intro) return null;
       for (const b of el.trayGrid.querySelectorAll('[data-food-id]')) {
         const r = b.getBoundingClientRect();
         if (x >= r.left && x <= r.right && y >= r.top && y <= r.bottom) return b.dataset.foodId;
@@ -1322,7 +1702,7 @@ export function createHUD(root, handlers = {}, options = {}) {
       cancelAnimationFrame(state.coinRaf);
       clearCountdown();
       root.innerHTML = '';
-      root.classList.remove('mp-hud', 'is-selecting', 'is-wardrobe', 'is-game', 'is-flush', 'is-intro', 'is-theming');
+      root.classList.remove('mp-hud', 'is-selecting', 'is-wardrobe', 'is-decor', 'is-game', 'is-flush', 'is-intro', 'is-theming');
     },
   };
 

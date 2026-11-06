@@ -1,6 +1,6 @@
 # Voice Script — Moldable Pet (สคริปต์อัดเสียงพากย์)
 
-เจ้าของ: Echo (audio) · อัปเดต: 2026-10-25 · Story: S1-05 · สถานะ canon: **Provisional** (ร่างให้เจ้าของอนุมัติ)
+เจ้าของ: Echo (audio) · อัปเดต: 2026-11-06 · Story: S1-05, S5-D3 (ข้อ 12) · สถานะ canon: **Provisional** (ร่างให้เจ้าของอนุมัติ)
 อ้างอิง: `design/narrative/character-bible.md`, `assets/data/personas.json` (ข้อความในเกม), `design/art/moldable-design.md` §11
 
 ## 0. หลักการ
@@ -430,3 +430,11 @@ ffmpeg -i raw.wav -af "highpass=f=80,loudnorm=I=-14:TP=-1.5:LRA=7,adelay=delays=
 1. **Loop:** เพิ่ม key `happy` ใน `personas.json` ทุกตัว (ใช้บทในสคริปต์นี้เป็นร่าง) และบอกว่าเกมเรียก `happy` ตอนไหน
 2. **Wire:** เล่นไฟล์ `<prefix>_<event>_<NN>` ให้ตรงกับ index ของข้อความที่สุ่มขึ้นบับเบิล ถ้าไม่มีไฟล์ให้เงียบ (บับเบิลยังขึ้น)
 3. **เจ้าของ:** หานักพากย์ 5 คน (หรือ 2–3 คนเล่นหลายตัว) และยืนยันสิทธิ์การใช้เสียง
+
+## 12. บทคุยกับสัตว์เลี้ยง (Sprint 5, วางแผน — S5-D3)
+ระบบ "คุยกัน" มาแทน "พูดตาม" ดีไซน์อยู่ที่ `design/gdd/conversation.md` บทพูดจะอยู่ใน `assets/data/conversation.json` (ยังไม่สร้าง รอเจ้าของอนุมัติรายการ intent)
+- **ตอนนี้ยังไม่อัด** ในเกมใช้บับเบิลข้อความ + เสียงพึมพำสังเคราะห์ (babble) ต่อตัวละครและช่วงวัย
+- ชื่อไฟล์ในอนาคต: `<prefix>_talk_<intent>_<variant>_<stage>_<NN>.wav` เช่น `pai_talk_ask_hungry_low_grown_01.wav` (`stage` = `baby` / `kid` / `grown` ตาม GDD การเติบโตของ Loop)
+- ช่วงวัย: `baby` พึมพำ + คำเด็ก 1 คำ (หม่ำ ฉี่ นอน เล่น รัก) · `kid` คำง่าย 1–4 คำ · `grown` ประโยคเต็มตามนิสัยในข้อ 3–7
+- ช่วง `baby` อาจไม่ต้องอัดเลย (ใช้ babble ต่อ) — เจ้าของตัดสินใจ
+- สเปกไฟล์เหมือนข้อ 9 ทุกอย่าง ถ้าไม่มีไฟล์ เกมเล่น babble แทน (บับเบิลขึ้นเสมอ)
