@@ -11,6 +11,9 @@
  * Character: soft, cute, rounded. pop/pick/boing/chirp/squish/slap keep the
  * approved prototype recipes (prototypes/squish-pet/index.html); slap gets a
  * lowpass so the square wave stays rounded. Never throws.
+ *
+ * Sprint 4 (S4-07): `place` (furniture set down), `jingle` (Christmas items),
+ * `preview` (shop card tapped, item shown in the room).
  */
 import { getAudioContext, resumeAudio, getBus, peekBus, busDefaultGain, duckMusic } from './context.js';
 
@@ -20,7 +23,17 @@ export const SFX_NAMES = Object.freeze([
   'flush', 'sparkle', 'whoosh', 'tap', 'giggle', 'yawn',
   // Sprint 2 (S2-10): Snack Rain + wardrobe.
   'coin', 'catch', 'bonk', 'tick', 'go', 'win', 'equip', 'buy',
+  // Sprint 4 (S4-07): furniture shop + Christmas set.
+  'place', 'jingle', 'preview',
 ]);
+
+/**
+ * Jingle shake pattern: [time (s), bell (0 = C7, 1 = A6), strength]. Fixed (no Math.random)
+ * so the sound is identical every time and auditions stay comparable.
+ */
+const JINGLE_SHAKES = [[0, 0, 1], [0.06, 1, 0.8], [0.11, 0, 0.65], [0.17, 1, 0.55], [0.25, 0, 0.75]];
+/** Small-bell partials: [ratio to fundamental, relative level, decay (s)]. Inharmonic = bell, quiet = not harsh. */
+const BELL_PARTIALS = [[1, 1, 0.32], [2.32, 0.28, 0.14], [4.08, 0.1, 0.07]];
 
 /** F major pentatonic (C6 D6 F6 G6 A6 C7): rapid coins climb this, so a streak sounds like a tune. */
 const COIN_STEPS = [1046.5, 1174.7, 1396.9, 1568, 1760, 2093];
@@ -268,6 +281,37 @@ const RECIPES = {
     });
     [880, 1046.5, 1396.9].forEach((hz, i) => tone(c, o, t + 0.26 + i * 0.07, hz, hz, 0.45, 'sine', 0.05 * v, { attack: 0.004 }));
     return 0.85;
+  },
+
+  // Sprint 4 (S4-07).
+  place: (c, o, t, v) => { // soft clay "dup-dum": padded contact, a dull body, one small settle. Body sits at
+    // 320→110 Hz (not lower) and the knock at ~500 Hz so phone speakers, which drop out below ~300 Hz, still carry it.
+    // Levels measured offline against the palette (100 ms RMS ≈ bonk/catch, about -33 dB).
+    noise(c, o, t, 0.09, 0.035 * v, { type: 'lowpass', f0: 700, f1: 180, q: 0.7, attack: 0.002 }); // padded contact
+    tone(c, o, t, 520, 230, 0.08, 'triangle', 0.045 * v, { lowpass: 1100, attack: 0.003 });         // dull knock
+    tone(c, o, t, 320, 110, 0.2, 'sine', 0.095 * v, { attack: 0.004 });                              // clay body
+    tone(c, o, t + 0.11, 260, 190, 0.12, 'sine', 0.035 * v, { attack: 0.008 });                      // settles
+    return 0.26;
+  },
+  jingle: (c, o, t, v) => { // two tiny bells (C7, A6) shaken 5 times, then the last ring hangs with a slight shimmer
+    const bells = [2093, 1760];
+    JINGLE_SHAKES.forEach(([dt, b, k], i) => {
+      const hz = bells[b], last = i === JINGLE_SHAKES.length - 1;
+      BELL_PARTIALS.forEach(([ratio, lvl, dec], p) => tone(c, o, t + dt, hz * ratio, hz * ratio * 1.001,
+        last && p === 0 ? 0.5 : dec, 'sine', 0.038 * v * k * lvl,
+        { attack: 0.002, vibrato: last && p === 0 ? { rate: 6, depth: 5 } : undefined }));
+      noise(c, o, t + dt, 0.025, 0.006 * v * k, { type: 'bandpass', f0: 5200, q: 3, attack: 0.001 }); // metal tick, kept tiny
+    });
+    tone(c, o, t + 0.25, 1396.9, 1398, 0.45, 'sine', 0.02 * v, { attack: 0.01 }); // F6 under the last ring: stays in key
+    return 0.76;
+  },
+  preview: (c, o, t, v) => { // short rising air whoosh that lands on a light upward pop ("here it is")
+    const f = noise(c, o, t, 0.2, 0.06 * v, { type: 'bandpass', f0: 500, q: 1, attack: 0.09 });
+    f.frequency.setValueAtTime(500, t);
+    f.frequency.exponentialRampToValueAtTime(1700, t + 0.17);
+    tone(c, o, t + 0.15, 520, 880, 0.08, 'sine', 0.11 * v, { attack: 0.004 });
+    tone(c, o, t + 0.19, 1046.5, 1050, 0.12, 'sine', 0.025 * v, { attack: 0.003 }); // tiny C6 glint
+    return 0.31;
   },
 };
 

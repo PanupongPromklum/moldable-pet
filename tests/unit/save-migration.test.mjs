@@ -1,8 +1,9 @@
-// Save v1 → v2 → v3 migration (owned, outfits, settings, best, theme, minigame control). Run: node tests/unit/save-migration.test.mjs
+// Save v1 → v2 → v3 → v4 migration (owned, outfits, settings, best, theme, minigame control, furniture). Run: node tests/unit/save-migration.test.mjs
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { test, assert, eq, deepEq, done } from './_harness.mjs';
 import { makeWardrobe, makeV1Save, memStorage } from './fixtures/sprint2.mjs';
+import { makeFurniture, makeV3Save } from './fixtures/sprint4.mjs';
 import { migrateSave, createGameState, newSave, sanitizeSettings, SAVE_KEY, SAVE_VERSION } from '../../src/game/state.js';
 
 const load = (f) => JSON.parse(readFileSync(fileURLToPath(new URL(`../../assets/data/${f}`, import.meta.url)), 'utf8'));
@@ -12,9 +13,9 @@ const T0 = 1_700_000_000_000;
 
 console.log('save migration');
 
-test('new save is v3 with starter items owned, empty outfits, camera shown, light theme, touch control, best 0', () => {
+test('new save is v4 with starter items owned, empty outfits, camera shown, light theme, touch control, best 0', () => {
   const s = newSave(DATA, T0);
-  eq(s.version, SAVE_VERSION, 'version'); eq(SAVE_VERSION, 3, 'v3');
+  eq(s.version, SAVE_VERSION, 'version'); eq(SAVE_VERSION, 4, 'v4');
   deepEq(s.owned, ['bow-ribbon', 'glasses-round'], 'owned');
   deepEq(s.chars.flower.outfit, { head: null, eyes: null, body: null }, 'outfit');
   deepEq(s.settings, { cameraHidden: false, theme: 'light', minigameControl: 'touch' }, 'settings');
@@ -44,10 +45,10 @@ test('v1 save migrates: needs, coins, room kept; owned/outfit/settings/best adde
   eq(m.settings.theme, 'light', 'v1 → light theme'); eq(m.settings.minigameControl, 'touch', 'v1 → touch');
 });
 
-test('v2 save migrates to v3: camera choice kept, theme light, control touch', () => {
+test('v2 save migrates to v4: camera choice kept, theme light, control touch', () => {
   const v2 = { ...newSave(DATA, T0), version: 2, settings: { cameraHidden: true } };
   const m = migrateSave(JSON.parse(JSON.stringify(v2)), DATA, T0);
-  eq(m.version, 3, 'version');
+  eq(m.version, 4, 'version');
   deepEq(m.settings, { cameraHidden: true, theme: 'light', minigameControl: 'touch' }, 'settings');
 });
 
@@ -102,6 +103,17 @@ test('createGameState: coins, purse and outfit persist through storage', () => {
   eq(b.best().snackRain, 120, 'best'); eq(b.best('cloud').snackRain, 50, 'cloud best'); eq(b.settings.cameraHidden, true, 'setting');
   eq(b.settings.theme, 'dark', 'theme persists'); eq(b.settings.minigameControl, 'head', 'control persists');
   b.setSetting('theme', 'sepia'); eq(b.settings.theme, 'light', 'invalid theme → light');
+});
+
+test('v3 save migrates to v4: every field kept, furniture at defaults, defaults owned', () => {
+  const D = { ...DATA, furniture: makeFurniture() };
+  const v3 = makeV3Save(T0);
+  const m = migrateSave(JSON.parse(JSON.stringify(v3)), D, T0, ['living', 'kitchen', 'bathroom']);
+  eq(m.version, 4, 'version'); eq(m.coins, 310, 'coins'); eq(m.room, 'bathroom', 'room'); eq(m.selected, 'gumdrop', 'selected');
+  deepEq(m.settings, v3.settings, 'settings'); deepEq(m.chars.gumdrop.outfit, v3.chars.gumdrop.outfit, 'outfit');
+  deepEq(m.chars.gumdrop.needs, v3.chars.gumdrop.needs, 'needs'); eq(m.chars.gumdrop.best.snackRain, 220, 'best');
+  deepEq(m.furniture, { living: { sofa: 'sofa-classic', corner: 'plant-pot' }, bathroom: { rug: 'mat-bath' } }, 'furniture');
+  for (const id of ['bow-ribbon', 'glasses-round', 'scarf', 'sofa-classic', 'plant-pot', 'mat-bath']) assert(m.owned.includes(id), `owned ${id}`);
 });
 
 done();

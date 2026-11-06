@@ -139,6 +139,8 @@ Typical player: 120-coin item after 3.3 rounds, the 350-coin crown after 9.7 rou
 | HUD (`startMinigame`, `updateMinigame`, `showMinigameResult`, `endMinigame`, `setCoins`) | display | glaze |
 | Audio (`tick`, `go`, `catch`, `coin`, `bonk`, `win`) | feedback | echo |
 | Input (pointer, keys, hands) and save (`coins`, best score) | logic | wire |
+| Minigames 2 (`minigames-2.md`) | shares this flow, pause and coin rules; picker order; coin-per-minute parity target (typical 36/min) | loop |
+| Growth (`growth-personality.md`) | round time counts as engaged; Snack Rain mix playful 0.6 / foodie 0.4 | loop |
 
 ## 7. Tuning Knobs
 

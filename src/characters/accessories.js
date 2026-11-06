@@ -1,5 +1,5 @@
 /**
- * Outfit accessories (story S2-06): 11 clay items in 3 slots that fit all six blob shapes.
+ * Outfit accessories (stories S2-06, S4-04): 16 clay items (11 basic + 5 Christmas) in 3 slots that fit all six blob shapes.
  *
  * Contract: docs/architecture/module-contracts.md → "Sprint 2 additions → Outfits".
  *   import { ACCESSORY_IDS, SLOT_OF } from './characters/accessories.js';
@@ -11,20 +11,22 @@
  *    group); the character parents it there so the item follows squash/stretch, carry, sitting
  *    and head turn, and offsets `group.position` by the soft-body dent at `anchor` (poke / grab).
  *  - each item owns its geometries and materials; `disposeAccessory(group)` frees them.
+ *  - optional `tick(dt, turnMatrixWorld)` (S4-04: bell, santa pom-pom) swings a hanging part; the
+ *    character calls it once per frame after posing (skipped under prefers-reduced-motion).
  *
  * Look: soft matte clay (rough physical material with sheen like the bodies), rounded bevels,
  * brand tints #7FA9B1 #9BB0DE #CBA5D1 #EB92B3 plus soft neutrals; no textures, no hard shadows.
  */
 import * as THREE from 'three';
-import { mergeVertices } from 'three/addons/utils/BufferGeometryUtils.js';
+import { mergeVertices, mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 
 const clamp = (v, a, b) => Math.min(b, Math.max(a, v));
 
-/** Slot of every item id. */
+/** Slot of every item id (Sprint 2 basics + Sprint 4 Christmas set, grouped by slot). */
 export const SLOT_OF = Object.freeze({
-  'hat-beanie': 'head', 'hat-party': 'head', 'bow-ribbon': 'head', 'crown-flower': 'head',
-  'glasses-round': 'eyes', 'glasses-sun': 'eyes', 'glasses-star': 'eyes',
-  'tie-neck': 'body', 'tie-bow': 'body', 'scarf': 'body', 'badge-star': 'body',
+  'hat-beanie': 'head', 'hat-party': 'head', 'bow-ribbon': 'head', 'crown-flower': 'head', 'hat-santa': 'head', 'antlers': 'head',
+  'glasses-round': 'eyes', 'glasses-sun': 'eyes', 'glasses-star': 'eyes', 'glasses-snow': 'eyes',
+  'tie-neck': 'body', 'tie-bow': 'body', 'scarf': 'body', 'badge-star': 'body', 'scarf-xmas': 'body', 'bell-collar': 'body',
 });
 /** All item ids, slot order head → eyes → body. */
 export const ACCESSORY_IDS = Object.freeze(Object.keys(SLOT_OF));
@@ -33,12 +35,25 @@ export const SLOTS = Object.freeze(['head', 'eyes', 'body']);
 /** Thai names (debug / demo; the shipped names live in assets/data/wardrobe.json). */
 export const ACCESSORY_TH = Object.freeze({
   'hat-beanie': 'หมวกไหมพรม', 'hat-party': 'หมวกปาร์ตี้', 'bow-ribbon': 'โบว์', 'crown-flower': 'มงกุฎดอกไม้',
-  'glasses-round': 'แว่นกลม', 'glasses-sun': 'แว่นกันแดด', 'glasses-star': 'แว่นดาว',
+  'hat-santa': 'หมวกซานต้า', 'antlers': 'เขากวาง',
+  'glasses-round': 'แว่นกลม', 'glasses-sun': 'แว่นกันแดด', 'glasses-star': 'แว่นดาว', 'glasses-snow': 'แว่นเกล็ดหิมะ',
   'tie-neck': 'เน็คไท', 'tie-bow': 'หูกระต่าย', 'scarf': 'ผ้าพันคอ', 'badge-star': 'เข็มกลัดดาว',
+  'scarf-xmas': 'ผ้าพันคอคริสต์มาส', 'bell-collar': 'กระดิ่ง',
 });
+/** Christmas set ids (Sprint 4; the shop theme itself lives in wardrobe.json `theme`). */
+export const XMAS_ACCESSORY_IDS = Object.freeze(['hat-santa', 'antlers', 'glasses-snow', 'scarf-xmas', 'bell-collar']);
 
 /** Palette: brand tints + soft neutrals. */
 const COL = { teal: '#7FA9B1', blue: '#9BB0DE', lilac: '#CBA5D1', pink: '#EB92B3', cream: '#FBF4EA', ink: '#565A7C', lens: '#3E4364', white: '#FFFFFF' };
+/**
+ * Christmas tones. `frost` is the DS border/primary value (#8296D2); the rest are [เสนอ] proposals
+ * (not in design.md yet): muted berry / pine-sage / soft gold / antler tan, all HSL s ≤ 60 %,
+ * large surfaces l ≥ 70 % (asset-style-sheet §3). Never bright red or bright green.
+ */
+const XM = {
+  berry: '#D98BA5', berryDeep: '#CC8299', sage: '#A9C6B2', sageDeep: '#95B59F',
+  gold: '#E6CF9F', goldDeep: '#D6BC86', tan: '#E3C9AC', tanDeep: '#D2B596', frost: '#8296D2', snow: '#FFFFFF',
+};
 
 /* ---------------------------------------------------------------- helpers */
 
@@ -180,6 +195,93 @@ function section(fit, y, nearX) {
   return { ...sp, zF: Math.max(.04, fit.frontZ(sp.cx, y)), zB: Math.min(-.04, fit.backZ(sp.cx, y)) };
 }
 function maxTop(fit, l, r) { let t = -Infinity; for (let i = 0; i <= 16; i++) t = Math.max(t, fit.topAt(l + (r - l) * i / 16)); return t; }
+
+/** Position + normal only, shared vertices merged, smooth normals (soft clay shading, no seams). */
+function smoothGeo(geo) {
+  for (const k of Object.keys(geo.attributes)) if (k !== 'position' && k !== 'color') geo.deleteAttribute(k);
+  const g = mergeVertices(geo, 1e-5); geo.dispose(); g.computeVertexNormals(); g.computeBoundingSphere();
+  return g;
+}
+/** Merge several geometries of one material into one mesh geometry (fewer draw calls). */
+function mergeAll(geos) {
+  for (const g of geos) for (const k of Object.keys(g.attributes)) if (k !== 'position' && k !== 'normal') g.deleteAttribute(k);
+  const out = mergeGeometries(geos.map(g => g.index ? g.toNonIndexed() : g));
+  geos.forEach(g => g.dispose());
+  return mergeVertices(out, 1e-6);
+}
+/**
+ * Reshape the rings of a TubeGeometry: `fn(i, u)` → { k, ky } scales each ring's offset from the
+ * path (k = radial / horizontal, ky = vertical; omit ky for a uniform scale).
+ */
+function shapeTube(tube, fn) {
+  const { path, tubularSegments: seg, radialSegments: rad } = tube.parameters, p = tube.attributes.position, c = new THREE.Vector3();
+  for (let i = 0; i <= seg; i++) {
+    path.getPointAt(i / seg, c); const { k, ky = k } = fn(i, i / seg);
+    for (let j = 0; j <= rad; j++) {
+      const n = i * (rad + 1) + j;
+      p.setXYZ(n, c.x + (p.getX(n) - c.x) * k, c.y + (p.getY(n) - c.y) * ky, c.z + (p.getZ(n) - c.z) * k);
+    }
+  }
+  p.needsUpdate = true;
+  return tube;
+}
+/** Per-ring vertex colours for a TubeGeometry (stripes across a knitted band). */
+function tubeColors(tube, colorAt) {
+  const { tubularSegments: seg, radialSegments: rad } = tube.parameters, arr = new Float32Array((seg + 1) * (rad + 1) * 3), c = new THREE.Color();
+  for (let i = 0; i <= seg; i++) { c.set(colorAt(i / seg)); for (let j = 0; j <= rad; j++) c.toArray(arr, (i * (rad + 1) + j) * 3); }
+  tube.setAttribute('color', new THREE.BufferAttribute(arr, 3));
+  return tube;
+}
+/**
+ * Closed loop that hugs the real body surface at height y (front from the height map, back from the
+ * back map, sides from the silhouette span), pushed `off` outward. The front droops by `sag`.
+ */
+function hugLoop(fit, y, nearX, off, sag = 0, n = 64) {
+  const sp = fit.span(y, nearX) || { cx: nearX, hw: .2 }, pts = [];
+  for (let i = 0; i < n; i++) {
+    const t = i / n * Math.PI * 2, c = Math.cos(t), s = Math.sin(t), yy = y - sag * Math.max(0, s) ** 2;
+    const sp2 = fit.span(yy, sp.cx) || sp, zF = fit.frontZ(sp2.cx, yy), zB = fit.backZ(sp2.cx, yy);
+    // march out along the ellipse direction until the point leaves the body
+    let lo = 0, hi = 1.6;
+    const at = k => [sp2.cx + c * sp2.hw * k, (s > 0 ? zF : -zB) * s * k];
+    for (let it = 0; it < 18; it++) {
+      const m = (lo + hi) / 2, [x, z] = at(m);
+      const inBody = fit.inside(x, yy) && z <= fit.frontZ(x, yy) + 1e-4 && z >= fit.backZ(x, yy) - 1e-4;
+      inBody ? lo = m : hi = m;
+    }
+    const [x, z] = at(lo), nx = c / Math.max(.05, sp2.hw), nz = s / Math.max(.05, s > 0 ? zF : -zB), L = Math.hypot(nx, nz) || 1;
+    pts.push(new THREE.Vector3(x + nx / L * off, yy, z + nz / L * off));
+  }
+  return pts;
+}
+/**
+ * Gentle pendulum for a hanging part (bell, pom-pom). The `pivot` swings toward the effective
+ * gravity at `local` (its point in body space): gravity minus the point's world acceleration,
+ * so carry, hops and squash make it jiggle; a damped spring with a small overshoot (never a hard
+ * bounce). `backMax` limits the swing into the body (−X rotation).
+ * @returns {(dt: number, turnMatrixWorld: THREE.Matrix4) => void}
+ */
+function pendulum(pivot, local, { k = 55, zeta = .3, gain = .35, maxA = .45, backMax = .08 } = {}) {
+  const pw = new THREE.Vector3(), prev = new THREE.Vector3(), vel = new THREE.Vector3(), acc = new THREE.Vector3(), a = new THREE.Vector3();
+  const d = new THREE.Vector3(), inv = new THREE.Matrix4(), st = { x: 0, vx: 0, z: 0, vz: 0 }, c = 2 * zeta * Math.sqrt(k);
+  let ready = false;
+  return function tick(dt, M) {
+    pw.copy(local).applyMatrix4(M);
+    if (!ready) { prev.copy(pw); vel.set(0, 0, 0); ready = true; return; }
+    if (!(dt > 0)) return;
+    const v = d.copy(pw).sub(prev).divideScalar(dt); prev.copy(pw);
+    a.copy(v).sub(vel).divideScalar(dt); vel.copy(v);
+    if (a.length() > 30) a.setLength(30);                       // teleports (room change) never fling it
+    acc.lerp(a, 1 - Math.exp(-dt * 18));
+    d.set(0, -9.8, 0).addScaledVector(acc, -gain).transformDirection(inv.copy(M).invert());
+    const tz = clamp(Math.atan2(d.x, -d.y), -maxA, maxA), tx = clamp(Math.atan2(-d.z, -d.y), -maxA, backMax);
+    st.vx += (-k * (st.x - tx) - c * st.vx) * dt; st.x += st.vx * dt;
+    st.vz += (-k * (st.z - tz) - c * st.vz) * dt; st.z += st.vz * dt;
+    // smooth saturation (no hard stop): the swing eases into its limits, and barely into the body
+    const rx = st.x > 0 ? backMax * Math.tanh(st.x / backMax) : -maxA * Math.tanh(-st.x / maxA);
+    pivot.rotation.set(rx, 0, maxA * Math.tanh(st.z / maxA));
+  };
+}
 
 /* ---------------------------------------------------------------- head */
 
@@ -406,10 +508,242 @@ function badgeStar(fit) {
   return { group: g, anchor: new THREE.Vector3(bx, y, fit.frontZ(bx, y)) };
 }
 
+/* ---------------------------------------------------------------- Christmas set (story S4-04) */
+
+/** Sphere geometry placed by scale / z-rotation / position (for merged multi-part pieces). */
+function blob(r, sx, sy, sz, x, y, z, rz = 0, ws = 16, hs = 12) {
+  const geo = new THREE.SphereGeometry(r, ws, hs); geo.scale(sx, sy, sz); if (rz) geo.rotateZ(rz); geo.translate(x, y, z);
+  return geo;
+}
+/** Small two-loop bow (merged), facing +Z, centred on the origin. */
+function bowGeo(b) {
+  return mergeAll([
+    blob(1, .5 * b, .32 * b, .2 * b, -.48 * b, .03 * b, 0, -.3), blob(1, .5 * b, .32 * b, .2 * b, .48 * b, .03 * b, 0, .3),
+    blob(1, .1 * b, .26 * b, .07 * b, -.2 * b, -.3 * b, -.02 * b, -.4), blob(1, .1 * b, .26 * b, .07 * b, .2 * b, -.3 * b, -.02 * b, .4),
+    blob(1, .19 * b, .2 * b, .17 * b, 0, 0, .05 * b),
+  ]);
+}
+
+/**
+ * หมวกซานต้า — berry cone that hugs the head like the beanie, then flops to one side; fluffy cream
+ * brim and a pom-pom on a gentle pendulum at the tip.
+ */
+function hatSanta(fit) {
+  const g = new THREE.Group(), s = fit.size, brimR = clamp(.05 * s, .042, .058);
+  const yb = Math.max(fit.head.top - .3 * s, fit.head.minY + brimR * .9);
+  const sec = section(fit, yb, fit.head.x);
+  const a = sec.hw * 1.05 + .014, zF = sec.zF * 1.07 + .014, zB = sec.zB * 1.07 - .014;
+  const capH = maxTop(fit, sec.l, sec.r) - yb;
+  const H = clamp(capH * 1.1 + .05, .14, .7) + .5 * s;          // unbent height
+  // profile radius per height: a soft cone, never inside the head
+  const N = 30, need = new Array(N + 1).fill(0), r = [];
+  for (let i = 0; i <= N; i++) {
+    const t = i / N, y = yb + t * H, sp = fit.span(y, sec.cx);
+    if (sp) need[i] = Math.max((Math.max(sec.cx - sp.l, sp.r - sec.cx) + .016) / a, (fit.frontZ(sec.cx, y) + .016) / zF, (.016 - fit.backZ(sec.cx, y)) / -zB);
+    r.push(Math.max(Math.pow(1 - t, .8) * (1 + .14 * Math.sin(Math.PI * t)), need[i], .085));
+  }
+  for (let i = N - 1; i >= 0; i--) r[i] = Math.max(r[i], r[i + 1]);
+  for (let pass = 0; pass < 2; pass++) for (let i = 1; i < N; i++) r[i] = Math.max((r[i - 1] + 2 * r[i] + r[i + 1]) / 4, need[i]);
+  const cone = new THREE.LatheGeometry(r.map((v, i) => new THREE.Vector2(v, i / N)), 40, Math.PI);
+  shapeLathe(cone, sec.cx, yb, a, H, zF, zB);
+  // bend: straight up to just above the head, then a flop toward `sg` whose curvature ramps up
+  // toward the tip and stays below 1 / (local half-width), so the inside of the bend never folds
+  const sg = fit.head.x > .03 ? -1 : 1, t0 = clamp((capH * 1.05 + .04) / H, .3, .72), Lb = (1 - t0) * H;
+  const pr = clamp(.36 * a, .072, .11) * s, P0y = yb + t0 * H, SM = 60, ds = Lb / SM;
+  const radAt = t => { const f = clamp(t, 0, 1) * N, i = Math.min(N - 1, Math.floor(f)); return (r[i] + (r[i + 1] - r[i]) * (f - i)) * Math.max(a, zF, -zB); };
+  const spineFor = thT => {
+    const sp = [{ x: sec.cx, y: P0y, th: 0 }], kb = thT * 2.2 / Lb;
+    let th = 0, x = sec.cx, y = P0y;
+    for (let j = 1; j <= SM; j++) {
+      const u = (j - .5) / SM, kk = Math.min(kb * Math.pow(u, 1.2), .8 / Math.max(radAt(t0 + u * (1 - t0)), 1e-3));
+      const thm = th + kk * ds / 2; th += kk * ds;
+      x += sg * Math.sin(thm) * ds; y += Math.cos(thm) * ds; sp.push({ x, y, th });
+    }
+    return sp;
+  };
+  let spine = null;
+  for (let thT = 2.1; thT > .8; thT -= .1) {                      // droop less if the pom would touch the head
+    spine = spineFor(thT);
+    const e = spine[SM], py = e.y - pr * .55, top = fit.topAt(e.x);
+    if (py - pr > Math.max(Number.isFinite(top) ? top + .012 : -Infinity, fit.head.minY)) break;
+  }
+  const p = cone.attributes.position;
+  for (let i = 0; i < p.count; i++) {
+    const t = (p.getY(i) - yb) / H; if (t <= t0) continue;
+    const f = Math.min(SM, (t - t0) / (1 - t0) * SM), j = Math.min(SM - 1, Math.floor(f)), w = f - j, A0 = spine[j], A1 = spine[j + 1];
+    const sx = A0.x + (A1.x - A0.x) * w, sy = A0.y + (A1.y - A0.y) * w, th = A0.th + (A1.th - A0.th) * w;
+    const ox = p.getX(i) - sec.cx, c = Math.cos(th), si = Math.sin(th);
+    p.setX(i, sx + ox * c); p.setY(i, sy - sg * ox * si);
+  }
+  p.needsUpdate = true;
+  g.add(mesh(smoothGeo(cone), clay(XM.berry, { side: THREE.DoubleSide }), 'cone'));
+  // fluffy brim: one chunky cream roll with soft lumps
+  const yy = yb + brimR * .3, k = brimR * .35;
+  const brimPts = loopPoints(sec.cx, yy, a + k, zF + k, zB - k), arc = brimPts.reduce((L, q, i) => L + q.distanceTo(brimPts[(i + 1) % brimPts.length]), 0);
+  const lumps = Math.max(10, Math.round(arc / (brimR * 2.1)));
+  const brim = shapeTube(tubeLoop(brimPts, brimR, 120, 12), (_, u) => ({ k: 1 + .1 * Math.cos(u * Math.PI * 2 * lumps) }));
+  g.add(mesh(smoothGeo(brim), clay(COL.cream), 'brim'));
+  // pom-pom on a pendulum at the tip
+  const tip = spine[SM], pivot = new THREE.Group(); pivot.position.set(tip.x, tip.y, 0); g.add(pivot);
+  const pom = mesh(new THREE.SphereGeometry(pr, 22, 16), clay(COL.cream), 'pom'); pom.position.y = -pr * .55; pivot.add(pom);
+  return { group: g, anchor: new THREE.Vector3(sec.cx, fit.head.top, 0), tick: pendulum(pivot, pivot.position.clone(), { k: 45, zeta: .3, maxA: .45, backMax: .4 }) };
+}
+
+/** เขากวาง — two small rounded clay antlers set into the head top, a tiny berry bow on one. */
+function antlers(fit) {
+  const g = new THREE.Group(), s = fit.size, r0 = clamp(.062 * s, .05, .07), A = 1.5 * s;   // sized to read at phone size
+  const sp = fit.span(fit.head.top - .1, fit.head.x) || { cx: fit.head.x, hw: .2 };
+  // narrow heads (diamond, gumdrop) keep both bases on the crown, not out on the slope
+  const off = clamp(sp.hw * .5, Math.min(.12, sp.hw * .42), .26), parts = [];
+  const branch = (pts, ra, rb) => {
+    const c = new THREE.CatmullRomCurve3(pts.map(([x, y]) => new THREE.Vector3(x * A, y * A, 0)));
+    const t = shapeTube(new THREE.TubeGeometry(c, 16, ra, 8, false), (_, u) => ({ k: 1 - (1 - rb / ra) * u }));
+    const e = c.getPoint(1);
+    return [t, blob(rb * 1.12, 1, 1, 1, e.x, e.y, e.z, 0, 12, 9)];
+  };
+  let bowAt = null;
+  for (const side of [-1, 1]) {
+    const bx = sp.cx + side * off;
+    let top = fit.topAt(bx); if (!Number.isFinite(top)) top = fit.head.top;
+    const by = Math.max(top - .03, fit.head.minY + r0);
+    const zm = (fit.frontZ(bx, by - .03) + fit.backZ(bx, by - .03)) / 2;
+    const sl = (fit.topAt(bx + .03) - fit.topAt(bx - .03)) / .06;
+    const rz = clamp(Math.atan(Number.isFinite(sl) ? sl : 0) * .6 - side * .2, -.6, .6);
+    const geos = [
+      ...branch([[0, -.03], [side * .01, .05], [side * .04, .115], [side * .05, .17]], r0, r0 * .78),
+      ...branch([[side * .02, .075], [side * .0, .105], [-side * .014, .13]], r0 * .8, r0 * .66),
+      ...branch([[side * .012, .025], [side * .045, .045], [side * .068, .075]], r0 * .78, r0 * .64),
+      blob(r0 * 1.08, 1, 1, 1, 0, -.03 * A, 0, 0, 12, 9),
+    ];
+    const M = new THREE.Matrix4().compose(new THREE.Vector3(bx, by, zm), new THREE.Quaternion().setFromEuler(new THREE.Euler(0, 0, rz)), new THREE.Vector3(1, 1, 1));
+    for (const geo of geos) { geo.applyMatrix4(M); parts.push(geo); }
+    if (side > 0) bowAt = { x: bx - Math.sin(rz) * .02, y: by + .02, z: Math.max(zm + r0 * 1.2, fit.frontZ(bx, by) + .016), rz };
+  }
+  g.add(mesh(mergeAll(parts), clay(XM.tan), 'antlers'));
+  const bow = bowGeo(.1 * s); bow.rotateZ(bowAt.rz * .5); bow.translate(bowAt.x, bowAt.y, bowAt.z);
+  g.add(mesh(bow, clay(XM.berry), 'bow'));
+  return { group: g, anchor: new THREE.Vector3(sp.cx, fit.head.top, 0) };
+}
+
+/**
+ * แว่นเกล็ดหิมะ — round frames with six short snowflake arms ending in snow balls. Arms that would
+ * reach the mouth, cross the midline (close-set eyes), leave the silhouette or rise into the head
+ * zone are shortened or dropped, so the frames never meet the mouth or a head item.
+ */
+function glassesSnow(fit) {
+  const g = new THREE.Group(), tube = fit.tube * 1.35, m = clay(XM.frost), frost = [], snow = [];
+  const midX = (fit.eyes[0].x + fit.eyes[1].x) / 2, M = fit.mouth, ball = tube * 1.55;
+  const lenses = fit.eyes.map((e, i) => {
+    const frame = lensFrame(fit, e, tube + .012 + i * .002), sgn = i ? -1 : 1, cr = Math.cos(e.rot), srt = Math.sin(e.rot);
+    const ring = tubeLoop(ellipseLocal(e.rx, e.ry, e.rot), tube, 64, 8); ring.applyMatrix4(frame.matrix); frost.push(ring);
+    const len0 = clamp(.62 * Math.min(e.rx, e.ry), .03, .07);
+    for (let k = 0; k < 6; k++) {
+      const th = Math.PI / 2 + k * Math.PI / 3, c = Math.cos(th), si = Math.sin(th);
+      const sx = e.rx * c * cr - e.ry * si * srt, sy = e.rx * c * srt + e.ry * si * cr, dx = c * cr - si * srt, dy = c * srt + si * cr;
+      const ok = L => {
+        const ex = e.x + sx + dx * L, ey = e.cy + sy + dy * L;
+        if (sgn * (ex - midX) > -ball - .006) return false;                                   // midline
+        if (Math.abs(ex - M.x) < M.hw + ball + .01 && ey - ball < M.top + .01) return false;    // mouth
+        if (ey + ball > fit.eyeZoneTop) return false;                                          // head zone
+        return fit.inside(ex, ey);
+      };
+      let L = len0; while (L > .014 && !ok(L)) L -= .006;
+      if (L <= .014) continue;
+      const a0 = lensPoint(frame, sx, sy), a1 = lensPoint(frame, sx + dx * L, sy + dy * L);
+      a1.z = Math.max(fit.frontZ(a1.x, a1.y) + ball * .8, a0.z - .02);
+      frost.push(new THREE.TubeGeometry(new THREE.LineCurve3(a0, a1), 4, tube * .8, 8, false));
+      snow.push(blob(ball, 1, 1, .8, a1.x, a1.y, a1.z, 0, 12, 9));
+    }
+    return { e, frame, inner: [sgn * e.rx * cr, sgn * e.rx * srt], outer: [-sgn * e.rx * cr, -sgn * e.rx * srt] };
+  });
+  g.add(mesh(mergeAll(frost), m, 'frame'));
+  if (snow.length) g.add(mesh(mergeAll(snow), clay(XM.snow), 'snow'));
+  eyewearLinks(fit, g, m, lenses, tube);
+  return { group: g, anchor: eyesAnchor(fit) };
+}
+
+/**
+ * ผ้าพันคอคริสต์มาส — chunky knitted band with berry / cream / sage stripes (vertex colours, one
+ * mesh), a knot and two crossed striped tails with cream fringe. Distinct from the teal `scarf`.
+ */
+function scarfXmas(fit) {
+  const g = new THREE.Group(), s = fit.size, r = clamp(.076 * s, .062, .086), { x, topY } = fit.chest;
+  const ys = topY - r - .006, sag = .05 * s;
+  const sec = section(fit, ys - sag * .5, x);
+  const a = sec.hw * .93 + r * .22, zF = sec.zF * 1.04 + r * .5, zB = sec.zB * 1.04 - r * .5;
+  const STRIPES = [XM.berry, XM.berry, XM.berry, COL.cream, XM.sage, XM.sage, XM.sage, COL.cream], UNITS = 48;  // UNITS % 8 = 0 → seamless
+  const knitMat = clay('#FFFFFF', { vertexColors: true, sheenColor: new THREE.Color('#F6F2F4') });
+  // two overlapping rolls (one chunky band), stripes offset so the rows read as one knit
+  const rolls = [];
+  for (const [y, kk, sg, ph] of [[ys, 1, sag, 0], [ys - r * .85, 1.01, sag * 1.12, 2]]) {
+    const sc = section(fit, y - sg * .5, x);
+    const aa = sc.hw * .93 * kk + r * .22, zzF = sc.zF * 1.04 + r * .5, zzB = sc.zB * 1.04 - r * .5;
+    const band = tubeLoop(loopPoints(sc.cx, y, aa, zzF, zzB, 2.4, 48, sg), r, 144, 10);
+    shapeTube(band, (_, u) => ({ k: 1 + .03 * Math.cos(u * Math.PI * 2 * 36) }));  // soft knit rows
+    tubeColors(band, u => STRIPES[(Math.floor(u * UNITS + 1e-6) + ph) % STRIPES.length]);
+    rolls.push(smoothGeo(band));
+  }
+  g.add(mesh(mergeGeometries(rolls), knitMat, 'band')); rolls.forEach(r2 => r2.dispose());
+  // knot on the front, to one side of the chest centre
+  const t = Math.PI / 2 - .5, c = Math.cos(t), si = Math.sin(t), pw = 2.4;
+  const kx = sec.cx + a * Math.sign(c) * Math.pow(Math.abs(c), 2 / pw), ky = ys - sag * si * si - r * .7;
+  const kz = Math.max(fit.frontZ(kx, ky) + r * 1.1, zF * Math.pow(si, 2 / pw));
+  const bucket = { [XM.berry]: [blob(r * 1.22, 1, .95, .7, kx, ky, kz, 0, 20, 14)], [XM.sage]: [], [COL.cream]: [] };   // one mesh per colour
+  // two tails (sage behind, berry in front), stripes laid on top, cream fringe
+  const tw = r * 2.4, L = clamp(ky - fit.chest.bottomY, .2, .34 * s);
+  const tails = [
+    { tilt: .3, L: L * .8, base: XM.sage, bands: [[.42, COL.cream], [.58, XM.berry], [.74, COL.cream]], gap: r * 1.05, dx: r * .45 },
+    { tilt: -.1, L, base: XM.berry, bands: [[.42, COL.cream], [.58, XM.sage], [.74, COL.cream]], gap: r * 1.05 + .02, dx: 0 },
+  ];
+  for (const T of tails) {
+    const ax = kx + T.dx, ay = ky - r * .2, w0 = tw / 2;
+    const tail = roundedPoly([[-w0, 0], [w0, 0], [w0 * 1.1, -T.L], [-w0 * 1.1, -T.L]], .03);
+    bucket[T.base].push(wrap(soft(tail, .022, .012), fit, ax, ay, T.gap, T.tilt));
+    for (const [f, hex] of T.bands) {
+      const w = w0 * (1 + .1 * f) + .003, h = hex === COL.cream ? .012 : .022;
+      const b = roundedPoly([[-w, -T.L * f + h], [w, -T.L * f + h], [w, -T.L * f - h], [-w, -T.L * f - h]], .008);
+      bucket[hex].push(wrap(soft(b, .024, .008), fit, ax, ay, T.gap + .007, T.tilt));
+    }
+    const cs = Math.cos(T.tilt), sn = Math.sin(T.tilt), fl = .055 * s, fr = .015 * s;
+    for (let k = 0; k < 4; k++) {
+      const lx = (-.75 + k * .5) * w0 * 1.1, ly = -T.L - fl * .35, fx = ax + lx * cs - ly * sn, fy = ay + lx * sn + ly * cs;
+      const geo = new THREE.CapsuleGeometry(fr, fl, 3, 8); geo.rotateZ(T.tilt); geo.translate(fx, fy, fit.frontZ(fx, fy) + T.gap);
+      bucket[COL.cream].push(geo);
+    }
+  }
+  for (const [hex, geos] of Object.entries(bucket)) g.add(mesh(mergeAll(geos), clay(hex), 'knit'));
+  return { group: g, anchor: new THREE.Vector3(sec.cx, ys, fit.frontZ(sec.cx, ys)) };
+}
+
+/** กระดิ่ง — soft berry ribbon collar hugging the body, small cream bow, soft-gold bell that jiggles. */
+function bellCollar(fit) {
+  const g = new THREE.Group(), s = fit.size, { x, topY } = fit.chest;
+  const bh = .058 * s, bt = .017, sag = .035 * s, yc = topY - bh - .01, n = 64;
+  const pts = hugLoop(fit, yc, x, bt + .004, sag, n);
+  const ribbon = shapeTube(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(pts, true, 'centripetal'), 96, 1, 12, true), () => ({ k: bt, ky: bh }));
+  g.add(mesh(smoothGeo(ribbon), clay(XM.berry), 'ribbon'));
+  const P = pts[n / 4];                                              // front centre
+  const bow = bowGeo(bh * 2.3); bow.translate(P.x, P.y + bh * .05, P.z + bt + .012);
+  g.add(mesh(bow, clay(COL.cream), 'bow'));
+  // bell on a pendulum below the bow
+  const rb = .092 * s, rr = .026 * s, pivot = new THREE.Group();
+  const drop = rr * 1.4 + rb * .92, bellY = P.y - bh * .55 - drop;
+  pivot.position.set(P.x, P.y - bh * .55, Math.max(P.z + bt + .014, fit.frontZ(P.x, bellY) + rb + .008));
+  g.add(pivot);
+  const ring = new THREE.TorusGeometry(rr, rr * .38, 8, 18); ring.translate(0, -rr * .7, 0);
+  const seam = new THREE.TorusGeometry(rb * 1.005, rb * .085, 8, 32); seam.rotateX(Math.PI / 2); seam.translate(0, -drop + rb * .08, 0);
+  const slot = new THREE.CapsuleGeometry(rb * .11, rb * .5, 3, 8); slot.rotateZ(Math.PI / 2); slot.scale(1, 1, .6); slot.translate(0, -drop - rb * .42, rb * .86);
+  pivot.add(mesh(mergeAll([ring, seam, slot]), clay(XM.goldDeep), 'bell-trim'));
+  const bell = mesh(new THREE.SphereGeometry(rb, 24, 16), clay(XM.gold), 'bell'); bell.position.y = -drop; pivot.add(bell);
+  return { group: g, anchor: new THREE.Vector3(P.x, P.y, P.z), tick: pendulum(pivot, pivot.position.clone(), { k: 60, zeta: .32, maxA: .42, backMax: .06 }) };
+}
+
 const BUILDERS = Object.freeze({
   'hat-beanie': hatBeanie, 'hat-party': hatParty, 'bow-ribbon': bowRibbon, 'crown-flower': crownFlower,
-  'glasses-round': glassesRound, 'glasses-sun': glassesSun, 'glasses-star': glassesStar,
+  'hat-santa': hatSanta, 'antlers': antlers,
+  'glasses-round': glassesRound, 'glasses-sun': glassesSun, 'glasses-star': glassesStar, 'glasses-snow': glassesSnow,
   'tie-neck': tieNeck, 'tie-bow': tieBow, 'scarf': scarf, 'badge-star': badgeStar,
+  'scarf-xmas': scarfXmas, 'bell-collar': bellCollar,
 });
 
 /**

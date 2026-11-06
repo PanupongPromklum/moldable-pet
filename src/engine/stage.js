@@ -3,10 +3,16 @@
  * the frame loop, plus screen ↔ world helpers used by input.
  * Lighting is ported from the prototype (hemisphere + key + fill + rim,
  * RoomEnvironment PMREM, NeutralToneMapping, transparent clear).
+ *
+ * Sprint 4: the active room's static scenery is baked (engine/bake.js) and
+ * composited as the background; `setBakeSource` tells the stage which room to
+ * bake. `?nobake` renders everything live. One `quality` hook (`setQuality`)
+ * holds the knobs a later graphics setting will drive (bake on/off, pixel ratio caps).
  * @module engine/stage
  */
 import * as THREE from 'three';
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
+import { createBake } from './bake.js';
 
 /** Presentation constants (not gameplay numbers). */
 const VIEW = {
@@ -18,10 +24,15 @@ const VIEW = {
   bandShare: 0.82,         // never taller than 82% of the space between the HUD bands
   lookAtY: 1.0,
   camLift: 0.2,            // camera y above lookAt, scaled by distance / 8
-  dprTouch: 1.75,
-  dprMouse: 2,
   maxDt: 1 / 20,
 };
+
+/**
+ * Default quality (presentation, not gameplay). A graphics setting UI comes
+ * later (owner, Sprint 4); it should only call `stage.setQuality(partial)`.
+ * `bake`: static scenery rendered once. `dprTouch` / `dprMouse`: devicePixelRatio caps.
+ */
+export const QUALITY_DEFAULT = Object.freeze({ bake: true, dprTouch: 1.75, dprMouse: 2 });
 
 /**
  * Stage light presets per theme (presentation, not gameplay). Light = the
@@ -37,10 +48,14 @@ export const STAGE_LIGHTS = Object.freeze({
 /**
  * @param {{ container: HTMLElement, overlay?: HTMLCanvasElement, hudReserve?: {top:number, bottom:number} }} opts
  */
-export function createStage({ container, overlay, hudReserve = { top: 120, bottom: 160 } }) {
+export function createStage({ container, overlay, hudReserve = { top: 120, bottom: 160 }, quality: q0 = {} }) {
   const coarse = matchMedia('(pointer: coarse)').matches;
+  const params = new URLSearchParams(location.search);
+  const quality = { ...QUALITY_DEFAULT, ...q0 };
+  if (params.has('nobake')) quality.bake = false;
   const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true, powerPreference: 'high-performance' });
-  renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, coarse ? VIEW.dprTouch : VIEW.dprMouse));
+  const pixelRatio = () => Math.min(window.devicePixelRatio || 1, coarse ? quality.dprTouch : quality.dprMouse);
+  renderer.setPixelRatio(pixelRatio());
   renderer.outputColorSpace = THREE.SRGBColorSpace;
   renderer.toneMapping = THREE.NeutralToneMapping;
   renderer.setClearColor(0x000000, 0);
@@ -87,6 +102,8 @@ export function createStage({ container, overlay, hudReserve = { top: 120, botto
     const r = container.getBoundingClientRect();
     size.w = Math.max(1, Math.round(r.width)); size.h = Math.max(1, Math.round(r.height));
     size.left = r.left; size.top = r.top;
+    const pr = pixelRatio();
+    if (renderer.getPixelRatio() !== pr) renderer.setPixelRatio(pr);   // DPR change (zoom, monitor move)
     renderer.setSize(size.w, size.h, false);
     if (overlay) {
       const dpr = Math.min(window.devicePixelRatio || 1, 2);
@@ -94,6 +111,10 @@ export function createStage({ container, overlay, hudReserve = { top: 120, botto
     }
     frame();
   }
+  const bake = createBake({ renderer, scene, camera, enabled: quality.bake });
+  /** Which room is baked: `{ room, moving }` filled each frame from the source. */
+  const bakeSrc = { room: null, moving: false };
+  let bakeSource = null;
   const ro = new ResizeObserver(resize);
   ro.observe(container);
   resize();
@@ -163,7 +184,9 @@ export function createStage({ container, overlay, hudReserve = { top: 120, botto
     const dt = Math.min(clock.getDelta(), VIEW.maxDt);
     const time = clock.elapsedTime;
     for (let i = 0; i < ticks.length; i++) ticks[i](dt, time);
-    renderer.render(scene, camera);
+    if (bakeSource) { bakeSrc.room = bakeSource.getRoom() || null; bakeSrc.moving = !!bakeSource.isMoving?.(); }
+    else { bakeSrc.room = null; bakeSrc.moving = false; }
+    if (!bake.render(bakeSrc)) renderer.render(scene, camera);
     for (let i = 0; i < after.length; i++) after[i](dt, time);
   }
   const after = [];
@@ -172,6 +195,24 @@ export function createStage({ container, overlay, hudReserve = { top: 120, botto
     renderer, scene, camera, canvas, coarse, size,
     /** The stage lights, for Prop's `applyStageLights(theme, lights)`. */
     lights: { hemi, key, fill, rim },
+    /** Bake state: `stats()`, `invalidate()`, `enabled`, `supported` (engine/bake.js). */
+    bake,
+    /**
+     * Tell the stage which room's `staticGroup` to bake (Sprint 4).
+     * @param {{ getRoom: () => object|null, isMoving?: () => boolean }|null} src
+     */
+    setBakeSource(src) { bakeSource = src; },
+    /** Current quality knobs (copy). */
+    get quality() { return { ...quality }; },
+    /**
+     * Quality hook for a later graphics setting: `{ bake?, dprTouch?, dprMouse? }`.
+     * Pixel ratio changes resize the drawing buffer (and re-bake).
+     */
+    setQuality(partial = {}) {
+      for (const k of Object.keys(QUALITY_DEFAULT)) if (k in partial) quality[k] = partial[k];
+      bake.setEnabled(quality.bake);
+      resize();
+    },
     /** Overlay 2D context (hand skeletons), or null. */
     overlayCtx: ovCtx,
     /** Register a per-frame callback run before render: fn(dt, time). */
@@ -212,6 +253,6 @@ export function createStage({ container, overlay, hudReserve = { top: 120, botto
     /** Update the HUD bands kept clear of the pet (px). */
     setHudReserve(r) { Object.assign(reserve, r); frame(); },
     rayFromScreen, screenToPlane, worldToScreen, worldPerPx,
-    dispose() { ro.disconnect(); this.stop(); renderer.dispose(); },
+    dispose() { ro.disconnect(); this.stop(); bake.dispose(); renderer.dispose(); },
   };
 }

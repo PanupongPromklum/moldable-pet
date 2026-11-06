@@ -59,6 +59,10 @@ export const LINE_ICONS = {
   finger: '<path d="M8.2 4.2a3.2 3.2 0 0 1 5.6 0"/><path d="M9.5 16.5V7a1.5 1.5 0 0 1 3 0v5"/><path d="M12.5 12v-1a1.5 1.5 0 0 1 3 0v1"/><path d="M15.5 12.5a1.5 1.5 0 0 1 3 0V16a5.5 5.5 0 0 1-5.5 5.5h-1a4.8 4.8 0 0 1-4-2.1l-2.6-3.7a1.4 1.4 0 0 1 2.2-1.7l1.9 2.5"/>',
   /** S3 minigame control "เอียงหัว" — a tilted face under a two-way arc. NEW, waiting for owner approval. */
   'head-tilt': '<circle cx="12" cy="14.5" r="6.5"/><circle cx="9.6" cy="13.4" r=".95" fill="currentColor" stroke="none"/><circle cx="14.6" cy="14.9" r=".95" fill="currentColor" stroke="none"/><path d="M10.6 17.6c1 .5 2 .6 3 .3"/><path d="M5 8.5a9 9 0 0 1 14 0"/><path d="M7.3 7.85L5 8.5l.15-2.4M16.7 7.85L19 8.5l-.15-2.4"/>',
+  /** S4 แต่งห้อง — a small sofa. NEW, waiting for owner approval. */
+  sofa: '<path d="M6 11V8.5a3 3 0 0 1 3-3h6a3 3 0 0 1 3 3V11"/><path d="M6 13.5a2 2 0 0 0-4 0V17a1.5 1.5 0 0 0 1.5 1.5h17A1.5 1.5 0 0 0 22 17v-3.5a2 2 0 0 0-4 0V15H6z"/><path d="M5 18.5V20M19 18.5V20"/>',
+  /** S4 ลองดู (preview) — a sparkle. NEW, waiting for owner approval. */
+  sparkle: '<path d="M12 3.5c.6 4.6 2.9 6.9 7.5 7.5-4.6.6-6.9 2.9-7.5 7.5-.6-4.6-2.9-6.9-7.5-7.5 4.6-.6 6.9-2.9 7.5-7.5z"/><path d="M19 17.5v3M17.5 19h3"/>',
 };
 LINE_ICONS.bowl = LINE_ICONS.hunger;
 LINE_ICONS.ball = LINE_ICONS.fun;
@@ -117,6 +121,13 @@ export const ACCESSORY_ICONS = {
   'tie-bow': `<path d="M10.5 12L5.5 8.6A1 1 0 0 0 4 9.4v5.2a1 1 0 0 0 1.5.8z" ${F('a')}/><path d="M13.5 12l5-3.4a1 1 0 0 1 1.5.8v5.2a1 1 0 0 1-1.5.8z" ${F('a')}/><rect x="10.5" y="10.5" width="3" height="3" rx="1" ${F('c', 1)}/>`,
   scarf: `<path d="M5 9.5c4 2 10 2 14 0v3c-4 2-10 2-14 0z" ${F('a')}/><path d="M14.4 13.6l1.6 5.9h-3.5l-.4-5.5" ${F('b')}/><path d="M13 19.5V21M14.4 19.5V21M15.8 19.5V21M9.2 11.3v2.9"/>`,
   'badge-star': `<circle cx="12" cy="12" r="7.5" ${F('b')}/><path d="M12 8.7l.94 2.31 2.48.18-1.9 1.6.6 2.42L12 13.9l-2.12 1.31.6-2.42-1.9-1.6 2.48-.18z" ${F('a', 1)}/>`,
+  // S4 Christmas set (fixed ids in module-contracts.md). Same pastel stops, no bright red/green:
+  // berry = --mp-acc-a (pink), pine = --mp-acc-d (grey-teal), snow = white trim. NEW, waiting for owner approval.
+  'hat-santa': `<path d="M5.5 16C6 10.5 9 6.2 13.4 5.6c3.1-.4 5.3 1.6 5.7 4.8L18 16z" ${F('a')}/><rect x="4" y="15.5" width="16" height="4" rx="2" style="fill:#FFFFFF"/><circle cx="19.2" cy="12" r="2.1" style="fill:#FFFFFF"/>`,
+  antlers: `<path d="M9 16.6C8.7 13 8.2 9.6 6.6 5.6M8.5 11c-1.4-.8-2.9-1-4.4-.6M7.7 8l1.8-2.6M15 16.6c.3-3.6.8-7 2.4-11M15.5 11c1.4-.8 2.9-1 4.4-.6M16.3 8l-1.8-2.6" style="stroke:var(--mp-acc-d);stroke-opacity:var(--mp-acc-fill-opacity);stroke-width:3.4"/><path d="M9 16.6C8.7 13 8.2 9.6 6.6 5.6M8.5 11c-1.4-.8-2.9-1-4.4-.6M7.7 8l1.8-2.6M15 16.6c.3-3.6.8-7 2.4-11M15.5 11c1.4-.8 2.9-1 4.4-.6M16.3 8l-1.8-2.6"/><path d="M4.5 18.2c4.8-2.6 10.2-2.6 15 0v1.8c-4.8-2.6-10.2-2.6-15 0z" ${F('a')}/>`,
+  'glasses-snow': `<circle cx="7.3" cy="13" r="3.6" ${F('b')}/><circle cx="16.7" cy="13" r="3.6" ${F('b')}/><path d="M7.3 11.3v3.4M5.85 12.15l2.9 1.7M5.85 13.85l2.9-1.7M16.7 11.3v3.4M15.25 12.15l2.9 1.7M15.25 13.85l2.9-1.7" stroke-width="1"/><path d="M10.9 12.6c.7-.6 1.5-.6 2.2 0M3.7 12.4L2.5 10.3M20.3 12.4l1.2-2.1"/>`,
+  'scarf-xmas': `<path d="M5 9.5c4 2 10 2 14 0v3c-4 2-10 2-14 0z" ${F('d')}/><path d="M14.4 13.6l1.6 5.9h-3.5l-.4-5.5" ${F('a')}/><path d="M8.5 10.7v3.1M12 11.1v3.1M15.5 10.7v3.1"/><path d="M13 19.5V21M14.4 19.5V21M15.8 19.5V21"/>`,
+  'bell-collar': `<path d="M4.5 8.5c4.5 2.5 10.5 2.5 15 0V11c-4.5 2.5-10.5 2.5-15 0z" ${F('a')}/><path d="M12 13c-2.6 0-4 2-4 4.4v1.1h8v-1.1C16 15 14.6 13 12 13z" ${F('c')}/><path d="M12 12.3V13"/><circle cx="12" cy="19.9" r="1.1" ${F('c', 1)}/>`,
 };
 
 /**
@@ -131,4 +142,135 @@ export function accessoryIcon(id, size = 40) {
 }
 
 /** Names of all new line icons (for the icon sheet / demo). */
-export const NEW_ICON_NAMES = ['hunger', 'toilet', 'fun', 'social', 'coin', 'gear', 'mic', 'stop', 'wave', 'camera', 'camera-off', 'arrow-left', 'arrow-right', 'chevron-down', 'flush', 'hand', 'check', 'lock', 'close', 'eye', 'eye-off', 'shirt', 'none', 'heart', 'star', 'timer', 'lamp', 'lamp-off', 'finger', 'head-tilt'];
+export const NEW_ICON_NAMES = ['hunger', 'toilet', 'fun', 'social', 'coin', 'gear', 'mic', 'stop', 'wave', 'camera', 'camera-off', 'arrow-left', 'arrow-right', 'chevron-down', 'flush', 'hand', 'check', 'lock', 'close', 'eye', 'eye-off', 'shirt', 'none', 'heart', 'star', 'timer', 'lamp', 'lamp-off', 'finger', 'head-tilt', 'sofa', 'sparkle'];
+
+/* ============================================================================
+ * S4 — FILLED Moldable symbols. Owner-approved 2026-11-07 (board: design/ui/icon-samples-s4.html).
+ * Live in hud.js for the four need meters, the coin, "แต่งห้อง" and "เล่น"; everything without a
+ * filled version keeps its line icon. Code only, never added to the Figma DS.
+ *
+ * Style (owner's Figma "Style Guide Categories", design/art/reference/icon-style-*.png):
+ * chunky soft rounded clay forms, no outlines, 2–4 overlapping shapes that are slightly
+ * translucent, each filled with a vertical gradient from the brand family, a soft inner
+ * highlight and a soft drop shadow. Every icon uses the same family of inks (owner decision:
+ * not one colour per need). 48 × 48 grid; reads at 28–32 px inside the meter and at 96 px.
+ *
+ * Inks (top → bottom of each shape). Bottom stops are the DS gradient stops (§3.1) except
+ * plum and periwinkle-deep, which come from the owner's style-guide image (all approved 2026-11-07):
+ *   blue  #D6E2EC [เสนอ] → #9BB0DE [DS]      teal  #D2E3E6 [เสนอ] → #7FA9B1 [DS]
+ *   pink  #F8DCE8 [เสนอ] → #EB92B3 [DS]      lilac #EADFF2 [เสนอ] → #CBA5D1 [DS]
+ *   plum  #D3B1DA [เสนอ] → #A578B5 [เสนอ]    peri  #C3C8EE [เสนอ] → #7E7CB8 [เสนอ]
+ *   brand = Decorations/Gradient 1 [DS] (coin face)
+ * Shadow colour/alpha come from CSS custom properties --mp-fico-shadow / --mp-fico-shadow-a
+ * (tokens.css) so the dark theme gets a deeper shadow.
+ *
+ * SVG ids: every call gets a unique prefix (`mpf<n>`), so any number of icons can share one
+ * page without gradient/filter id clashes. Pass `opts.uid` for a stable prefix (tests, SSR).
+ * ==========================================================================*/
+
+/** Ink stops [top, bottom] (see the table above). */
+export const FILLED_INKS = {
+  blue: ['#D6E2EC', '#9BB0DE'],
+  teal: ['#D2E3E6', '#7FA9B1'],
+  pink: ['#F8DCE8', '#EB92B3'],
+  lilac: ['#EADFF2', '#CBA5D1'],
+  plum: ['#D3B1DA', '#A578B5'],
+  peri: ['#C3C8EE', '#7E7CB8'],
+};
+
+/**
+ * Filled icon bodies. Each is a function of a helper `k` that turns an ink name into a
+ * `fill="url(#…)"` attribute and knows the highlight gradient (`k.hl`) and clip ids (`k.id`).
+ * 48 × 48 viewBox. Drawing order = back to front.
+ */
+export const FILLED_ICONS = {
+  /** อิ่ม — a plump rice mound in a round bowl. */
+  hunger: (k) => `
+    <path d="M12.5 25C12.5 15.6 17.6 10 24 10s11.5 5.6 11.5 15z" ${k('pink')}/>
+    <ellipse cx="19.4" cy="16.2" rx="3.6" ry="2.2" ${k.hl} transform="rotate(-28 19.4 16.2)"/>
+    <rect x="17" y="36" width="14" height="6.5" rx="3.2" ${k('peri')}/>
+    <path d="M6.2 22.5h35.6a2.3 2.3 0 0 1 2.3 2.6C42.9 34.2 34.6 40.5 24 40.5S5.1 34.2 3.9 25.1a2.3 2.3 0 0 1 2.3-2.6z" ${k('blue')} opacity=".93"/>
+    <ellipse cx="13.6" cy="28.6" rx="5.2" ry="2.3" ${k.hl} transform="rotate(14 13.6 28.6)"/>`,
+
+  /** ห้องน้ำ — a round toilet from the side: tank, seat and bowl. */
+  toilet: (k) => `
+    <rect x="7.5" y="5" width="16" height="21" rx="6" ${k('lilac')}/>
+    <ellipse cx="13.2" cy="10.6" rx="2.6" ry="3.6" ${k.hl}/>
+    <path d="M17.5 35.5h13l1.6 5.6a1.8 1.8 0 0 1-1.7 2.3H17.6a1.8 1.8 0 0 1-1.7-2.3z" ${k('peri')}/>
+    <path d="M7 24h34a2.4 2.4 0 0 1 2.3 3c-1.6 6.6-7.4 11-14.8 11h-9.6C12 38 7 33.6 5 27a2.4 2.4 0 0 1 2-3z" ${k('blue')} opacity=".94"/>
+    <rect x="4" y="19.5" width="40" height="7" rx="3.5" ${k('pink')} opacity=".92"/>
+    <ellipse cx="14.5" cy="31" rx="4.4" ry="1.9" ${k.hl}/>`,
+
+  /** สนุก — a bouncy ball with a soft band and a sparkle. */
+  fun: (k) => `
+    <clipPath id="${k.id('ball')}"><circle cx="22" cy="26.5" r="15.5"/></clipPath>
+    <circle cx="22" cy="26.5" r="15.5" ${k('blue')}/>
+    <g clip-path="url(#${k.id('ball')})">
+      <path d="M17 8C24 15 24.5 34 16 44l9 1c7.5-10 6.5-28-1-37z" ${k('pink')} opacity=".9"/>
+      <path d="M30 9c5.5 6 6.5 23 .5 34l5 .5c5.5-10 4.5-25-.5-33z" ${k('lilac')} opacity=".9"/>
+    </g>
+    <ellipse cx="15" cy="18.5" rx="4.4" ry="2.6" ${k.hl} transform="rotate(-35 15 18.5)"/>
+    <path d="M39.5 3.5c.7 4 1.9 5.2 5.9 5.9-4 .7-5.2 1.9-5.9 5.9-.7-4-1.9-5.2-5.9-5.9 4-.7 5.2-1.9 5.9-5.9z" ${k('plum')}/>`,
+
+  /** ใกล้ชิด — two hearts leaning together. */
+  social: (k) => `
+    <path d="M17 29.5c-6.6-3.9-11-8.3-11-13.4C6 12.7 8.6 10 11.8 10c2.2 0 4.1 1.2 5.2 3.1C18.1 11.2 20 10 22.2 10c3.2 0 5.8 2.7 5.8 6.1 0 5.1-4.4 9.5-11 13.4z" ${k('lilac')}/>
+    <ellipse cx="11.6" cy="14.8" rx="2.4" ry="1.5" ${k.hl} transform="rotate(-30 11.6 14.8)"/>
+    <path d="M30 41.5c-8.4-4.9-14-10.5-14-17 0-4.3 3.3-7.7 7.4-7.7 2.8 0 5.2 1.5 6.6 3.9 1.4-2.4 3.8-3.9 6.6-3.9 4.1 0 7.4 3.4 7.4 7.7 0 6.5-5.6 12.1-14 17z" ${k('pink')} opacity=".92"/>
+    <ellipse cx="22.6" cy="23" rx="3.4" ry="2" ${k.hl} transform="rotate(-32 22.6 23)"/>`,
+
+  /** เหรียญ — a thick coin: deeper edge, brand-gradient face, soft sparkle. */
+  coin: (k) => `
+    <circle cx="24" cy="27" r="17" ${k('peri')}/>
+    <circle cx="24" cy="23.5" r="17" ${k.brand}/>
+    <circle cx="24" cy="23.5" r="11" fill="#FFFFFF" fill-opacity=".22"/>
+    <path d="M24 15.5c.8 4.6 2.6 6.4 7.2 7.2-4.6.8-6.4 2.6-7.2 7.2-.8-4.6-2.6-6.4-7.2-7.2 4.6-.8 6.4-2.6 7.2-7.2z" fill="#FFFFFF" fill-opacity=".92"/>
+    <ellipse cx="15.2" cy="14.6" rx="4.6" ry="2.4" ${k.hl} transform="rotate(-38 15.2 14.6)"/>`,
+
+  /** แต่งห้อง — a chunky sofa with a sparkle. */
+  decor: (k) => `
+    <rect x="10" y="38" width="4.5" height="5" rx="2" ${k('peri')}/><rect x="33.5" y="38" width="4.5" height="5" rx="2" ${k('peri')}/>
+    <rect x="9" y="13.5" width="30" height="18" rx="7.5" ${k('lilac')}/>
+    <ellipse cx="16.5" cy="18.2" rx="4.4" ry="2.1" ${k.hl}/>
+    <rect x="8" y="27" width="32" height="11.5" rx="5.5" ${k('blue')} opacity=".94"/>
+    <rect x="3" y="21.5" width="10" height="18" rx="5" ${k('pink')} opacity=".92"/>
+    <rect x="35" y="21.5" width="10" height="18" rx="5" ${k('pink')} opacity=".92"/>
+    <ellipse cx="7" cy="25.6" rx="2" ry="2.6" ${k.hl}/>
+    <path d="M40 2.5c.6 3.3 1.6 4.3 4.9 4.9-3.3.6-4.3 1.6-4.9 4.9-.6-3.3-1.6-4.3-4.9-4.9 3.3-.6 4.3-1.6 4.9-4.9z" ${k('plum')}/>`,
+};
+FILLED_ICONS.decorate = FILLED_ICONS.decor;
+
+/** Ids of the filled sample icons, in board order. */
+export const FILLED_ICON_NAMES = ['hunger', 'toilet', 'fun', 'social', 'coin', 'decor'];
+
+let filledSeq = 0;
+
+/**
+ * Build a FILLED Moldable icon (S4) as an SVG string. Call it once per placement: ids are unique per call.
+ * @param {string} name key of FILLED_ICONS (hunger | toilet | fun | social | coin | decor)
+ * @param {number} [size=32] rendered size in px
+ * @param {{uid?: string, title?: string}} [opts] uid = stable id prefix; title = accessible name
+ *        (without a title the icon is decorative: aria-hidden)
+ * @returns {string} `<svg>` markup; '' for an unknown name
+ */
+export function filledIcon(name, size = 32, opts = {}) {
+  const body = FILLED_ICONS[name];
+  if (!body) return '';
+  const uid = String(opts.uid || `mpf${++filledSeq}`).replace(/[^\w-]/g, '');
+  const used = new Set();
+  const k = (ink) => { used.add(ink); return `fill="url(#${uid}-${ink})"`; };
+  k.id = (part) => `${uid}-${part}`;
+  k.hl = `fill="url(#${uid}-hl)"`;
+  k.brand = `fill="url(#${uid}-brand)"`;
+  const markup = body(k);
+  const grads = [...used].map((ink) => {
+    const [a, b] = FILLED_INKS[ink];
+    return `<linearGradient id="${uid}-${ink}" x1=".25" y1="0" x2=".55" y2="1"><stop offset="0" stop-color="${a}"/><stop offset="1" stop-color="${b}"/></linearGradient>`;
+  }).join('');
+  const defs = `<defs>${grads}
+    <linearGradient id="${uid}-brand" x1="0" y1=".1" x2="1" y2=".9"><stop offset="0" stop-color="#7FA9B1"/><stop offset=".35" stop-color="#9BB0DE"/><stop offset=".7" stop-color="#CBA5D1"/><stop offset="1" stop-color="#EB92B3"/></linearGradient>
+    <radialGradient id="${uid}-hl"><stop offset="0" stop-color="#FFFFFF" stop-opacity=".85"/><stop offset="1" stop-color="#FFFFFF" stop-opacity="0"/></radialGradient>
+    <filter id="${uid}-sh" x="-20%" y="-20%" width="140%" height="150%"><feDropShadow dx="0" dy="1.6" stdDeviation="1.4" style="flood-color:var(--mp-fico-shadow,#252941);flood-opacity:var(--mp-fico-shadow-a,.2)"/></filter></defs>`;
+  const a11y = opts.title ? `role="img" aria-label="${String(opts.title).replace(/"/g, '&quot;')}"` : 'aria-hidden="true"';
+  return `<svg class="mp-fico" width="${size}" height="${size}" viewBox="0 0 48 48" ${a11y} focusable="false">${defs}<g filter="url(#${uid}-sh)">${markup}</g></svg>`;
+}

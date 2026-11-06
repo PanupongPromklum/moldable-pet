@@ -14,6 +14,12 @@
  * (saved `settings.theme`, the system scheme no longer decides), Snack Rain
  * intro card with the control choice (touch / head tilt via `input/head.js`,
  * saved `settings.minigameControl`), head-stroke petting (gestures).
+ *
+ * Sprint 4 (module-contracts.md › Sprint 4 additions): baked static scenery
+ * (stage bake source = the room manager), furniture state in save v4
+ * (`game/furniture.js`), the "แต่งห้อง" shop (preview / buy / equip / close
+ * reverts unbought previews), lazily rendered shop thumbnails
+ * (`engine/thumbs.js`), Christmas outfits through the wardrobe data.
  * @module main
  */
 import * as THREE from 'three';
@@ -28,6 +34,8 @@ import { attachPointer } from './input/pointer.js';
 import { createHands } from './input/hands.js';
 import { createHeadControl } from './input/head.js';
 import { equipItem, buyItem, wearReaction } from './game/wardrobe.js';
+import { equipFurniture, revertPartial, decorView, findFurniture, isXmas } from './game/furniture.js';
+import { createThumbnails } from './engine/thumbs.js';
 import { createSnackRain, resolveConfig } from './game/minigames/snack-rain.js';
 import { createCharacter, CHARACTER_KEYS } from './characters/character.js';
 import * as RoomsMod from './rooms/index.js';
@@ -109,11 +117,11 @@ function fallbackMesh(kind) {
 
 async function boot() {
   // 1. data
-  const [needs, foods, personas, wardrobe, minigames, propMini] = await Promise.all([
+  const [needs, foods, personas, wardrobe, minigames, furnitureCat, propMini] = await Promise.all([
     loadJSON('needs'), loadJSON('foods'), loadJSON('personas'), loadOptional('wardrobe'), loadOptional('minigames'),
-    import('./props/minigame.js').catch(() => null),
+    loadOptional('furniture'), import('./props/minigame.js').catch(() => null),
   ]);
-  const data = { needs, foods, personas, wardrobe, minigames };
+  const data = { needs, foods, personas, wardrobe, minigames, furniture: furnitureCat };
   const game = createGameState({ data, storage: safeLocalStorage(), roomIds: ROOM_IDS });
   const reduceMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
   const app = $('app');
@@ -126,6 +134,7 @@ async function boot() {
   let hud, care, gestures, mood, hands = null, minigame = null;
   const rooms = createRoomManager({
     scene: stage.scene, createRoom, roomIds: ROOM_IDS, reduceMotion,
+    getFurniture: (id) => game.furniture(id),
     onEnter(room, id) {
       game.setRoom(id);
       // keep a toilet (or other drop zone) on screen next to the pet on narrow phones
@@ -139,7 +148,11 @@ async function boot() {
       hud?.setRoom(id);
       game.persist();
     },
+    // the shop belongs to one room: revert its previews on the room that is leaving
+    onLeave() { if (decorOpen) closeDecor(); },
   });
+  // bake the active room's staticGroup (engine/bake.js); live while sliding between rooms
+  stage.setBakeSource?.({ getRoom: () => rooms.room, isMoving: () => rooms.moving });
 
   // 4. character
   let pet = null;
@@ -189,6 +202,11 @@ async function boot() {
     onWardrobe() { openWardrobe(); },
     onEquip(slot, id) { equip(slot, id ?? null); },
     onBuy(id) { buy(id); },
+    onDecor() { openDecor(); },
+    onDecorPreview(slot, id) { decorPreview(slot, id ?? null); },
+    onDecorEquip(slot, id) { decorEquip(slot, id); },
+    onDecorBuy(id) { decorBuy(id); },
+    onDecorClose() { closeDecor(false); },
     onMinigameExit() { if (headStarting) headCancel = true; minigame?.exit(); },
     /** HUD countdown 3, 2, 1, then 0 = go. */
     onMinigameTick(n) { sfx.play(n > 0 ? 'tick' : 'go'); },
@@ -283,9 +301,11 @@ async function boot() {
   const wardrobeView = () => ({
     slots: data.wardrobe?.slots || SLOT_LABELS, items: data.wardrobe?.items || [],
     owned: game.owned.slice(), outfit: { ...game.outfit() }, coins: game.coins, charKey: game.selected,
+    themes: data.wardrobe?.themes || null,
   });
   function openWardrobe() {
     if (minigame?.active) return;
+    closeDecor();
     if (!hud.showWardrobe) { hud.toast('ตู้เสื้อผ้ากำลังมา', 2200); return; }
     if (!data.wardrobe) hud.toast('ยังโหลดรายการชุดไม่ได้ ลองรีเฟรชอีกครั้ง', 2600);
     hud.showWardrobe(wardrobeView());
@@ -298,6 +318,7 @@ async function boot() {
     game.setOutfit(r.outfit);
     applyOutfit();
     sfx.play('equip');
+    if (isXmas(r.item)) sfx.play('jingle');
     hud.updateWardrobe?.({ outfit: { ...r.outfit } });
     if (r.item) {
       const now = game.now();
@@ -326,6 +347,87 @@ async function boot() {
     mood.say('buy', true);
     hud.updateWardrobe?.({ owned: r.owned.slice(), coins: r.coins });
     equip(r.item.slot, id);   // a bought item goes on at once
+    game.persist();
+    return true;
+  }
+
+  // 7c2. furniture shop "แต่งห้อง" (Sprint 4). Furniture is shared by every
+  // character; previews live only in the room object until bought / equipped.
+  const thumbs = typeof RoomsMod.createFurniturePreview === 'function'
+    ? createThumbnails({ stage, createPreview: (id, o) => RoomsMod.createFurniturePreview(id, o) }) : null;
+  let decorOpen = false;
+  const decorData = () => decorView(data.furniture, rooms.id, {
+    owned: game.owned, furniture: game.furniture(rooms.id), coins: game.coins,
+    thumbOf: (id) => thumbs?.get(id) || null, fallbackSlots: RoomsMod.FURNITURE_SLOTS?.[rooms.id] || [],
+  });
+  thumbs?.onReady(() => { if (decorOpen) hud.updateDecor?.({ items: decorData().items }); });
+  function openDecor() {
+    if (minigame?.active || rooms.moving) return;
+    if (!hud.showDecor) { hud.toast('ร้านแต่งห้องกำลังมา', 2200); return; }
+    if (!data.furniture) { hud.toast('ยังโหลดรายการของแต่งห้องไม่ได้ ลองรีเฟรชอีกครั้ง', 2600); return; }
+    hud.hideWardrobe?.();
+    const view = decorData();
+    decorOpen = true;
+    hud.showDecor(view);
+    thumbs?.request(view.items.map((it) => it.id));
+  }
+  /** Put every slot of the current room back to the saved furniture (unbought / unequipped previews). */
+  function revertPreviews() {
+    const room = rooms.room;
+    if (!room?.setFurniture) return;
+    const back = revertPartial(room.furniture, game.furniture(rooms.id));
+    if (back) { try { room.setFurniture(back); } catch (e) { console.error('[decor] revert', e); } }
+  }
+  /** @param {boolean} hide also close the sheet (wire-initiated) */
+  function closeDecor(hide = true) {
+    if (!decorOpen) return;
+    decorOpen = false;
+    revertPreviews();
+    if (hide) hud.hideDecor?.();
+  }
+  function decorPreview(slot, id) {
+    const room = rooms.room;
+    if (!decorOpen || !room?.setFurniture) return;
+    const want = id ?? game.furniture(rooms.id)[slot];
+    if (!want) return;
+    const it = findFurniture(data.furniture, want);
+    if (!it || it.room !== rooms.id || it.slot !== slot) return;
+    try { room.setFurniture({ [slot]: want }); } catch (e) { console.error('[decor] preview', e); return; }
+    if (id) { sfx.play('preview'); if (isXmas(it)) sfx.play('jingle'); }
+  }
+  function decorEquip(slot, id) {
+    const all = game.furniture();
+    const r = equipFurniture(all, rooms.id, slot, id, game.owned, data.furniture);
+    if (!r.ok) {
+      if (r.reason !== 'same') console.warn('[decor] equip', r.reason, id);
+      hud.updateDecor?.({ furniture: game.furniture(rooms.id) });
+      return false;
+    }
+    game.setFurniture(r.furniture);
+    try { rooms.room?.setFurniture?.({ [slot]: r.furniture[rooms.id][slot] }); } catch (e) { console.error('[decor] equip', e); }
+    sfx.play('place');
+    if (isXmas(r.item)) sfx.play('jingle');
+    hud.updateDecor?.({ furniture: game.furniture(rooms.id) });
+    game.persist();
+    return true;
+  }
+  function decorBuy(id) {
+    const it = findFurniture(data.furniture, id);
+    if (!it || it.room !== rooms.id) return false;
+    const r = buyItem({ coins: game.coins, owned: game.owned }, id, data.furniture);
+    if (!r.ok) {
+      if (r.reason === 'coins') {
+        hud.updateDecor?.({ coins: game.coins });
+        hud.toast(`เหรียญยังไม่พอ ต้องใช้ ${r.price} เหรียญ`, 2600);
+      } else if (r.reason === 'owned') hud.updateDecor?.({ owned: game.owned.slice() });
+      return false;
+    }
+    game.setPurse(r.coins, r.owned);
+    hud.setCoins(r.coins);
+    sfx.play('buy');
+    mood.say('buy', true);
+    hud.updateDecor?.({ owned: r.owned.slice(), coins: r.coins });
+    decorEquip(it.slot, id);   // a bought item goes in at once (wardrobe pattern)
     game.persist();
     return true;
   }
@@ -374,6 +476,7 @@ async function boot() {
   function startMinigame() {
     if (!canStartMinigame()) return false;
     hud.hideWardrobe?.();
+    closeDecor();
     gestures.reset();
     unlock();
     const ok = minigame.start();
@@ -394,6 +497,7 @@ async function boot() {
   function openMinigameIntro() {
     if (!canStartMinigame() || headStarting) return;
     hud.hideWardrobe?.();
+    closeDecor();
     if (!hud.showMinigameIntro) { control = 'touch'; startMinigame(); return; }
     hud.showMinigameIntro({ controls: MINIGAME_CONTROLS, selected: game.settings.minigameControl });
   }
@@ -518,7 +622,8 @@ async function boot() {
   document.documentElement.dataset.boot = 'ok';
 
   if (new URLSearchParams(location.search).has('debug')) {
-    window.__moldablePet = { data, game, stage, rooms, mood, care, gestures, hands, head: headCtl, hud, getPet, selectCharacter, minigame, startMinigame, openMinigameIntro, readyMinigame, setTheme, getControl: () => control, equip, buy, openWardrobe, snackCfg };
+    window.__moldablePet = { data, game, stage, rooms, mood, care, gestures, hands, head: headCtl, hud, getPet, selectCharacter, minigame, startMinigame, openMinigameIntro, readyMinigame, setTheme, getControl: () => control, equip, buy, openWardrobe, snackCfg,
+      openDecor, closeDecor, decorPreview, decorEquip, decorBuy, thumbs, isDecorOpen: () => decorOpen };
   }
 }
 

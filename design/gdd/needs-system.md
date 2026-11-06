@@ -222,7 +222,9 @@ If instead ไผ่ was away 30 h: Δh_off = 12 h, every need ends at 0.15 (low
 | Rooms and props (prop) | shared ids | food ids for meshes, toilet zone and flush for the toilet rule |
 | Audio (echo) | this drives it | events (eat, flush, relieved) trigger SFX; lines are the base for `voice-script.md` |
 | Character bible (narrative) | source | personalities behind needRates, food likes and lines |
-| Future: coins, minigames, sleep/energy | will depend on this | minigames add fun; energy would join `moods.priority` |
+| Minigames (`minigame-snack-rain.md`, `minigames-2.md`) | depend on this | round-end fun/social/hunger deltas × `playGain` |
+| Growth & raised personality (`growth-personality.md`, S5) | independent by design | needs never speed up, slow down or change growth or the trait; mood idles from needs take priority over trait idles |
+| Future: sleep/energy | will depend on this | energy would join `moods.priority` |
 
 Each of these docs should list the needs system back as a dependency when they are written.
 

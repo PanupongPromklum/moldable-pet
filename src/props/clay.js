@@ -37,6 +37,24 @@ export const NIGHT = Object.freeze({
   lamp: '#FFD9B8', star: '#FFF4DA', moon: '#FFF1D2',
 });
 
+/**
+ * Christmas tints (Sprint 4 furniture, all rooms). [เสนอ] — proposed by prop, waiting
+ * for owner review. Muted berry / sage / cream / soft gold next to the brand pastels;
+ * never bright red or green. Large surfaces: use the light values (lightness ≥ 70%);
+ * the `*Deep` values are for small accents only (berries, stocking cuffs, ribbon).
+ */
+export const XMAS = Object.freeze({
+  berry: '#E0A9BC', berryDeep: '#C98AA2',       // [เสนอ] muted berry (pink side of the brand)
+  sage: '#B7CFC2', sageDeep: '#93B4A8',         // [เสนอ] pine / sage (teal side of the brand)
+  pine: '#A5C3BA',                              // [เสนอ] tree body, between sage and brand teal
+  cream: '#FBF3E7', snow: '#FFFFFF', ice: '#E6EEFA',
+  gold: '#EFD9A4', goldDeep: '#DFC184',         // [เสนอ] soft gold (stars, bells, bauble caps)
+  cocoa: '#DDBBA2',                             // [เสนอ] gingerbread / logs, warm and light
+  flame: '#FFD3A8', flameCore: '#FFF1D6',       // [เสนอ] fire glow (unlit)
+  /** Evening sky for snowy windows: soft lilac dusk, a little bluer than NIGHT.sky*. */
+  snowSkyLow: '#9C8CC0', snowSkyHigh: '#3E4683',
+});
+
 /** Theme switching values for the shared materials (not gameplay numbers). */
 const THEME_MAT = {
   light: { clayEnv: 0.35, lampEmissive: 0, shadowBoost: 1 },
@@ -213,6 +231,54 @@ export function circle(radius, segments = 40) {
   return new THREE.CircleGeometry(radius, segments);
 }
 
+/**
+ * Soft round tube along a smooth curve through `points`, with ball ends (lamp arcs,
+ * garland ropes, stems). Returns one geometry.
+ * @param {number[][]} points  [x, y, z] control points
+ * @param {number} radius
+ * @param {{segments?: number, radial?: number, ends?: boolean}} [o]
+ */
+export function tube(points, radius, o = {}) {
+  const curve = new THREE.CatmullRomCurve3(points.map((p) => new THREE.Vector3(...p)));
+  const parts = [new THREE.TubeGeometry(curve, o.segments ?? Math.max(8, points.length * 8), radius, o.radial ?? 8, false)];
+  if (o.ends !== false) for (const p of [points[0], points[points.length - 1]]) {
+    const s = new THREE.SphereGeometry(radius, o.radial ?? 8, Math.max(4, (o.radial ?? 8) >> 1)); s.translate(...p); parts.push(s);
+  }
+  const g = mergeGeometries(parts.map((x) => x.toNonIndexed()), false);
+  for (const x of parts) x.dispose();
+  return g;
+}
+
+/**
+ * Puffy clay star facing +Z (soft points, rounded front and back).
+ * @param {number} radius  tip radius
+ * @param {number} depth   thickness factor (0.3 = flat-ish ornament, 0.6 = chubby)
+ * @param {{points?: number, inner?: number, detail?: number}} [o]
+ */
+export function puffyStar(radius, depth = 0.4, o = {}) {
+  const n = o.points ?? 5, inner = o.inner ?? 0.5;
+  return blob(radius, {
+    detail: o.detail ?? 4,
+    fn: (d, out) => {
+      const a = Math.atan2(d.y, d.x) - Math.PI / 2;
+      const k = 0.5 + 0.5 * Math.cos(a * n);                 // 1 at a tip, 0 between
+      const r = inner + (1 - inner) * Math.pow(k, 1.6);
+      const xy = Math.hypot(d.x, d.y);
+      out.set(d.x * r, d.y * r, d.z * depth * (0.55 + 0.45 * (1 - xy * xy)) * (0.7 + 0.3 * r));
+    },
+  });
+}
+
+/**
+ * Painter that coats everything above `y0` (local space) with `coat` — snow on a
+ * sill, icing on a roof. `soft` blends over that many units.
+ * @returns {(x:number,y:number,z:number,c:THREE.Color)=>void}
+ */
+export function topCoat(base, coat, y0, soft = 0.02) {
+  const a = new THREE.Color(base), b = new THREE.Color(coat);
+  return (x, y, z, c) => c.copy(a).lerp(b, THREE.MathUtils.smoothstep(y, y0 - soft, y0 + soft));
+}
+
 /* ------------------------------------------------------------------ building */
 
 const _m = new THREE.Matrix4();
@@ -368,6 +434,47 @@ export class ClayBuilder {
     g.setAttribute('color', new THREE.BufferAttribute(a, 4));
     g.deleteAttribute('normal');
     this.shadows.push(g);
+    return this;
+  }
+
+  /**
+   * Add a soft shadow on the back wall (behind a sofa, under a frame or shelf).
+   * Shares the floor-shadow draw call.
+   * @param {number} x @param {number} y centre on the wall
+   * @param {number} z wall surface z (a hair in front of it)
+   * @param {number} w @param {number} h full width / height
+   * @param {number} [strength=1] 0..1
+   */
+  addWallShadow(x, y, z, w, h, strength = 1) {
+    const g = new THREE.PlaneGeometry(w, h).toNonIndexed();
+    g.translate(x, y, z + 0.004 + this.shadows.length * 0.0003);
+    const n = g.attributes.position.count, a = new Float32Array(n * 4);
+    for (let i = 0; i < n; i++) { a[i * 4] = a[i * 4 + 1] = a[i * 4 + 2] = 1; a[i * 4 + 3] = strength; }
+    g.setAttribute('color', new THREE.BufferAttribute(a, 4));
+    g.deleteAttribute('normal');
+    this.shadows.push(g);
+    return this;
+  }
+
+  /**
+   * Add a row of tiny stitch dashes from `a` to `b` (cushion seams, rug borders).
+   * Dashes lie along the line; `lift` pushes them out along `normal` so they sit on a surface.
+   * @param {number[]} a @param {number[]} b  [x, y, z] ends
+   * @param {number} count
+   * @param {string} color
+   * @param {{r?: number, len?: number, normal?: number[], lift?: number}} [o]
+   * @returns {this}
+   */
+  addStitches(a, b, count, color, o = {}) {
+    const A = new THREE.Vector3(...a), B = new THREE.Vector3(...b), dir = B.clone().sub(A);
+    const nrm = new THREE.Vector3(...(o.normal ?? [0, 0, 1])).multiplyScalar(o.lift ?? 0);
+    const q = new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 1, 0), dir.clone().normalize());
+    const e = new THREE.Euler().setFromQuaternion(q);
+    const r = o.r ?? 0.012, len = o.len ?? Math.max(0.01, dir.length() / count * 0.45);
+    for (let i = 0; i < count; i++) {
+      const p = A.clone().addScaledVector(dir, (i + 0.5) / count).add(nrm);
+      this.add(capsule(r, len, 2, 5), color, { position: p.toArray(), rotation: [e.x, e.y, e.z], shade: 0 });
+    }
     return this;
   }
 

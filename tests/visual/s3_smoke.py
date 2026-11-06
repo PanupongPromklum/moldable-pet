@@ -122,7 +122,7 @@ def run(pw, label, viewport, touch, scheme):
     check('boot ok', boot(page))
     t = theme_state(page)
     check(f'new save: light theme even with system {scheme}', t['html'] == 'light' and t['cs'] == 'only light' and t['room'] == 'light' and t['saved'] == 'light' and t['lamp'] == 'light', json.dumps(t))
-    check('save v3', S(page, 'M.game.save.version') == 3 and S(page, 'M.game.settings.minigameControl') == 'touch')
+    check('save v3+ (v4 since Sprint 4)', S(page, 'M.game.save.version') >= 3 and S(page, 'M.game.settings.minigameControl') == 'touch')
     time.sleep(0.4)
     pick(page, 'flower')
     check('no horizontal scroll', page.evaluate('document.documentElement.scrollWidth <= innerWidth'))

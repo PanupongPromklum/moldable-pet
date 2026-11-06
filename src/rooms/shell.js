@@ -5,6 +5,7 @@
  */
 import * as THREE from 'three';
 import { roundedBox, gradientY, lighten, disposeTree, countDrawCalls, applyTheme } from '../props/clay.js';
+import { attachFurniture } from './furniture.js';
 
 export const WALL_Z = -3;
 const HALF_W = 16;
@@ -73,17 +74,41 @@ export function applyStageLights(theme, lights) {
 }
 
 /**
- * Wrap a built room into the contract object (docs/architecture/module-contracts.md).
- * @param {{id: string, group: THREE.Group, petSpot?: THREE.Vector3, dropZones?: object,
+ * Wrap a built room into the contract object (docs/architecture/module-contracts.md,
+ * incl. Sprint 4: staticGroup / liveGroup / staticVersion / furniture slots — see furniture.js).
+ *
+ * Pass `staticGroup` (never moves, wire bakes it) and `liveGroup` (animated / interactive).
+ * Legacy form: pass only `group`; its children named `…:static` go to staticGroup and
+ * every other child goes to liveGroup.
+ *
+ * @param {{id: string, staticGroup?: THREE.Group, liveGroup?: THREE.Group, group?: THREE.Group,
+ *          petSpot?: THREE.Vector3, dropZones?: object,
  *          toiletSeat?: THREE.Vector3, flush?: () => number, update?: (dt:number, t:number) => void,
  *          onTheme?: (theme: 'light'|'dark') => void}} o
  */
 export function makeRoom(o) {
-  o.group.name = 'room:' + o.id;
-  o.group.userData.roomId = o.id;
+  const group = o.group ?? new THREE.Group();
+  let staticGroup = o.staticGroup, liveGroup = o.liveGroup;
+  if (!staticGroup || !liveGroup) {
+    const legacy = [...group.children];
+    staticGroup = staticGroup ?? new THREE.Group();
+    liveGroup = liveGroup ?? new THREE.Group();
+    for (const c of legacy) (/:static$/.test(c.name) ? staticGroup : liveGroup).add(c);
+  }
+  staticGroup.name = o.id + ':staticGroup';
+  liveGroup.name = o.id + ':liveGroup';
+  group.add(staticGroup, liveGroup);
+  group.name = 'room:' + o.id;
+  group.userData.roomId = o.id;
   const room = {
     id: o.id,
-    group: o.group,
+    group,
+    /** Everything that never moves (wire renders it once into the background). */
+    staticGroup,
+    /** Animated or interactive parts, rendered every frame. */
+    liveGroup,
+    /** +1 whenever staticGroup content changes (setFurniture, setTheme). */
+    staticVersion: 0,
     petSpot: o.petSpot ?? new THREE.Vector3(0, 0, 0),
     lights: [],
     dropZones: o.dropZones ?? {},
@@ -96,16 +121,18 @@ export function makeRoom(o) {
      */
     setTheme(theme) {
       const t = theme === 'dark' ? 'dark' : 'light';
-      applyTheme(o.group, t);
+      applyTheme(group, t);
+      if (t !== room.theme) room.staticVersion++;
       room.theme = t;
       o.onTheme?.(t);
     },
-    /** Draw calls this room issues (for the perf budget, ≤ 60). */
-    drawCalls: () => countDrawCalls(o.group),
-    dispose() { o.group.removeFromParent(); disposeTree(o.group); },
+    /** Draw calls this room issues (static + live, for the perf budget, ≤ 60). */
+    drawCalls: () => countDrawCalls(group),
+    dispose() { group.removeFromParent(); disposeTree(group); },
   };
   if (o.toiletSeat) room.toiletSeat = o.toiletSeat;
   if (o.flush) room.flush = o.flush;
+  attachFurniture(room);
   return room;
 }
 

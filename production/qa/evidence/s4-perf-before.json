@@ -1,0 +1,247 @@
+{
+ "url": "http://localhost:8130/index.html?debug",
+ "label": "before",
+ "seconds": 5.0,
+ "phone": {
+  "viewport": "390x844@3",
+  "touch": true,
+  "rows": [
+   {
+    "room": "living",
+    "frames": 6,
+    "fps": 0.85,
+    "frameAvgMs": 1177.7,
+    "frameP95Ms": 1450.0,
+    "renderAvgMs": 6.9,
+    "renderP95Ms": 10.1,
+    "calls": 12,
+    "tris": 59522,
+    "passes": 1,
+    "heapDeltaKB": 397.4,
+    "breakdown": {
+     "groups": {
+      "pet": {
+       "calls": 7,
+       "tris": 35598
+      },
+      "room": {
+       "calls": 6,
+       "tris": 25184
+      }
+     },
+     "transparent": 7,
+     "meshes": 13,
+     "caps": {
+      "pixelRatio": 1.75,
+      "buffer": [
+       682,
+       1477
+      ],
+      "antialias": true,
+      "petVerts": 16812,
+      "bake": null,
+      "quality": null
+     }
+    }
+   },
+   {
+    "room": "kitchen",
+    "frames": 7,
+    "fps": 1.09,
+    "frameAvgMs": 919.0,
+    "frameP95Ms": 999.9,
+    "renderAvgMs": 8.56,
+    "renderP95Ms": 12,
+    "calls": 11,
+    "tris": 66408,
+    "passes": 1,
+    "heapDeltaKB": 101.6,
+    "breakdown": {
+     "groups": {
+      "pet": {
+       "calls": 7,
+       "tris": 35598
+      },
+      "room": {
+       "calls": 4,
+       "tris": 30810
+      }
+     },
+     "transparent": 7,
+     "meshes": 11,
+     "caps": {
+      "pixelRatio": 1.75,
+      "buffer": [
+       682,
+       1477
+      ],
+      "antialias": true,
+      "petVerts": 16812,
+      "bake": null,
+      "quality": null
+     }
+    }
+   },
+   {
+    "room": "bathroom",
+    "frames": 8,
+    "fps": 1.38,
+    "frameAvgMs": 722.9,
+    "frameP95Ms": 783.3,
+    "renderAvgMs": 5.87,
+    "renderP95Ms": 7.8,
+    "calls": 14,
+    "tris": 60026,
+    "passes": 1,
+    "heapDeltaKB": 314.3,
+    "breakdown": {
+     "groups": {
+      "pet": {
+       "calls": 7,
+       "tris": 35598
+      },
+      "room": {
+       "calls": 7,
+       "tris": 24428
+      }
+     },
+     "transparent": 7,
+     "meshes": 14,
+     "caps": {
+      "pixelRatio": 1.75,
+      "buffer": [
+       682,
+       1477
+      ],
+      "antialias": true,
+      "petVerts": 16812,
+      "bake": null,
+      "quality": null
+     }
+    }
+   }
+  ],
+  "errors": []
+ },
+ "desktop": {
+  "viewport": "1440x900@1",
+  "touch": false,
+  "rows": [
+   {
+    "room": "living",
+    "frames": 5,
+    "fps": 0.78,
+    "frameAvgMs": 1286.6,
+    "frameP95Ms": 1366.6,
+    "renderAvgMs": 7.68,
+    "renderP95Ms": 11.5,
+    "calls": 13,
+    "tris": 93705,
+    "passes": 1,
+    "heapDeltaKB": 546.0,
+    "breakdown": {
+     "groups": {
+      "pet": {
+       "calls": 7,
+       "tris": 68521
+      },
+      "room": {
+       "calls": 6,
+       "tris": 25184
+      }
+     },
+     "transparent": 7,
+     "meshes": 13,
+     "caps": {
+      "pixelRatio": 1,
+      "buffer": [
+       1440,
+       900
+      ],
+      "antialias": true,
+      "petVerts": 32492,
+      "bake": null,
+      "quality": null
+     }
+    }
+   },
+   {
+    "room": "kitchen",
+    "frames": 6,
+    "fps": 0.81,
+    "frameAvgMs": 1230.5,
+    "frameP95Ms": 1283.3,
+    "renderAvgMs": 8.1,
+    "renderP95Ms": 9.7,
+    "calls": 11,
+    "tris": 99331,
+    "passes": 1,
+    "heapDeltaKB": 325.5,
+    "breakdown": {
+     "groups": {
+      "pet": {
+       "calls": 7,
+       "tris": 68521
+      },
+      "room": {
+       "calls": 4,
+       "tris": 30810
+      }
+     },
+     "transparent": 7,
+     "meshes": 11,
+     "caps": {
+      "pixelRatio": 1,
+      "buffer": [
+       1440,
+       900
+      ],
+      "antialias": true,
+      "petVerts": 32492,
+      "bake": null,
+      "quality": null
+     }
+    }
+   },
+   {
+    "room": "bathroom",
+    "frames": 5,
+    "fps": 0.7,
+    "frameAvgMs": 1423.3,
+    "frameP95Ms": 1533.3,
+    "renderAvgMs": 8.42,
+    "renderP95Ms": 11.9,
+    "calls": 14,
+    "tris": 92949,
+    "passes": 1,
+    "heapDeltaKB": 219.9,
+    "breakdown": {
+     "groups": {
+      "pet": {
+       "calls": 7,
+       "tris": 68521
+      },
+      "room": {
+       "calls": 7,
+       "tris": 24428
+      }
+     },
+     "transparent": 7,
+     "meshes": 14,
+     "caps": {
+      "pixelRatio": 1,
+      "buffer": [
+       1440,
+       900
+      ],
+      "antialias": true,
+      "petVerts": 32492,
+      "bake": null,
+      "quality": null
+     }
+    }
+   }
+  ],
+  "errors": []
+ }
+}

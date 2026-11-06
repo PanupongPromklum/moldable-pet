@@ -1,39 +1,69 @@
 {
   "_meta": {
     "owner": "loop",
-    "story": "S2-07",
-    "version": 1,
+    "story": "S2-07, S4-01",
+    "version": 2,
     "doc": "design/gdd/economy.md",
     "units": {
       "price": "coins; 0 for starter items",
       "startCoins": "coins in a new save",
       "reactions.*.social / fun": "need level delta (0..1 scale), applied once per equip, before persona gains",
-      "bonusCooldownSeconds": "seconds per character before an equip can give the need bonus again"
+      "bonusCooldownSeconds": "seconds per character before an equip can give the need bonus again",
+      "theme": "catalog filter: basic | xmas (Christmas set, on sale all year)"
     },
-    "notes": "items[] order is display order in the sheet. likes = characters who react happily (wearLike) when wearing the item; everyone else says wearOk. Reaction face/action reuse the persona's foodReaction.like / foodReaction.ok."
+    "notes": "items[] order is display order in the sheet. likes = characters who react happily (wearLike) when wearing the item; everyone else says wearOk. Reaction face/action reuse the persona's foodReaction.like / foodReaction.ok. Sprint 4: 5 Christmas items (theme xmas) appended after the basic items; each playable character likes exactly one of them (4 likes each in total)."
   },
   "startCoins": 0,
   "slots": {
-    "head": { "label": "หัว" },
-    "eyes": { "label": "ตา" },
-    "body": { "label": "ตัว" }
+    "head": {
+      "label": "หัว"
+    },
+    "eyes": {
+      "label": "ตา"
+    },
+    "body": {
+      "label": "ตัว"
+    }
+  },
+  "themes": {
+    "basic": {
+      "label": "พื้นฐาน"
+    },
+    "xmas": {
+      "label": "คริสต์มาส"
+    }
   },
   "items": [
-    { "id": "hat-beanie",    "slot": "head", "name": "หมวกไหมพรม",   "price": 0,   "starter": true,  "likes": ["cloud"] },
-    { "id": "hat-party",     "slot": "head", "name": "หมวกปาร์ตี้",   "price": 90,  "starter": false, "likes": ["flower", "gumdrop"] },
-    { "id": "bow-ribbon",    "slot": "head", "name": "โบว์",          "price": 120, "starter": false, "likes": ["splat"] },
-    { "id": "crown-flower",  "slot": "head", "name": "มงกุฎดอกไม้",   "price": 350, "starter": false, "likes": ["splat", "flower"] },
-    { "id": "glasses-round", "slot": "eyes", "name": "แว่นกลม",       "price": 0,   "starter": true,  "likes": ["flower"] },
-    { "id": "glasses-sun",   "slot": "eyes", "name": "แว่นกันแดด",    "price": 120, "starter": false, "likes": ["cloud"] },
-    { "id": "glasses-star",  "slot": "eyes", "name": "แว่นดาว",       "price": 200, "starter": false, "likes": ["diamond"] },
-    { "id": "tie-neck",      "slot": "body", "name": "เน็คไท",        "price": 0,   "starter": true,  "likes": ["gumdrop"] },
-    { "id": "badge-star",    "slot": "body", "name": "เข็มกลัดดาว",   "price": 60,  "starter": false, "likes": ["splat", "gumdrop"] },
-    { "id": "tie-bow",       "slot": "body", "name": "หูกระต่าย",     "price": 90,  "starter": false, "likes": ["diamond"] },
-    { "id": "scarf",         "slot": "body", "name": "ผ้าพันคอ",      "price": 150, "starter": false, "likes": ["diamond", "cloud"] }
+    {"id": "hat-beanie", "slot": "head", "name": "หมวกไหมพรม", "price": 0, "starter": true, "likes": ["cloud"], "theme": "basic"},
+    {"id": "hat-party", "slot": "head", "name": "หมวกปาร์ตี้", "price": 90, "starter": false, "likes": ["flower", "gumdrop"], "theme": "basic"},
+    {"id": "bow-ribbon", "slot": "head", "name": "โบว์", "price": 120, "starter": false, "likes": ["splat"], "theme": "basic"},
+    {"id": "crown-flower", "slot": "head", "name": "มงกุฎดอกไม้", "price": 350, "starter": false, "likes": ["splat", "flower"], "theme": "basic"},
+    {"id": "glasses-round", "slot": "eyes", "name": "แว่นกลม", "price": 0, "starter": true, "likes": ["flower"], "theme": "basic"},
+    {"id": "glasses-sun", "slot": "eyes", "name": "แว่นกันแดด", "price": 120, "starter": false, "likes": ["cloud"], "theme": "basic"},
+    {"id": "glasses-star", "slot": "eyes", "name": "แว่นดาว", "price": 200, "starter": false, "likes": ["diamond"], "theme": "basic"},
+    {"id": "tie-neck", "slot": "body", "name": "เน็คไท", "price": 0, "starter": true, "likes": ["gumdrop"], "theme": "basic"},
+    {"id": "badge-star", "slot": "body", "name": "เข็มกลัดดาว", "price": 60, "starter": false, "likes": ["splat", "gumdrop"], "theme": "basic"},
+    {"id": "tie-bow", "slot": "body", "name": "หูกระต่าย", "price": 90, "starter": false, "likes": ["diamond"], "theme": "basic"},
+    {"id": "scarf", "slot": "body", "name": "ผ้าพันคอ", "price": 150, "starter": false, "likes": ["diamond", "cloud"], "theme": "basic"},
+    {"id": "hat-santa", "slot": "head", "name": "หมวกซานต้า", "price": 160, "starter": false, "likes": ["gumdrop"], "theme": "xmas"},
+    {"id": "antlers", "slot": "head", "name": "เขากวาง", "price": 140, "starter": false, "likes": ["flower"], "theme": "xmas"},
+    {"id": "glasses-snow", "slot": "eyes", "name": "แว่นเกล็ดหิมะ", "price": 140, "starter": false, "likes": ["cloud"], "theme": "xmas"},
+    {"id": "scarf-xmas", "slot": "body", "name": "ผ้าพันคอคริสต์มาส", "price": 160, "starter": false, "likes": ["diamond"], "theme": "xmas"},
+    {"id": "bell-collar", "slot": "body", "name": "กระดิ่ง", "price": 100, "starter": false, "likes": ["splat"], "theme": "xmas"}
   ],
   "reactions": {
-    "like": { "line": "wearLike", "persona": "foodReaction.like", "social": 0.03, "fun": 0.02 },
-    "ok":   { "line": "wearOk",   "persona": "foodReaction.ok",   "social": 0.0,  "fun": 0.0 }
+    "like": {
+      "line": "wearLike",
+      "persona": "foodReaction.like",
+      "social": 0.03,
+      "fun": 0.02
+    },
+    "ok": {
+      "line": "wearOk",
+      "persona": "foodReaction.ok",
+      "social": 0.0,
+      "fun": 0.0
+    }
   },
   "bonusCooldownSeconds": 600
 }

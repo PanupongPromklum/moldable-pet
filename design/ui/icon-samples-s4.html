@@ -1,0 +1,239 @@
+<!doctype html>
+<html lang="th" data-theme="light">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="only light">
+<title>Icon samples S4</title>
+<!--
+  S4-05 icon sample board (owner: glaze). For OWNER REVIEW — the live HUD still uses the
+  line icons. New filled Moldable symbols: src/ui/icons.js → FILLED_ICONS / filledIcon().
+  Theme: ?theme=dark (or the button top-right). Serve from the repo root:
+  python3 -m http.server 8123 → http://localhost:8123/design/ui/icon-samples-s4.html
+-->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Prompt:wght@400;500;600&family=Poppins:wght@400;500;600&display=swap">
+<link rel="stylesheet" href="../../src/ui/tokens.css">
+<link rel="stylesheet" href="../../src/ui/hud.css">
+<style>
+  :root { --room: #F2F1FB; --room-2: #FBF0F4; --card: var(--mp-bg); }
+  :root[data-theme="dark"] { --room: #2A2838; --room-2: #33282F; }
+  html, body { margin: 0; background: var(--mp-bg-light); color: var(--mp-text); font-family: var(--mp-font-th); line-height: 1.5; }
+  .page { max-width: 1240px; margin: 0 auto; padding: 32px 24px 48px; display: flex; flex-direction: column; gap: 28px; }
+  header { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; }
+  h1 { margin: 0; font-size: 28px; font-weight: 600; line-height: 1.4; }
+  h2 { margin: 0 0 4px; font-size: 20px; font-weight: 600; line-height: 1.4; }
+  .sub { margin: 2px 0 0; font-size: 14px; color: var(--mp-text-muted); }
+  .en { font-family: var(--mp-font-en); }
+  .tag { display: inline-flex; align-items: center; gap: 6px; padding: 2px 10px; border-radius: 999px; font-size: 13px; font-weight: 500;
+    background: var(--mp-bg-primary-light); color: var(--mp-text); }
+  .tag.warn { background: var(--mp-bg-danger-light); color: var(--mp-text-warn); }
+  .theme-btn { height: 44px; padding: 0 18px; border-radius: 999px; border: 1.5px solid var(--mp-border-primary); background: var(--mp-bg);
+    color: var(--mp-text); font: 600 15px/1.4 var(--mp-font-th); cursor: pointer; }
+  .theme-btn:focus-visible { outline: 3px solid var(--mp-focus); outline-offset: 2px; }
+  section.card { background: var(--card); border-radius: 28px; padding: 22px 24px 24px; }
+  :root[data-theme="dark"] section.card { box-shadow: inset 0 0 0 1px var(--mp-line); }
+
+  /* ---- 1. real HUD size over a room ---- */
+  .hudrow { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+  .roombox { border-radius: 24px; padding: 16px; background: var(--room); display: flex; flex-direction: column; gap: 12px; }
+  .roombox .cap { font-size: 13px; font-weight: 600; color: var(--mp-text-muted); }
+  .bar { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+  .fakechip { height: 44px; padding: 0 14px; display: flex; align-items: center; border-radius: 999px; background: var(--mp-bg); font-weight: 600; }
+  .coinpill { position: relative; display: flex; align-items: center; gap: 8px; height: 44px; padding: 0 14px 0 9px; border-radius: 999px; background: var(--mp-bg); }
+  .coinpill .mp-fico { width: 28px; height: 28px; }
+  .coinpill b { font: 600 16px/1.4 var(--mp-font-en); }
+  .bottomrow { display: flex; align-items: center; gap: 10px; }
+  .ctxbtn { display: flex; align-items: center; gap: 6px; height: 52px; padding: 0 16px 0 10px; border-radius: 999px; border: 1.5px solid var(--mp-border-primary);
+    background: var(--mp-bg); color: var(--mp-text); font: 600 16px/1.4 var(--mp-font-th); }
+  .ctxbtn .mp-fico { width: 30px; height: 30px; }
+
+  /* Meter v2 [เสนอ]: the filled icon sits on a clean cup; the level is a 3 px progress ring that
+   * follows the blob, clockwise from the top. Filled part = the need colour (≥ 3:1 on the cup and
+   * on the panel, same tokens as today's fill); track = a faint tint of it. Low = faded icon +
+   * muted pink ring and a faint pink cup (no dark-red ground in the dark theme). */
+  .v2 { --track: color-mix(in srgb, var(--need) 22%, var(--ground)); }
+  .v2 .v2-cup { position: absolute; inset: 0; border-radius: var(--blob); background: var(--ground); }
+  .v2 .v2-ring { position: absolute; inset: 0; border-radius: var(--blob); padding: 3px;
+    background: conic-gradient(var(--need) calc(var(--level) * 360deg), var(--track) 0);
+    -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0); -webkit-mask-composite: xor;
+    mask: linear-gradient(#000 0 0) content-box exclude, linear-gradient(#000 0 0); }
+  .v2 .v2-ico { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; }
+  .v2 .v2-ico .mp-fico { width: 36px; height: 36px; }
+  .mp-meter.is-low .v2, .mp-meter.is-urgent .v2 { --ground: var(--mp-fico-low-ground); --track: color-mix(in srgb, var(--need) 50%, var(--ground)); }
+  .mp-meter.is-low .v2-ico .mp-fico, .mp-meter.is-urgent .v2-ico .mp-fico, .low .mp-fico {
+    opacity: var(--mp-fico-low-opacity); filter: saturate(var(--mp-fico-low-saturate, .45)); }
+
+  /* ---- 2. states grid ---- */
+  .states { display: grid; grid-template-columns: 150px repeat(4, 1fr); gap: 8px 12px; align-items: center; }
+  .states .h { font-size: 13px; font-weight: 600; color: var(--mp-text-muted); text-align: center; }
+  .states .rowh { font-size: 14px; font-weight: 600; }
+  .states .rowh small { display: block; font-weight: 400; font-size: 12px; color: var(--mp-text-muted); }
+  .cell { display: flex; justify-content: center; gap: 14px; padding: 10px 6px; border-radius: 20px; background: var(--room); }
+
+  /* ---- 3. large ---- */
+  .large { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
+  .lg { border-radius: 24px; background: var(--mp-bg-light); padding: 16px; display: flex; flex-direction: column; gap: 10px; }
+  :root[data-theme="dark"] .lg { background: #262626; }
+  .lg-row { display: flex; align-items: center; gap: 12px; }
+  .tile { width: 124px; height: 124px; border-radius: 28px; background: var(--mp-bg); display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+  .tile.low { background: var(--mp-fico-low-ground); box-shadow: inset 0 0 0 2px var(--mp-need-low-fill); }
+  .tile .mp-fico { width: 96px; height: 96px; }
+  .old { width: 64px; height: 64px; border-radius: 20px; background: var(--mp-bg); display: flex; align-items: center; justify-content: center; color: var(--mp-text); flex-shrink: 0; }
+  .lg-name { font-size: 16px; font-weight: 600; } .lg-name span { font: 500 13px/1.4 var(--mp-font-en); color: var(--mp-text-muted); margin-left: 6px; }
+  .lg-cap { display: flex; gap: 12px; font-size: 12px; color: var(--mp-text-muted); }
+  .lg-cap span:nth-child(1) { width: 124px; text-align: center; } .lg-cap span:nth-child(2) { width: 124px; text-align: center; } .lg-cap span:nth-child(3) { width: 64px; text-align: center; }
+
+  /* ---- 4. size ladder ---- */
+  .ladder { display: grid; grid-template-columns: 120px 1fr 1fr; gap: 8px 14px; align-items: center; }
+  .ladder .h { font-size: 13px; font-weight: 600; color: var(--mp-text-muted); }
+  .lad { display: flex; align-items: center; justify-content: space-around; gap: 10px; padding: 8px 14px; border-radius: 16px; background: var(--mp-bg-light); }
+  .lad.room { background: var(--room-2); }
+  .lad span { display: flex; flex-direction: column; align-items: center; gap: 2px; font: 500 11px/1.4 var(--mp-font-en); color: var(--mp-text-muted); }
+  :root[data-theme="dark"] .lad { background: #262626; } :root[data-theme="dark"] .lad.room { background: var(--room-2); }
+
+  .notes { display: grid; grid-template-columns: 1fr 1fr; gap: 8px 24px; font-size: 14px; color: var(--mp-text); }
+  .notes p { margin: 0; } .notes b { font-weight: 600; }
+  .sw { display: inline-block; width: 14px; height: 14px; border-radius: 5px; vertical-align: -2px; margin-right: 4px; }
+</style>
+</head>
+<body>
+<main class="page">
+  <header>
+    <div>
+      <h1>ไอคอนแบบใหม่ <span class="en">S4</span> — ตัวอย่างให้เลือก</h1>
+      <p class="sub">สไตล์ Moldable แบบเติมสี ก้อนนุ่มมน ซ้อนกันโปร่งนิดๆ ไล่สีแบรนด์ชุดเดียวกันทุกไอคอน มีไฮไลต์และเงานุ่ม ไม่มีเส้นขอบ</p>
+      <p class="sub" style="display:flex;gap:8px;margin-top:8px"><span class="tag warn">ยังไม่ใช้ในเกม รออนุมัติ</span><span class="tag">ไอคอนใหม่ทั้งหมด วาดในโค้ด ไม่เพิ่มใน Figma DS</span></p>
+    </div>
+    <button class="theme-btn" type="button" id="theme"></button>
+  </header>
+
+  <section class="card">
+    <h2>1 · ขนาดจริงบน HUD</h2>
+    <p class="sub">แถบความต้องการ เหรียญ และปุ่มแต่งห้อง บนพื้นห้อง ซ้าย = ไอคอนเส้นที่ใช้อยู่ตอนนี้ · ขวา = ไอคอนเติมสีแบบใหม่ (ระดับเดียวกัน)</p>
+    <div class="hudrow" id="hudrow"></div>
+  </section>
+
+  <section class="card">
+    <h2>2 · สถานะ เต็ม / ต่ำ</h2>
+    <p class="sub">ต่ำ = ไอคอนจางลง สีลดลง ขอบและพื้นชมพูหม่นตามกฎแบรนด์ (ไม่ใช้แดงสด) พร้อมป้าย ! เหมือนเดิม · ในแต่ละช่อง: ซ้าย = แบบเดิม ขวา = แบบใหม่</p>
+    <div class="states" id="states"></div>
+  </section>
+
+  <section class="card">
+    <h2>3 · ขนาดใหญ่ 96 px</h2>
+    <p class="sub">เต็ม · ต่ำ · และไอคอนเส้นเดิมเพื่อเทียบ</p>
+    <div class="large" id="large"></div>
+  </section>
+
+  <section class="card">
+    <h2>4 · อ่านออกไหมเมื่อเล็กลง</h2>
+    <p class="sub">20 · 24 · 28 · 32 · 40 px บนพื้นการ์ดและพื้นห้อง</p>
+    <div class="ladder" id="ladder"></div>
+  </section>
+
+  <section class="card">
+    <h2>หมายเหตุสำหรับเจ้าของ</h2>
+    <div class="notes" id="notes"></div>
+  </section>
+</main>
+
+<script type="module">
+import { icon, filledIcon, FILLED_ICON_NAMES, FILLED_INKS } from '../../src/ui/icons.js';
+
+const q = new URLSearchParams(location.search);
+const theme = q.get('theme') === 'dark' ? 'dark' : 'light';
+document.documentElement.dataset.theme = theme;
+document.querySelector('meta[name="color-scheme"]').content = theme === 'dark' ? 'only dark' : 'only light';
+const tb = document.getElementById('theme');
+tb.textContent = theme === 'dark' ? 'เปิดไฟ (ธีมสว่าง)' : 'ปิดไฟ (ธีมมืด)';
+tb.onclick = () => { q.set('theme', theme === 'dark' ? 'light' : 'dark'); location.search = q.toString(); };
+
+const NEEDS = ['hunger', 'toilet', 'fun', 'social'];
+const LABEL = { hunger: 'อิ่ม', toilet: 'ห้องน้ำ', fun: 'สนุก', social: 'ใกล้ชิด', coin: 'เหรียญ', decor: 'แต่งห้อง' };
+const EN = { hunger: 'hunger', toilet: 'toilet', fun: 'fun', social: 'social', coin: 'coin', decor: 'decor' };
+const OLD = { hunger: 'hunger', toilet: 'toilet', fun: 'fun', social: 'social', coin: 'coin', decor: 'sofa' };
+const LEVELS = { hunger: 0.8, toilet: 0.6, fun: 0.45, social: 0.9 };
+const stateOf = (v) => (v < 0.1 ? 'urgent' : v < 0.25 ? 'low' : v >= 0.7 ? 'full' : 'half');
+
+/** Today's meter, same markup as hud.js. */
+function oldMeter(id, v, i) {
+  const st = stateOf(v);
+  return `<div class="mp-meter is-${st}" data-need="${id}" style="--level:${v}">
+    <span class="mp-blob" style="--blob: var(--mp-blob-${i + 1})">
+      <span class="mp-blob-ring"></span>
+      <span class="mp-blob-cup"><span class="mp-blob-ico">${icon(id, 24)}</span></span>
+      <span class="mp-blob-fill"><span class="mp-blob-ico">${icon(id, 24)}</span></span>
+      <span class="mp-blob-badge mp-num">!</span>
+    </span><span class="mp-meter-label">${LABEL[id]}</span></div>`;
+}
+/** Proposed meter with the filled icon. */
+function newMeter(id, v, i) {
+  const st = stateOf(v);
+  return `<div class="mp-meter is-${st}" data-need="${id}" style="--level:${v}">
+    <span class="mp-blob v2" style="--blob: var(--mp-blob-${i + 1})">
+      <span class="mp-blob-ring"></span>
+      <span class="v2-cup"></span><span class="v2-ring"></span>
+      <span class="v2-ico">${filledIcon(id, 36)}</span>
+      <span class="mp-blob-badge mp-num">!</span>
+    </span><span class="mp-meter-label">${LABEL[id]}</span></div>`;
+}
+const oldCoin = '<span class="mp-coin-dot" aria-hidden="true"><span></span></span>';
+
+function hudBox(kind) {
+  const isNew = kind === 'new';
+  const meters = NEEDS.map((id, i) => (isNew ? newMeter : oldMeter)(id, LEVELS[id], i)).join('');
+  return `<div class="roombox">
+    <span class="cap">${isNew ? 'แบบใหม่ (ตัวอย่าง)' : 'ที่ใช้อยู่ตอนนี้'}</span>
+    <div class="bar"><span class="fakechip">ไผ่</span>
+      <span class="coinpill">${isNew ? filledIcon('coin', 28) : oldCoin}<b>240</b></span></div>
+    <div class="mp-meters">${meters}</div>
+    <div class="bottomrow"><span class="ctxbtn">${isNew ? filledIcon('decor', 30) : icon('sofa', 22)}<span>แต่งห้อง</span></span>
+      <span class="ctxbtn">${isNew ? filledIcon('fun', 30) : icon('fun', 22)}<span>เล่น</span></span></div>
+  </div>`;
+}
+document.getElementById('hudrow').innerHTML = hudBox('old') + hudBox('new');
+
+// 2. states
+const ROWS = [['เต็ม', 'full', 1], ['ครึ่ง', 'half', 0.5], ['ต่ำ', 'low', 0.18], ['ด่วน', 'urgent', 0.06]];
+let html = '<span></span>' + NEEDS.map((id) => `<span class="h">${LABEL[id]}</span>`).join('');
+for (const [th, en, v] of ROWS) {
+  html += `<span class="rowh">${th}<small class="en">${en} · ${Math.round(v * 100)}%</small></span>`;
+  html += NEEDS.map((id, i) => `<div class="cell">${oldMeter(id, v, i)}${newMeter(id, v, i)}</div>`).join('');
+}
+document.getElementById('states').innerHTML = html;
+
+// 3. large
+document.getElementById('large').innerHTML = FILLED_ICON_NAMES.map((id) => `
+  <div class="lg">
+    <span class="lg-name">${LABEL[id]}<span>${EN[id]}</span></span>
+    <div class="lg-row">
+      <span class="tile">${filledIcon(id, 96)}</span>
+      <span class="tile low">${filledIcon(id, 96)}</span>
+      <span class="old">${icon(OLD[id], 48)}</span>
+    </div>
+    <div class="lg-cap"><span>เต็ม</span><span>ต่ำ</span><span>แบบเดิม</span></div>
+  </div>`).join('');
+
+// 4. ladder
+const SIZES = [20, 24, 28, 32, 40];
+let lad = '<span></span><span class="h">บนพื้นการ์ด</span><span class="h">บนพื้นห้อง</span>';
+for (const id of FILLED_ICON_NAMES) {
+  lad += `<span class="rowh" style="font-size:14px;font-weight:600">${LABEL[id]}</span>`;
+  for (const bg of ['', 'room']) lad += `<div class="lad ${bg}">${SIZES.map((sz) => `<span>${filledIcon(id, sz)}${sz}</span>`).join('')}</div>`;
+}
+document.getElementById('ladder').innerHTML = lad;
+
+// notes
+const inks = Object.entries(FILLED_INKS).map(([k, [a, b]]) =>
+  `<span style="white-space:nowrap"><span class="sw" style="background:linear-gradient(${a},${b})"></span><span class="en">${k} ${a} → ${b}</span></span>`).join(' · ');
+document.getElementById('notes').innerHTML = `
+  <p><b>สีที่ใช้</b> หมึกไล่สีชุดเดียวกันทุกไอคอน ปลายล่างเป็นสีจากแบรนด์ (DS) ยกเว้น plum และ peri ที่ดูดจากภาพ Style Guide ของเจ้าของ — ทั้งหมดเป็นค่า <b>[เสนอ]</b></p>
+  <p>${inks}</p>
+  <p><b>แถบความต้องการแบบใหม่ [เสนอ]</b> ไอคอนเติมสีอยู่บนพื้นเรียบ ระดับเป็นวงแหวนหนา 3 px รอบก้อน วนตามเข็มนาฬิกาจากด้านบน (สีวงแหวนเดิม คอนทราสต์ ≥ 3:1) ชื่อใต้ไอคอนยังบอกความหมายเสมอ · ลองแบบ "ระดับน้ำสีอ่อนหลังไอคอน" แล้ว ไอคอนจมหายในธีมสว่าง จึงไม่เลือก</p>
+  <p><b>สถานะต่ำ</b> ไอคอนจาง ${theme === 'dark' ? '35' : '40'}% สีลดลง ขอบชมพูหม่น และพื้นชมพูจางๆ (ธีมสว่าง #FFEBEB [DS] ขอบ #A76B7A · ธีมมืด พื้น #3A2E33 [เสนอ] ขอบ #FFD1D1 [DS] แทนพื้นแดงเข้ม #731412) และป้าย ! — ไม่มีแดงสด</p>`;
+document.body.dataset.ready = '1';
+</script>
+</body>
+</html>

@@ -1,0 +1,337 @@
+{
+ "url": "http://localhost:8122/index.html?debug&nobake",
+ "label": "after-nobake",
+ "seconds": 5.0,
+ "phone": {
+  "viewport": "390x844@3",
+  "touch": true,
+  "rows": [
+   {
+    "room": "living",
+    "frames": 2,
+    "fps": 0.23,
+    "frameAvgMs": 4258.1,
+    "frameP95Ms": 4533.1,
+    "renderAvgMs": 15.03,
+    "renderP95Ms": 23.1,
+    "calls": 28,
+    "tris": 116160,
+    "passes": 1,
+    "heapDeltaKB": -129.3,
+    "breakdown": {
+     "groups": {
+      "pet": {
+       "calls": 7,
+       "tris": 35598
+      },
+      "room.static(live)": {
+       "calls": 20,
+       "tris": 78352
+      },
+      "room.live": {
+       "calls": 2,
+       "tris": 2212
+      }
+     },
+     "transparent": 13,
+     "meshes": 29,
+     "caps": {
+      "pixelRatio": 1.75,
+      "buffer": [
+       682,
+       1477
+      ],
+      "antialias": true,
+      "petVerts": 16812,
+      "bake": {
+       "enabled": false,
+       "supported": true,
+       "reason": "",
+       "mode": "off",
+       "bakes": 0,
+       "room": null,
+       "version": null,
+       "lastBakeMs": 0,
+       "target": null,
+       "staticDrawables": 0
+      },
+      "quality": null
+     }
+    }
+   },
+   {
+    "room": "kitchen",
+    "frames": 3,
+    "fps": 0.32,
+    "frameAvgMs": 3183.2,
+    "frameP95Ms": 3583.2,
+    "renderAvgMs": 31.62,
+    "renderP95Ms": 102.1,
+    "calls": 16,
+    "tris": 105598,
+    "passes": 1,
+    "heapDeltaKB": 113.8,
+    "breakdown": {
+     "groups": {
+      "pet": {
+       "calls": 7,
+       "tris": 35598
+      },
+      "room.static(live)": {
+       "calls": 9,
+       "tris": 70000
+      },
+      "room.live": {
+       "calls": 1,
+       "tris": 240
+      }
+     },
+     "transparent": 8,
+     "meshes": 17,
+     "caps": {
+      "pixelRatio": 1.75,
+      "buffer": [
+       682,
+       1477
+      ],
+      "antialias": true,
+      "petVerts": 16812,
+      "bake": {
+       "enabled": false,
+       "supported": true,
+       "reason": "",
+       "mode": "off",
+       "bakes": 0,
+       "room": null,
+       "version": null,
+       "lastBakeMs": 0,
+       "target": null,
+       "staticDrawables": 0
+      },
+      "quality": null
+     }
+    }
+   },
+   {
+    "room": "bathroom",
+    "frames": 3,
+    "fps": 0.4,
+    "frameAvgMs": 2511.0,
+    "frameP95Ms": 2733.2,
+    "renderAvgMs": 8.53,
+    "renderP95Ms": 11.1,
+    "calls": 20,
+    "tris": 112058,
+    "passes": 1,
+    "heapDeltaKB": 130.0,
+    "breakdown": {
+     "groups": {
+      "pet": {
+       "calls": 7,
+       "tris": 35598
+      },
+      "room.static(live)": {
+       "calls": 9,
+       "tris": 69336
+      },
+      "room.live": {
+       "calls": 5,
+       "tris": 8384
+      }
+     },
+     "transparent": 9,
+     "meshes": 21,
+     "caps": {
+      "pixelRatio": 1.75,
+      "buffer": [
+       682,
+       1477
+      ],
+      "antialias": true,
+      "petVerts": 16812,
+      "bake": {
+       "enabled": false,
+       "supported": true,
+       "reason": "",
+       "mode": "off",
+       "bakes": 0,
+       "room": null,
+       "version": null,
+       "lastBakeMs": 0,
+       "target": null,
+       "staticDrawables": 0
+      },
+      "quality": null
+     }
+    }
+   }
+  ],
+  "errors": []
+ },
+ "desktop": {
+  "viewport": "1440x900@1",
+  "touch": false,
+  "rows": [
+   {
+    "room": "living",
+    "frames": 3,
+    "fps": 0.21,
+    "frameAvgMs": 4872.1,
+    "frameP95Ms": 5049.8,
+    "renderAvgMs": 41.9,
+    "renderP95Ms": 128.1,
+    "calls": 29,
+    "tris": 149085,
+    "passes": 1,
+    "heapDeltaKB": -164.2,
+    "breakdown": {
+     "groups": {
+      "pet": {
+       "calls": 7,
+       "tris": 68521
+      },
+      "room.static(live)": {
+       "calls": 20,
+       "tris": 78352
+      },
+      "room.live": {
+       "calls": 2,
+       "tris": 2212
+      }
+     },
+     "transparent": 13,
+     "meshes": 29,
+     "caps": {
+      "pixelRatio": 1,
+      "buffer": [
+       1440,
+       900
+      ],
+      "antialias": true,
+      "petVerts": 32492,
+      "bake": {
+       "enabled": false,
+       "supported": true,
+       "reason": "",
+       "mode": "off",
+       "bakes": 0,
+       "room": null,
+       "version": null,
+       "lastBakeMs": 0,
+       "target": null,
+       "staticDrawables": 0
+      },
+      "quality": null
+     }
+    }
+   },
+   {
+    "room": "kitchen",
+    "frames": 3,
+    "fps": 0.23,
+    "frameAvgMs": 4422.0,
+    "frameP95Ms": 5116.5,
+    "renderAvgMs": 10.18,
+    "renderP95Ms": 11.8,
+    "calls": 17,
+    "tris": 138761,
+    "passes": 1,
+    "heapDeltaKB": 115.1,
+    "breakdown": {
+     "groups": {
+      "pet": {
+       "calls": 7,
+       "tris": 68521
+      },
+      "room.static(live)": {
+       "calls": 9,
+       "tris": 70000
+      },
+      "room.live": {
+       "calls": 1,
+       "tris": 240
+      }
+     },
+     "transparent": 8,
+     "meshes": 17,
+     "caps": {
+      "pixelRatio": 1,
+      "buffer": [
+       1440,
+       900
+      ],
+      "antialias": true,
+      "petVerts": 32492,
+      "bake": {
+       "enabled": false,
+       "supported": true,
+       "reason": "",
+       "mode": "off",
+       "bakes": 0,
+       "room": null,
+       "version": null,
+       "lastBakeMs": 0,
+       "target": null,
+       "staticDrawables": 0
+      },
+      "quality": null
+     }
+    }
+   },
+   {
+    "room": "bathroom",
+    "frames": 3,
+    "fps": 0.19,
+    "frameAvgMs": 5377.5,
+    "frameP95Ms": 6283.1,
+    "renderAvgMs": 25.48,
+    "renderP95Ms": 30.8,
+    "calls": 20,
+    "tris": 144981,
+    "passes": 1,
+    "heapDeltaKB": 117.4,
+    "breakdown": {
+     "groups": {
+      "pet": {
+       "calls": 7,
+       "tris": 68521
+      },
+      "room.static(live)": {
+       "calls": 9,
+       "tris": 69336
+      },
+      "room.live": {
+       "calls": 5,
+       "tris": 8384
+      }
+     },
+     "transparent": 9,
+     "meshes": 21,
+     "caps": {
+      "pixelRatio": 1,
+      "buffer": [
+       1440,
+       900
+      ],
+      "antialias": true,
+      "petVerts": 32492,
+      "bake": {
+       "enabled": false,
+       "supported": true,
+       "reason": "",
+       "mode": "off",
+       "bakes": 0,
+       "room": null,
+       "version": null,
+       "lastBakeMs": 0,
+       "target": null,
+       "staticDrawables": 0
+      },
+      "quality": null
+     }
+    }
+   }
+  ],
+  "errors": []
+ }
+}

@@ -32,7 +32,7 @@ import { createFit } from './fit.js';
 export { EXPRESSION_KEYS } from './expressions.js';
 export { EXPRESSION_ACTION, EXPRESSION_TH } from './expressions.js';
 export { ACTION_KEYS } from './actions.js';
-export { ACCESSORY_IDS, SLOT_OF, SLOTS, ACCESSORY_TH } from './accessories.js';
+export { ACCESSORY_IDS, SLOT_OF, SLOTS, ACCESSORY_TH, XMAS_ACCESSORY_IDS } from './accessories.js';
 
 /** Character keys in roster order (`pill` is "coming soon" in Sprint 1). */
 export const CHARACTER_KEYS = Object.freeze(['splat', 'pill', 'gumdrop', 'diamond', 'cloud', 'flower']);
@@ -195,7 +195,8 @@ export function createCharacter(key, opts = {}) {
   /* ---------- outfit (S2-06) ---------- */
   const outfitG = new THREE.Group(); outfitG.name = 'outfit'; turn.add(outfitG);
   const outfit = { head: null, eyes: null, body: null };
-  const worn = { head: null, eyes: null, body: null };      // { group, anchor }
+  const worn = { head: null, eyes: null, body: null };      // { group, anchor, tick? }
+  const calmItems = prefersReducedMotion();                 // reduced motion: hanging parts stay still
   let fit = null;
   const getFit = () => fit || (fit = createFit({
     profile: prof, positions: flatGeo.attributes.position.array, bbox: bb, eye: E, eyeScale: S,
@@ -426,6 +427,12 @@ export function createCharacter(key, opts = {}) {
     // floor shadow
     const sh = 1 / (1 + Math.max(0, y) * 2.2), so = sh * (1 - clamp(c, 0, 1));
     shadow.scale.set(bodyW * 1.15 * SXs * sh, 1.5 * SZs * sh, 1); shadow.material.opacity = so; shadow.position.x = frame.x;
+
+    // swinging outfit parts (bell, pom-pom, S4-04): gentle pendulums driven by the body's motion
+    if (!calmItems && (worn.head?.tick || worn.eyes?.tick || worn.body?.tick)) {
+      turn.updateWorldMatrix(true, false);
+      for (const sl of SLOTS) worn[sl]?.tick?.(dt, turn.matrixWorld);
+    }
 
     applyDeform();
   }

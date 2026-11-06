@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="color-scheme" content="only light">
-<title>HUD demo — Moldable Pet (S1-04, S2, S3)</title>
+<title>HUD demo — Moldable Pet (S1-04, S2, S3, S4)</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Prompt:wght@400;500;600&family=Poppins:wght@400;500;600&display=swap">
@@ -26,6 +26,8 @@
   #room[data-room="kitchen"] { background: var(--room-kitchen); } #room[data-room="kitchen"] .floor { background: var(--floor-kitchen); }
   #room[data-room="bathroom"] { background: var(--room-bathroom); } #room[data-room="bathroom"] .floor { background: var(--floor-bathroom); }
   #pet { position: fixed; left: 50%; width: 200px; height: 190px; margin-left: -100px; object-fit: contain; pointer-events: none; }
+  /* S4: the fake room shows the furniture item of the open tab (equipped or being tried) */
+  #furn { position: fixed; left: 4%; width: 116px; height: 116px; object-fit: contain; pointer-events: none; display: none; }
   #ghost { position: fixed; left: 0; top: 0; width: 64px; height: 64px; pointer-events: none; z-index: 20; display: none; transform-origin: center; }
   .drop { position: fixed; top: -40px; width: 36px; height: 36px; pointer-events: none; z-index: 1; }
   /* Demo panel (not part of the HUD) */
@@ -46,6 +48,7 @@
   <div class="blob" style="left:8%; top:24%; width:28vw; max-width:140px; height:150px;"></div>
   <div class="blob" style="right:9%; top:26%; width:22vw; max-width:100px; height:100px;"></div>
 </div>
+<img id="furn" alt="">
 <img id="pet" alt="">
 <div id="ghost"></div>
 <div id="hud"></div>
@@ -69,6 +72,8 @@
   <b>Screens</b>
   <button data-a="select">หน้าเลือกตัวละคร (เปิดเกม)</button>
   <button data-a="ward">ตู้เสื้อผ้า</button>
+  <button data-a="decor">แต่งห้อง (ห้องนี้)</button>
+  <button data-a="thumbs">แต่งห้อง: รูปมาช้า</button>
   <button data-a="game">มินิเกม ฝนขนม (การ์ดเลือกวิธีเล่น)</button>
   <button data-a="theme">สลับไฟ (light / dark)</button>
   <button data-a="camfail">กล้องใช้ไม่ได้ → กลับเป็นนิ้ว</button>
@@ -104,16 +109,62 @@ const CAMS = ['off', 'loading', 'on', 'error'];
 
 let WARD = { slots: {}, items: [] };
 try { WARD = await (await fetch('../../assets/data/wardrobe.json')).json(); } catch { /* demo keeps going */ }
+let FURN = { rooms: {}, items: [], themes: {} };
+try { FURN = await (await fetch('../../assets/data/furniture.json')).json(); } catch { /* demo keeps going */ }
+
+/** Stand-in for wire's createFurniturePreview → PNG thumbnails (S4-06): soft clay-ish shapes on a canvas. */
+const THUMB_INKS = { basic: [['#D6E2EC', '#9BB0DE'], ['#EADFF2', '#CBA5D1'], ['#F8DCE8', '#EB92B3']], xmas: [['#F1D4DC', '#B9798D'], ['#D7E6E1', '#7FA39A'], ['#F6EADF', '#D9B9A0']] };
+function fakeThumb(it, i) {
+  const c = document.createElement('canvas'); c.width = c.height = 128;
+  const g = c.getContext('2d');
+  const [a, b] = THUMB_INKS[it.theme === 'xmas' ? 'xmas' : 'basic'][i % 3];
+  const fill = (y0, y1) => { const gr = g.createLinearGradient(0, y0, 0, y1); gr.addColorStop(0, a); gr.addColorStop(1, b); return gr; };
+  const rr = (x, y, w, h, r) => { g.beginPath(); g.roundRect(x, y, w, h, r); g.fill(); };
+  g.fillStyle = 'rgba(37,41,65,.12)'; g.beginPath(); g.ellipse(64, 112, 46, 8, 0, 0, Math.PI * 2); g.fill();
+  const slot = it.slot;
+  if (slot === 'sofa') { g.fillStyle = fill(34, 70); rr(22, 34, 84, 44, 18); g.fillStyle = fill(60, 100); rr(16, 62, 96, 40, 16); }
+  else if (slot === 'rug') { g.fillStyle = fill(70, 112); g.beginPath(); g.ellipse(64, 92, 54, 22, 0, 0, Math.PI * 2); g.fill(); }
+  else if (slot === 'wall') { g.fillStyle = fill(24, 96); rr(26, 22, 76, 64, 16); g.fillStyle = 'rgba(255,255,255,.55)'; rr(38, 34, 52, 40, 10); }
+  else if (slot === 'window' || slot === 'mirror') { g.fillStyle = fill(16, 108); g.beginPath(); g.ellipse(64, 62, 38, 46, 0, 0, Math.PI * 2); g.fill(); g.fillStyle = 'rgba(255,255,255,.5)'; g.beginPath(); g.ellipse(64, 62, 28, 36, 0, 0, Math.PI * 2); g.fill(); }
+  else if (slot === 'corner') { g.fillStyle = fill(10, 90); g.beginPath(); g.moveTo(64, 10); g.quadraticCurveTo(112, 86, 96, 88); g.lineTo(32, 88); g.quadraticCurveTo(16, 86, 64, 10); g.fill(); g.fillStyle = '#CBA5D1'; rr(48, 84, 32, 24, 8); }
+  else if (slot === 'lamp') { g.fillStyle = fill(14, 54); g.beginPath(); g.ellipse(64, 40, 34, 26, 0, Math.PI, 0); g.fill(); g.fillStyle = '#B7B3CF'; rr(60, 40, 8, 60, 4); rr(42, 98, 44, 10, 5); }
+  else if (slot === 'fridge') { g.fillStyle = fill(10, 112); rr(34, 10, 60, 100, 18); g.fillStyle = 'rgba(255,255,255,.6)'; rr(80, 34, 6, 22, 3); }
+  else { g.fillStyle = fill(40, 108); rr(28, 44, 72, 62, 18); }
+  g.fillStyle = 'rgba(255,255,255,.55)'; g.beginPath(); g.ellipse(46, 46, 12, 6, -0.5, 0, Math.PI * 2); g.fill();
+  return c.toDataURL('image/png');
+}
+const THUMBS = Object.fromEntries(FURN.items.map((it) => {
+  const i = FURN.items.filter((x) => x.slot === it.slot && x.room === it.room).indexOf(it);
+  return [it.id, fakeThumb(it, i)];
+}));
 
 const s = { room: HUD_ROOMS.indexOf(q.get('room')) >= 0 ? q.get('room') : 'living', preset: 0, mic: 0, cam: 0, camHidden: false,
   coins: 240, toilet: 'idle', coach: false, char: CHARS[5], needs: { ...PRESETS[0] }, best: 38,
   theme: 'light', control: q.get('ctl') || 'touch',
-  owned: WARD.items.filter((i) => i.starter).map((i) => i.id), outfit: { head: null, eyes: 'glasses-round', body: null }, game: null };
+  owned: WARD.items.filter((i) => i.starter).map((i) => i.id), outfit: { head: null, eyes: 'glasses-round', body: null }, game: null,
+  furniture: Object.fromEntries(Object.keys(FURN.rooms).map((r) => [r, Object.fromEntries(FURN.items.filter((x) => x.room === r && x.default).map((x) => [x.slot, x.id]))])),
+  preview: {}, thumbsLate: q.get('thumbs') === 'late' || q.get('thumbs') === 'none' };
+if (q.get('coins')) s.coins = +q.get('coins');
+// A couple of things bought already, so "มีแล้ว" shows up.
+s.owned.push('sofa-cloud', 'rug-flower', 'mat-duck');
 
 const roomEl = document.getElementById('room');
 const pet = document.getElementById('pet');
 const ghost = document.getElementById('ghost');
-const wardData = () => ({ slots: WARD.slots, items: WARD.items, owned: s.owned, outfit: s.outfit, coins: s.coins, charKey: s.char.key });
+const wardData = () => ({ slots: WARD.slots, items: WARD.items, owned: s.owned, outfit: s.outfit, coins: s.coins, charKey: s.char.key, themes: WARD.themes });
+const furnEl = document.getElementById('furn');
+/** Data as wire passes it to hud.showDecor (contract: Sprint 4 → Furniture shop). */
+function decorData() {
+  const room = s.room;
+  const slots = Object.entries((FURN.rooms[room] || {}).slots || {}).map(([id, v]) => ({ id, label: v.label }));
+  const items = FURN.items.filter((x) => x.room === room).map((x) => ({ ...x, thumb: s.thumbsLate ? undefined : THUMBS[x.id] }));
+  return { room, slots, items, owned: s.owned, furniture: s.furniture[room], coins: s.coins, themes: FURN.themes };
+}
+/** Fake room: show the item of a slot (tried or equipped). */
+function showFurn(id) {
+  if (!id || !THUMBS[id]) { furnEl.style.display = 'none'; return; }
+  furnEl.src = THUMBS[id]; furnEl.style.display = 'block';
+}
 
 const hud = createHUD(document.getElementById('hud'), {
   onRoom(d) {
@@ -144,6 +195,18 @@ const hud = createHUD(document.getElementById('hud'), {
     hud.setCoins(s.coins -= it.price);
     hud.updateWardrobe({ owned: s.owned, outfit: s.outfit, coins: s.coins });
   },
+  onDecor() { s.preview = {}; hud.showDecor(decorData()); if (s.thumbsLate && q.get('thumbs') !== 'none') setTimeout(() => { s.thumbsLate = false; hud.updateDecor({ items: decorData().items }); }, 1500); },
+  onDecorPreview(slot, id) { s.preview[slot] = id; showFurn(id || s.furniture[s.room][slot]); },
+  onDecorEquip(slot, id) { s.furniture[s.room][slot] = id; hud.updateDecor({ furniture: s.furniture[s.room] }); showFurn(id); hud.say('ห้องสวยขึ้นเลย'); },
+  onDecorBuy(id) {
+    const it = FURN.items.find((x) => x.id === id);
+    if (!it || s.coins < it.price) return;
+    s.owned = [...s.owned, id]; s.furniture[s.room][it.slot] = id; delete s.preview[it.slot];
+    hud.setCoins(s.coins -= it.price);
+    hud.updateDecor({ owned: s.owned, furniture: s.furniture[s.room], coins: s.coins });
+    showFurn(id);
+  },
+  onDecorClose() { s.preview = {}; furnEl.style.display = 'none'; },
   onMinigameExit() { stopGame(); hud.endMinigame(); },
   onMinigameAgain() { startGame(); },
   onMinigameControl(id) { s.control = id; },
@@ -232,6 +295,22 @@ if (q.get('ward')) {
   if (q.get('ward') === 'body' || q.get('ward') === 'buy') document.querySelector('.mp-ward-tab[data-slot="body"]')?.click();
   if (q.get('ward') === 'buy') document.querySelector('.mp-item[data-id="scarf"]')?.click();
 }
+if (q.get('ward') === 'xmas' || q.get('ward') === 'xmas-body') {
+  if (q.get('ward') === 'xmas-body') document.querySelector('.mp-ward-tab[data-slot="body"]')?.click();
+  document.querySelector('.mp-chip[data-filter="xmas"]')?.click();
+}
+// S4 shop: ?decor=1 | preview | buy | short | xmas   (&tab=<slot> &coins=n &thumbs=late|none)
+if (q.get('decor')) {
+  const mode = q.get('decor');
+  hud.showDecor(decorData());
+  if (s.thumbsLate && q.get('thumbs') === 'late') setTimeout(() => { s.thumbsLate = false; hud.updateDecor({ items: decorData().items }); }, 1500);
+  const tab = q.get('tab') || (mode === 'short' ? 'corner' : null);
+  if (tab) document.querySelector(`.mp-decor .mp-ward-tab[data-slot="${tab}"]`)?.click();
+  if (mode === 'xmas') document.querySelector('.mp-decor .mp-chip[data-filter="xmas"]')?.click();
+  const tryIt = () => [...document.querySelectorAll('.mp-decor .mp-item')].find((b) => !b.classList.contains('is-owned'));
+  if (mode === 'preview' || mode === 'buy' || mode === 'short' || mode === 'xmas') { const card = mode === 'short' ? document.querySelector('.mp-decor .mp-item[data-id="xmas-tree"]') : tryIt(); card?.click(); }
+  if (mode === 'buy' || mode === 'short') document.querySelector('.mp-decor .mp-try-buy')?.click();
+}
 if (q.get('game') === 'intro') openIntro();
 if (q.get('game') === 'play') {
   hud.startMinigame({ title: 'ฝนขนม', durationSec: 45, countdown: 0, control: s.control });
@@ -251,13 +330,14 @@ function frame(t) {
   const base = s.room === 'kitchen' ? vh * 0.36 : vh * 0.5;
   const top = base - 95 + Math.sin(t / 700) * 3;
   pet.style.top = `${top}px`;
+  furnEl.style.top = `${base - 40}px`;
   hud.placeBubble(window.innerWidth / 2 + 30, top + 6);
   requestAnimationFrame(frame);
 }
 requestAnimationFrame(frame);
 
 window.addEventListener('keydown', (e) => {
-  if (document.querySelector('.mp-hud.is-game, .mp-hud.is-wardrobe, .mp-hud.is-selecting')) return;
+  if (document.querySelector('.mp-hud.is-game, .mp-hud.is-wardrobe, .mp-hud.is-decor, .mp-hud.is-selecting')) return;
   if (e.key === 'ArrowLeft') { s.room = HUD_ROOMS[(HUD_ROOMS.indexOf(s.room) + 2) % 3]; s.toilet = 'idle'; applyRoom(); }
   if (e.key === 'ArrowRight') { s.room = HUD_ROOMS[(HUD_ROOMS.indexOf(s.room) + 1) % 3]; s.toilet = 'idle'; applyRoom(); }
 });
@@ -284,6 +364,8 @@ panel.addEventListener('click', (e) => {
   if (a === 'coins-') hud.setCoins(s.coins = Math.max(0, s.coins - 50));
   if (a === 'select') hud.showSelect(CHARS);
   if (a === 'ward') { if (s.room !== 'living') { s.room = 'living'; applyRoom(); } hud.showWardrobe(wardData()); }
+  if (a === 'decor') { s.preview = {}; hud.showDecor(decorData()); }
+  if (a === 'thumbs') { s.thumbsLate = true; s.preview = {}; hud.showDecor(decorData()); setTimeout(() => { s.thumbsLate = false; hud.updateDecor({ items: decorData().items }); }, 1500); }
   if (a === 'game') openIntro();
   if (a === 'theme') applyTheme(s.theme === 'dark' ? 'light' : 'dark');
   if (a === 'camfail') { s.control = 'touch'; hud.updateMinigame({ control: 'touch' }); hud.toast('เปิดกล้องไม่ได้ เลยเล่นด้วยนิ้วแทนนะ', 4000, { icon: 'camera-off', tone: 'warn' }); }

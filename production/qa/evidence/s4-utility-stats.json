@@ -1,0 +1,434 @@
+{
+ "bathroom-desktop-alt1-dark": {
+  "static": {
+   "calls": 10,
+   "tris": 103040
+  },
+  "live": {
+   "calls": 5,
+   "tris": 6944
+  },
+  "total": 15,
+  "staticVersion": 1,
+  "furniture": {
+   "mirror": "mirror-cloud",
+   "wall": "towel-stripes",
+   "rug": "mat-duck"
+  },
+  "frameCalls": 22
+ },
+ "bathroom-desktop-alt1-light": {
+  "static": {
+   "calls": 9,
+   "tris": 103028
+  },
+  "live": {
+   "calls": 5,
+   "tris": 6944
+  },
+  "total": 14,
+  "staticVersion": 1,
+  "furniture": {
+   "mirror": "mirror-cloud",
+   "wall": "towel-stripes",
+   "rug": "mat-duck"
+  },
+  "frameCalls": 21
+ },
+ "bathroom-desktop-default-dark": {
+  "static": {
+   "calls": 10,
+   "tris": 102628
+  },
+  "live": {
+   "calls": 5,
+   "tris": 6944
+  },
+  "total": 15,
+  "staticVersion": 1,
+  "furniture": {
+   "mirror": "mirror-oval",
+   "wall": "towel-rail",
+   "rug": "mat-bath"
+  },
+  "frameCalls": 22
+ },
+ "bathroom-desktop-default-light": {
+  "static": {
+   "calls": 9,
+   "tris": 102616
+  },
+  "live": {
+   "calls": 5,
+   "tris": 6944
+  },
+  "total": 14,
+  "staticVersion": 1,
+  "furniture": {
+   "mirror": "mirror-oval",
+   "wall": "towel-rail",
+   "rug": "mat-bath"
+  },
+  "frameCalls": 21
+ },
+ "bathroom-desktop-xmas-dark": {
+  "static": {
+   "calls": 12,
+   "tris": 140412
+  },
+  "live": {
+   "calls": 5,
+   "tris": 6944
+  },
+  "total": 17,
+  "staticVersion": 1,
+  "furniture": {
+   "mirror": "mirror-holly",
+   "wall": "stocking-xmas",
+   "rug": "mat-snow-bath"
+  },
+  "frameCalls": 24
+ },
+ "bathroom-desktop-xmas-light": {
+  "static": {
+   "calls": 10,
+   "tris": 140388
+  },
+  "live": {
+   "calls": 5,
+   "tris": 6944
+  },
+  "total": 15,
+  "staticVersion": 1,
+  "furniture": {
+   "mirror": "mirror-holly",
+   "wall": "stocking-xmas",
+   "rug": "mat-snow-bath"
+  },
+  "frameCalls": 22
+ },
+ "bathroom-phone-alt1-dark": {
+  "static": {
+   "calls": 10,
+   "tris": 103040
+  },
+  "live": {
+   "calls": 5,
+   "tris": 6944
+  },
+  "total": 15,
+  "staticVersion": 1,
+  "furniture": {
+   "mirror": "mirror-cloud",
+   "wall": "towel-stripes",
+   "rug": "mat-duck"
+  },
+  "frameCalls": 20
+ },
+ "bathroom-phone-alt1-light": {
+  "static": {
+   "calls": 9,
+   "tris": 103028
+  },
+  "live": {
+   "calls": 5,
+   "tris": 6944
+  },
+  "total": 14,
+  "staticVersion": 1,
+  "furniture": {
+   "mirror": "mirror-cloud",
+   "wall": "towel-stripes",
+   "rug": "mat-duck"
+  },
+  "frameCalls": 19
+ },
+ "bathroom-phone-default-dark": {
+  "static": {
+   "calls": 10,
+   "tris": 102628
+  },
+  "live": {
+   "calls": 5,
+   "tris": 6944
+  },
+  "total": 15,
+  "staticVersion": 1,
+  "furniture": {
+   "mirror": "mirror-oval",
+   "wall": "towel-rail",
+   "rug": "mat-bath"
+  },
+  "frameCalls": 20
+ },
+ "bathroom-phone-default-light": {
+  "static": {
+   "calls": 9,
+   "tris": 102616
+  },
+  "live": {
+   "calls": 5,
+   "tris": 6944
+  },
+  "total": 14,
+  "staticVersion": 1,
+  "furniture": {
+   "mirror": "mirror-oval",
+   "wall": "towel-rail",
+   "rug": "mat-bath"
+  },
+  "frameCalls": 19
+ },
+ "bathroom-phone-xmas-dark": {
+  "static": {
+   "calls": 12,
+   "tris": 140412
+  },
+  "live": {
+   "calls": 5,
+   "tris": 6944
+  },
+  "total": 17,
+  "staticVersion": 1,
+  "furniture": {
+   "mirror": "mirror-holly",
+   "wall": "stocking-xmas",
+   "rug": "mat-snow-bath"
+  },
+  "frameCalls": 22
+ },
+ "bathroom-phone-xmas-light": {
+  "static": {
+   "calls": 10,
+   "tris": 140388
+  },
+  "live": {
+   "calls": 5,
+   "tris": 6944
+  },
+  "total": 15,
+  "staticVersion": 1,
+  "furniture": {
+   "mirror": "mirror-holly",
+   "wall": "stocking-xmas",
+   "rug": "mat-snow-bath"
+  },
+  "frameCalls": 20
+ },
+ "kitchen-desktop-alt1-dark": {
+  "static": {
+   "calls": 11,
+   "tris": 84574
+  },
+  "live": {
+   "calls": 1,
+   "tris": 80
+  },
+  "total": 12,
+  "staticVersion": 1,
+  "furniture": {
+   "fridge": "fridge-retro",
+   "wall": "shelf-plants",
+   "rug": "mat-fruit"
+  },
+  "frameCalls": 19
+ },
+ "kitchen-desktop-alt1-light": {
+  "static": {
+   "calls": 9,
+   "tris": 84554
+  },
+  "live": {
+   "calls": 1,
+   "tris": 80
+  },
+  "total": 10,
+  "staticVersion": 1,
+  "furniture": {
+   "fridge": "fridge-retro",
+   "wall": "shelf-plants",
+   "rug": "mat-fruit"
+  },
+  "frameCalls": 17
+ },
+ "kitchen-desktop-default-dark": {
+  "static": {
+   "calls": 11,
+   "tris": 70020
+  },
+  "live": {
+   "calls": 1,
+   "tris": 80
+  },
+  "total": 12,
+  "staticVersion": 1,
+  "furniture": {
+   "fridge": "fridge-classic",
+   "wall": "shelf-jars",
+   "rug": "mat-kitchen"
+  },
+  "frameCalls": 19
+ },
+ "kitchen-desktop-default-light": {
+  "static": {
+   "calls": 9,
+   "tris": 70000
+  },
+  "live": {
+   "calls": 1,
+   "tris": 80
+  },
+  "total": 10,
+  "staticVersion": 1,
+  "furniture": {
+   "fridge": "fridge-classic",
+   "wall": "shelf-jars",
+   "rug": "mat-kitchen"
+  },
+  "frameCalls": 17
+ },
+ "kitchen-desktop-xmas-dark": {
+  "static": {
+   "calls": 11,
+   "tris": 106136
+  },
+  "live": {
+   "calls": 1,
+   "tris": 80
+  },
+  "total": 12,
+  "staticVersion": 1,
+  "furniture": {
+   "fridge": "fridge-gingerbread",
+   "wall": "wreath-xmas",
+   "rug": "mat-snow"
+  },
+  "frameCalls": 19
+ },
+ "kitchen-desktop-xmas-light": {
+  "static": {
+   "calls": 9,
+   "tris": 106100
+  },
+  "live": {
+   "calls": 1,
+   "tris": 80
+  },
+  "total": 10,
+  "staticVersion": 1,
+  "furniture": {
+   "fridge": "fridge-gingerbread",
+   "wall": "wreath-xmas",
+   "rug": "mat-snow"
+  },
+  "frameCalls": 17
+ },
+ "kitchen-phone-alt1-dark": {
+  "static": {
+   "calls": 11,
+   "tris": 84574
+  },
+  "live": {
+   "calls": 1,
+   "tris": 80
+  },
+  "total": 12,
+  "staticVersion": 1,
+  "furniture": {
+   "fridge": "fridge-retro",
+   "wall": "shelf-plants",
+   "rug": "mat-fruit"
+  },
+  "frameCalls": 18
+ },
+ "kitchen-phone-alt1-light": {
+  "static": {
+   "calls": 9,
+   "tris": 84554
+  },
+  "live": {
+   "calls": 1,
+   "tris": 80
+  },
+  "total": 10,
+  "staticVersion": 1,
+  "furniture": {
+   "fridge": "fridge-retro",
+   "wall": "shelf-plants",
+   "rug": "mat-fruit"
+  },
+  "frameCalls": 16
+ },
+ "kitchen-phone-default-dark": {
+  "static": {
+   "calls": 11,
+   "tris": 70020
+  },
+  "live": {
+   "calls": 1,
+   "tris": 80
+  },
+  "total": 12,
+  "staticVersion": 1,
+  "furniture": {
+   "fridge": "fridge-classic",
+   "wall": "shelf-jars",
+   "rug": "mat-kitchen"
+  },
+  "frameCalls": 18
+ },
+ "kitchen-phone-default-light": {
+  "static": {
+   "calls": 9,
+   "tris": 70000
+  },
+  "live": {
+   "calls": 1,
+   "tris": 80
+  },
+  "total": 10,
+  "staticVersion": 1,
+  "furniture": {
+   "fridge": "fridge-classic",
+   "wall": "shelf-jars",
+   "rug": "mat-kitchen"
+  },
+  "frameCalls": 16
+ },
+ "kitchen-phone-xmas-dark": {
+  "static": {
+   "calls": 11,
+   "tris": 106136
+  },
+  "live": {
+   "calls": 1,
+   "tris": 80
+  },
+  "total": 12,
+  "staticVersion": 1,
+  "furniture": {
+   "fridge": "fridge-gingerbread",
+   "wall": "wreath-xmas",
+   "rug": "mat-snow"
+  },
+  "frameCalls": 18
+ },
+ "kitchen-phone-xmas-light": {
+  "static": {
+   "calls": 9,
+   "tris": 106100
+  },
+  "live": {
+   "calls": 1,
+   "tris": 80
+  },
+  "total": 10,
+  "staticVersion": 1,
+  "furniture": {
+   "fridge": "fridge-gingerbread",
+   "wall": "wreath-xmas",
+   "rug": "mat-snow"
+  },
+  "frameCalls": 16
+ }
+}

@@ -1,0 +1,354 @@
+{
+ "desktop-alt1-dark": {
+  "frameCalls": 29,
+  "furniture": {
+   "corner": "plant-tall",
+   "lamp": "lamp-mushroom",
+   "rug": "rug-flower",
+   "side": "toy-box",
+   "sofa": "sofa-cloud",
+   "wall": "wall-books",
+   "window": "window-arch"
+  },
+  "live": {
+   "calls": 2,
+   "tris": 2212
+  },
+  "static": {
+   "calls": 20,
+   "tris": 86715
+  },
+  "staticVersion": 1,
+  "total": 22
+ },
+ "desktop-alt1-light": {
+  "frameCalls": 27,
+  "furniture": {
+   "corner": "plant-tall",
+   "lamp": "lamp-mushroom",
+   "rug": "rug-flower",
+   "side": "toy-box",
+   "sofa": "sofa-cloud",
+   "wall": "wall-books",
+   "window": "window-arch"
+  },
+  "live": {
+   "calls": 2,
+   "tris": 2212
+  },
+  "static": {
+   "calls": 18,
+   "tris": 86699
+  },
+  "staticVersion": 1,
+  "total": 20
+ },
+ "desktop-alt2-dark": {
+  "frameCalls": 29,
+  "furniture": {
+   "corner": "plant-tall",
+   "lamp": "lamp-mushroom",
+   "rug": "rug-flower",
+   "side": "toy-box",
+   "sofa": "sofa-cloud",
+   "wall": "wall-books",
+   "window": "window-arch"
+  },
+  "live": {
+   "calls": 2,
+   "tris": 2212
+  },
+  "static": {
+   "calls": 20,
+   "tris": 86715
+  },
+  "staticVersion": 1,
+  "total": 22
+ },
+ "desktop-alt2-light": {
+  "frameCalls": 27,
+  "furniture": {
+   "corner": "plant-tall",
+   "lamp": "lamp-mushroom",
+   "rug": "rug-flower",
+   "side": "toy-box",
+   "sofa": "sofa-cloud",
+   "wall": "wall-books",
+   "window": "window-arch"
+  },
+  "live": {
+   "calls": 2,
+   "tris": 2212
+  },
+  "static": {
+   "calls": 18,
+   "tris": 86699
+  },
+  "staticVersion": 1,
+  "total": 20
+ },
+ "desktop-default-dark": {
+  "frameCalls": 31,
+  "furniture": {
+   "corner": "plant-pot",
+   "lamp": "lamp-floor",
+   "rug": "rug-round",
+   "side": "table-mug",
+   "sofa": "sofa-classic",
+   "wall": "frame-blob",
+   "window": "window-round"
+  },
+  "live": {
+   "calls": 2,
+   "tris": 2212
+  },
+  "static": {
+   "calls": 22,
+   "tris": 78372
+  },
+  "staticVersion": 1,
+  "total": 24
+ },
+ "desktop-default-light": {
+  "frameCalls": 29,
+  "furniture": {
+   "corner": "plant-pot",
+   "lamp": "lamp-floor",
+   "rug": "rug-round",
+   "side": "table-mug",
+   "sofa": "sofa-classic",
+   "wall": "frame-blob",
+   "window": "window-round"
+  },
+  "live": {
+   "calls": 2,
+   "tris": 2212
+  },
+  "static": {
+   "calls": 20,
+   "tris": 78352
+  },
+  "staticVersion": 1,
+  "total": 22
+ },
+ "desktop-xmas-dark": {
+  "frameCalls": 40,
+  "furniture": {
+   "corner": "xmas-tree",
+   "lamp": "lamp-star",
+   "rug": "rug-snow",
+   "side": "fireplace-xmas",
+   "sofa": "sofa-xmas",
+   "wall": "garland-xmas",
+   "window": "window-snow"
+  },
+  "live": {
+   "calls": 7,
+   "tris": 3806
+  },
+  "static": {
+   "calls": 26,
+   "tris": 173632
+  },
+  "staticVersion": 1,
+  "total": 33
+ },
+ "desktop-xmas-light": {
+  "frameCalls": 34,
+  "furniture": {
+   "corner": "xmas-tree",
+   "lamp": "lamp-star",
+   "rug": "rug-snow",
+   "side": "fireplace-xmas",
+   "sofa": "sofa-xmas",
+   "wall": "garland-xmas",
+   "window": "window-snow"
+  },
+  "live": {
+   "calls": 5,
+   "tris": 3754
+  },
+  "static": {
+   "calls": 22,
+   "tris": 173608
+  },
+  "staticVersion": 1,
+  "total": 27
+ },
+ "phone-alt1-dark": {
+  "frameCalls": 29,
+  "furniture": {
+   "corner": "plant-tall",
+   "lamp": "lamp-mushroom",
+   "rug": "rug-flower",
+   "side": "toy-box",
+   "sofa": "sofa-cloud",
+   "wall": "wall-books",
+   "window": "window-arch"
+  },
+  "live": {
+   "calls": 2,
+   "tris": 2212
+  },
+  "static": {
+   "calls": 20,
+   "tris": 86715
+  },
+  "staticVersion": 1,
+  "total": 22
+ },
+ "phone-alt1-light": {
+  "frameCalls": 27,
+  "furniture": {
+   "corner": "plant-tall",
+   "lamp": "lamp-mushroom",
+   "rug": "rug-flower",
+   "side": "toy-box",
+   "sofa": "sofa-cloud",
+   "wall": "wall-books",
+   "window": "window-arch"
+  },
+  "live": {
+   "calls": 2,
+   "tris": 2212
+  },
+  "static": {
+   "calls": 18,
+   "tris": 86699
+  },
+  "staticVersion": 1,
+  "total": 20
+ },
+ "phone-alt2-dark": {
+  "frameCalls": 29,
+  "furniture": {
+   "corner": "plant-tall",
+   "lamp": "lamp-mushroom",
+   "rug": "rug-flower",
+   "side": "toy-box",
+   "sofa": "sofa-cloud",
+   "wall": "wall-books",
+   "window": "window-arch"
+  },
+  "live": {
+   "calls": 2,
+   "tris": 2212
+  },
+  "static": {
+   "calls": 20,
+   "tris": 86715
+  },
+  "staticVersion": 1,
+  "total": 22
+ },
+ "phone-alt2-light": {
+  "frameCalls": 27,
+  "furniture": {
+   "corner": "plant-tall",
+   "lamp": "lamp-mushroom",
+   "rug": "rug-flower",
+   "side": "toy-box",
+   "sofa": "sofa-cloud",
+   "wall": "wall-books",
+   "window": "window-arch"
+  },
+  "live": {
+   "calls": 2,
+   "tris": 2212
+  },
+  "static": {
+   "calls": 18,
+   "tris": 86699
+  },
+  "staticVersion": 1,
+  "total": 20
+ },
+ "phone-default-dark": {
+  "frameCalls": 30,
+  "furniture": {
+   "corner": "plant-pot",
+   "lamp": "lamp-floor",
+   "rug": "rug-round",
+   "side": "table-mug",
+   "sofa": "sofa-classic",
+   "wall": "frame-blob",
+   "window": "window-round"
+  },
+  "live": {
+   "calls": 2,
+   "tris": 2212
+  },
+  "static": {
+   "calls": 22,
+   "tris": 78372
+  },
+  "staticVersion": 1,
+  "total": 24
+ },
+ "phone-default-light": {
+  "frameCalls": 28,
+  "furniture": {
+   "corner": "plant-pot",
+   "lamp": "lamp-floor",
+   "rug": "rug-round",
+   "side": "table-mug",
+   "sofa": "sofa-classic",
+   "wall": "frame-blob",
+   "window": "window-round"
+  },
+  "live": {
+   "calls": 2,
+   "tris": 2212
+  },
+  "static": {
+   "calls": 20,
+   "tris": 78352
+  },
+  "staticVersion": 1,
+  "total": 22
+ },
+ "phone-xmas-dark": {
+  "frameCalls": 39,
+  "furniture": {
+   "corner": "xmas-tree",
+   "lamp": "lamp-star",
+   "rug": "rug-snow",
+   "side": "fireplace-xmas",
+   "sofa": "sofa-xmas",
+   "wall": "garland-xmas",
+   "window": "window-snow"
+  },
+  "live": {
+   "calls": 7,
+   "tris": 3806
+  },
+  "static": {
+   "calls": 26,
+   "tris": 173632
+  },
+  "staticVersion": 1,
+  "total": 33
+ },
+ "phone-xmas-light": {
+  "frameCalls": 33,
+  "furniture": {
+   "corner": "xmas-tree",
+   "lamp": "lamp-star",
+   "rug": "rug-snow",
+   "side": "fireplace-xmas",
+   "sofa": "sofa-xmas",
+   "wall": "garland-xmas",
+   "window": "window-snow"
+  },
+  "live": {
+   "calls": 5,
+   "tris": 3754
+  },
+  "static": {
+   "calls": 22,
+   "tris": 173608
+  },
+  "staticVersion": 1,
+  "total": 27
+ }
+}

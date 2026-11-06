@@ -1,146 +1,126 @@
 /**
- * living.js — ห้องนั่งเล่น (owner: prop).
- * Sofa behind the pet, round window with soft sky, framed brand blob, rug, plant,
- * floor lamp, toy ball; extra cabinet, pouf and shelf for wide desktop screens.
- * Evening look (setTheme('dark')): dusk sky with a moon and soft stars in the window,
- * the sill lamp and floor lamp glow warmly.
+ * living.js — ห้องนั่งเล่น (owner: prop-living).
+ *
+ * Fixed part of the room (never swapped): shell with a soft wainscot and dotted
+ * wallpaper, toy ball (live, rocks gently), and wide-screen decor (cabinet, shelves,
+ * bookcase, pouf, big plant). The seven furniture slots (sofa, rug, wall, window,
+ * corner, lamp, side) are built by the items registered in
+ * `src/props/furniture/living-basic.js` and `living-xmas.js`; anchors are in
+ * `living-common.js`. Evening look (setTheme('dark')): dusk sky with moon and stars in
+ * the window, lamps glow warmly, halos on the wall.
  */
 import * as THREE from 'three';
-import {
-  ClayBuilder, PALETTE, NIGHT, BRAND, lighten, roundedBox, capsule, sphere, torus, lathe, puck, blob, circle,
-  gradientY, brandGradientX,
-} from '../props/clay.js';
-import { addShell, makeRoom, WALL_Z } from './shell.js';
+import { ClayBuilder, PALETTE, NIGHT, BRAND, lighten, roundedBox, capsule, sphere, torus, lathe, puck, blob, circle, brandGradientX } from '../props/clay.js';
+import { addShell, makeRoom } from './shell.js';
+import { W } from '../props/furniture/living-common.js';
+import '../props/furniture/living-basic.js';
+import '../props/furniture/living-xmas.js';
 
 const P = PALETTE.living;
 const N = NIGHT.living;
-const W = WALL_Z + 0.04;
+const WHITE = '#FFFFFF';
+const INK = PALETTE.ink;
 
-/** Build the living room. @returns {ReturnType<typeof makeRoom>} */
+/** Build the living room (fixed part; createRoom fills the slots). @returns {ReturnType<typeof makeRoom>} */
 export function buildLiving() {
   const b = new ClayBuilder({ shadowColor: P.shadow, shadowOpacity: 0.22, themed: true, nightShadowColor: N.shadow });
   addShell(b, P, N);
-  const group = new THREE.Group();
+  const liveGroup = new THREE.Group();
 
-  // --- sofa (centred behind the pet, as in the approved mockup)
-  const sz = -2.42;
-  b.add(roundedBox(3.3, 0.5, 0.95, 0.2), '#D3CDEB', { position: [0, 0.34, sz] });
-  b.add(roundedBox(3.3, 0.98, 0.4, 0.19), '#DCD7F1', { position: [0, 0.98, sz - 0.36] });
+  // --- wall dressing: soft wainscot band, rounded chair rail, panel insets, dotted wallpaper
+  b.add(roundedBox(32, 1.0, 0.04, 0.02), '#ECEAF8', { position: [0, 0.55, W - 0.01], shade: 0, night: '#55528A' });
+  b.add(roundedBox(32, 0.08, 0.1, 0.04), WHITE, { position: [0, 1.07, W + 0.02], shade: 0, night: '#6A67A0' });
+  for (let i = -10; i <= 10; i++) b.add(roundedBox(1.15, 0.6, 0.02, 0.1), '#F1EFFA', { position: [i * 1.45, 0.6, W + 0.02], shade: 0, night: '#5B5891' });
+  const dot = lighten(P.wall, 0.75);
+  for (let r = 0; r < 9; r++) for (let c = -17; c <= 17; c++) {
+    const x = c * 0.42 + (r % 2) * 0.21, y = 1.45 + r * 0.42;
+    b.add(circle(0.03, 10), dot, { position: [x, y, W - 0.025], shade: 0, night: '#625F98' });
+  }
+
+  // --- right wide-screen decor: cabinet with books, vase and figurines, framed blob, yarn basket
+  const cx = 3.6, cz = -2.55;
+  b.add(roundedBox(2.0, 0.92, 0.7, 0.18), lighten(BRAND.periwinkle, 0.62), { position: [cx, 0.5, cz] });
   for (const s of [-1, 1]) {
-    b.add(roundedBox(0.44, 0.8, 1.0, 0.21), '#D8D2EE', { position: [s * 1.72, 0.48, sz + 0.02] });
-    b.add(roundedBox(1.46, 0.26, 0.8, 0.12), '#E3DEF4', { position: [s * 0.74, 0.7, sz + 0.06] });
-    b.add(roundedBox(1.38, 0.62, 0.24, 0.12), '#E3DEF4', { position: [s * 0.73, 1.08, sz - 0.2], rotation: [-0.12, 0, 0] });
-    for (const z of [-0.36, 0.36]) b.add(puck(0.07, 0.1, 10), '#BFB6E0', { position: [s * 1.6, 0, sz + z] });
+    b.add(roundedBox(0.9, 0.72, 0.04, 0.12), lighten(BRAND.periwinkle, 0.72), { position: [cx + s * 0.48, 0.5, cz + 0.35] });
+    b.add(sphere(0.04, 10, 8), WHITE, { position: [cx + s * 0.1, 0.56, cz + 0.39] });
+    b.add(puck(0.06, 0.06, 10), lighten(BRAND.periwinkle, 0.4), { position: [cx + s * 0.85, 0, cz + 0.22] });
   }
-  b.add(roundedBox(0.52, 0.5, 0.2, 0.13), lighten(BRAND.pink, 0.55), { position: [1.18, 1.02, sz - 0.02], rotation: [-0.15, 0, 0.18] });
-  b.add(roundedBox(0.48, 0.46, 0.2, 0.12), lighten(BRAND.periwinkle, 0.5), { position: [-1.2, 1.0, sz - 0.02], rotation: [-0.15, 0, -0.14] });
-  b.addShadow(0, sz + 0.1, 4.2, 1.5);
-
-  // --- round window with soft sky
-  const wx = -0.62, wy = 2.5, R = 0.55;
-  b.add(torus(R, 0.1, 10, 40), PALETTE.white, { position: [wx, wy, W + 0.04], shade: 0.03 });
-  b.addGlow(circle(R, 40), gradientY('#F7E3EE', '#CFE0F6', -R, R * 0.8),
-    { position: [wx, wy, W], night: gradientY(NIGHT.skyLow, NIGHT.skyHigh, -R, R * 0.8) });
-  b.addGlow(blob(0.12, { seed: 2, detail: 2 }), '#FFFFFF', { position: [wx - 0.22, wy + 0.2, W + 0.01], scale: [1.9, 0.75, 0.2], night: NIGHT.cloud });
-  b.addGlow(blob(0.1, { seed: 5, detail: 2 }), '#FFFFFF', { position: [wx + 0.25, wy - 0.05, W + 0.01], scale: [1.7, 0.7, 0.2], night: NIGHT.cloud });
-  // night sky: moon + a few soft stars (dark theme only)
-  b.addHalo(wx + 0.27, wy + 0.27, W + 0.015, 0.34, NIGHT.moon, 0.95);
-  b.addHalo(wx + 0.27, wy + 0.27, W + 0.016, 0.16, NIGHT.moon, 0.9);
-  for (const [sx_, sy_, s_] of [[-0.3, 0.32, 0.09], [-0.05, 0.4, 0.06], [0.1, 0.18, 0.07], [-0.36, 0.02, 0.06], [0.32, -0.12, 0.07], [-0.12, -0.24, 0.05]]) {
-    b.addHalo(wx + sx_, wy + sy_, W + 0.014, s_, NIGHT.star, 0.95);
+  b.add(roundedBox(2.06, 0.08, 0.76, 0.04), WHITE, { position: [cx, 0.98, cz] });
+  const books = [[BRAND.pink, 0.5], [BRAND.lavender, 0.58], [BRAND.periwinkle, 0.44], [BRAND.teal, 0.4]];
+  books.forEach(([c, h], i) => b.add(roundedBox(0.15, h, 0.4, 0.05), lighten(c, 0.35), { position: [cx - 0.78 + i * 0.17, 1.02 + h / 2, cz], rotation: [0, 0, i === 3 ? -0.2 : 0] }));
+  b.add(lathe([[0, 0], [0.12, 0], [0.18, 0.12], [0.16, 0.26], [0.07, 0.36], [0.08, 0.42], [0, 0.42]], 18), WHITE, { position: [cx + 0.5, 1.02, cz] });
+  for (const [dx, dy, c] of [[-0.06, 0.62, BRAND.pink], [0.07, 0.6, BRAND.lavender], [0, 0.7, BRAND.periwinkle]]) {
+    b.add(capsule(0.008, 0.2, 2, 4), lighten(BRAND.teal, 0.3), { position: [cx + 0.5 + dx * 0.5, 1.02 + dy - 0.12, cz] });
+    b.add(sphere(0.055, 12, 8), lighten(c, 0.35), { position: [cx + 0.5 + dx, 1.02 + dy, cz] });
   }
-  b.add(roundedBox(R * 1.9, 0.06, 0.05, 0.025), PALETTE.white, { position: [wx, wy, W + 0.05] });
-  b.add(roundedBox(0.06, R * 1.9, 0.05, 0.025), PALETTE.white, { position: [wx, wy, W + 0.05] });
-  b.add(roundedBox(R * 2.1, 0.1, 0.24, 0.05), PALETTE.white, { position: [wx, wy - R - 0.08, W + 0.1] });
-  // little dome lamp on the sill (visible on phones; glows in the evening)
-  const sl = [wx - 0.42, wy - R - 0.03, W + 0.12];
-  b.add(puck(0.09, 0.04, 16), '#FFFFFF', { position: sl });
-  b.add(capsule(0.018, 0.08, 2, 6), '#FFFFFF', { position: [sl[0], sl[1] + 0.08, sl[2]] });
-  b.addLamp(lathe([[0, 0], [0.15, 0], [0.155, 0.02], [0.12, 0.1], [0.06, 0.15], [0, 0.16]], 20), lighten(BRAND.pink, 0.55), { position: [sl[0], sl[1] + 0.12, sl[2]], shade: 0.03 });
-  b.addGlow(sphere(0.05, 10, 6), '#FFF6EE', { position: [sl[0], sl[1] + 0.12, sl[2]], scale: [1, 0.5, 1] });
-  b.addHalo(sl[0], sl[1] + 0.14, W + 0.02, 1.3, NIGHT.lamp, 0.32);
-  b.addHalo(sl[0], sl[1] + 0.12, sl[2] + 0.2, 0.5, NIGHT.lamp, 0.22);
-
-  // --- framed brand blob (right of the window)
-  b.add(roundedBox(0.66, 0.78, 0.08, 0.16), '#FBF0F4', { position: [0.92, 2.48, W + 0.04] });
-  b.add(blob(0.2, { seed: 3, wobble: 0.14 }), brandGradientX(-0.25, 0.25, 0.35), { position: [0.92, 2.48, W + 0.1], scale: [1.05, 1, 0.22], shade: 0 });
-
-  // --- floor lamp (left)
-  const lx = -2.6, lz = -2.45;
-  b.add(puck(0.27, 0.08), '#D8D2EE', { position: [lx, 0, lz] });
-  b.add(capsule(0.04, 1.6, 3, 8), '#E3DEF4', { position: [lx, 0.88, lz] });
-  b.addLamp(lathe([[0, 0], [0.42, 0], [0.43, 0.04], [0.38, 0.16], [0.24, 0.34], [0.07, 0.42], [0, 0.43]], 24), lighten(BRAND.pink, 0.62), { position: [lx, 1.66, lz], shade: 0.03 });
-  b.addGlow(sphere(0.1, 12, 8), '#FFF6EE', { position: [lx, 1.64, lz], scale: [1, 0.5, 1] });
-  b.addHalo(lx, 1.8, W + 0.02, 2.6, NIGHT.lamp, 0.34);
-  b.addHalo(lx, 1.7, lz + 0.5, 1.0, NIGHT.lamp, 0.18);
-  b.addShadow(lx, lz, 0.9, 0.6);
-
-  // --- side table with mug (right of sofa)
-  const tx = 2.3, tz = -2.45;
-  b.add(puck(0.36, 0.08), '#FFFFFF', { position: [tx, 0.62, tz] });
-  b.add(capsule(0.06, 0.5, 3, 8), '#E3DEF4', { position: [tx, 0.34, tz] });
-  b.add(puck(0.24, 0.06), '#E3DEF4', { position: [tx, 0, tz] });
-  b.add(lathe([[0, 0], [0.09, 0], [0.1, 0.02], [0.1, 0.18], [0.085, 0.19], [0, 0.17]], 16), lighten(BRAND.teal, 0.45), { position: [tx - 0.08, 0.7, tz + 0.05] });
-  b.add(torus(0.05, 0.016, 6, 12), lighten(BRAND.teal, 0.45), { position: [tx + 0.03, 0.8, tz + 0.05] });
-  b.addShadow(tx, tz, 0.9, 0.6);
-
-  // --- plant (pot is static, leaves sway)
-  const px = 3.15, pz = -2.4;
-  b.add(lathe([[0, 0], [0.24, 0], [0.3, 0.05], [0.34, 0.5], [0.39, 0.55], [0.38, 0.62], [0, 0.6]], 24), lighten(BRAND.lavender, 0.3), { position: [px, 0, pz] });
-  b.addShadow(px, pz, 1.0, 0.6);
-  const lb = new ClayBuilder({ themed: true });
-  const leaf = (rx, rz, len, col) => lb.add(blob(0.16, { seed: rx * 7 + rz, wobble: 0.06, detail: 2 }), col,
-    { position: [Math.sin(rz) * -len * 0.5, Math.cos(rz) * len * 0.5 * Math.cos(rx), Math.sin(rx) * len * 0.5], rotation: [rx, 0, rz], scale: [0.7, len * 3.1, 0.32] });
-  const L1 = lighten(BRAND.teal, 0.2), L2 = lighten(BRAND.teal, 0.42);
-  leaf(0, 0, 0.9, L1); leaf(0.2, 0.55, 0.75, L2); leaf(-0.15, -0.6, 0.8, L2); leaf(0.4, 0.15, 0.6, L1); leaf(-0.35, -0.2, 0.65, L1); leaf(0.1, 1.0, 0.55, L1); leaf(0, -1.05, 0.55, L2);
-  const leaves = lb.buildMesh('living:plantLeaves');
-  leaves.position.set(px, 0.58, pz);
-  group.add(leaves);
-
-  // --- rug in front
-  b.add(puck(1, 0.035, 40), '#D9D4F0', { position: [0, 0, 0.35], scale: [2.3, 1, 1.35], shade: 0 });
-  b.add(puck(1, 0.04, 40), '#E1DDF4', { position: [0, 0, 0.35], scale: [1.85, 1, 1.0], shade: 0 });
-
-  // --- wide-screen extras: cabinet with books (right), shelf + pouf (left)
-  const cx = 4.8, cz = -2.55;
-  b.add(roundedBox(2.1, 0.92, 0.7, 0.18), lighten(BRAND.periwinkle, 0.62), { position: [cx, 0.5, cz] });
-  for (const s of [-1, 1]) b.add(capsule(0.035, 0.18, 3, 8), '#FFFFFF', { position: [cx + s * 0.25, 0.55, cz + 0.37], rotation: [0, 0, Math.PI / 2] });
-  b.add(roundedBox(0.04, 0.7, 0.02, 0.01), lighten(BRAND.periwinkle, 0.5), { position: [cx, 0.5, cz + 0.355] });
-  const books = [[BRAND.pink, 0.52], [BRAND.lavender, 0.6], [BRAND.periwinkle, 0.46], [BRAND.teal, 0.42]];
-  books.forEach(([c, h], i) => b.add(roundedBox(0.16, h, 0.4, 0.06), lighten(c, 0.35), { position: [cx - 0.75 + i * 0.18, 0.96 + h / 2, cz], rotation: [0, 0, i === 3 ? -0.18 : 0] }));
-  b.add(lathe([[0, 0], [0.12, 0], [0.18, 0.12], [0.16, 0.26], [0.07, 0.36], [0.08, 0.42], [0, 0.42]], 18), '#FFFFFF', { position: [cx + 0.55, 0.96, cz] });
-  b.add(blob(0.24, { seed: 8 }), brandGradientX(-0.3, 0.3, 0.4), { position: [cx, 2.4, W + 0.05], scale: [1.2, 1, 0.18], shade: 0 });
+  // two little blob figurines
+  for (const [fx, s, seed] of [[cx - 0.05, 0.12, 4], [cx + 0.18, 0.09, 9]]) {
+    b.add(blob(s, { seed, wobble: 0.08, detail: 3 }), brandGradientX(-s, s, 0.4), { position: [fx, 1.02 + s, cz + 0.1] });
+    for (const k of [-1, 1]) b.add(sphere(s * 0.1, 6, 4), INK, { position: [fx + k * s * 0.35, 1.02 + s * 1.15, cz + 0.1 + s * 0.92] });
+  }
   b.addShadow(cx, cz + 0.05, 2.6, 0.9);
+  b.addWallShadow(cx, 0.6, W + 0.035, 2.4, 1.2, 0.4);
+  b.addWallShadow(cx + 0.02, 2.42, W, 0.9, 0.9, 0.5);
+  b.add(roundedBox(0.6, 0.6, 0.06, 0.2), WHITE, { position: [cx, 2.45, W + 0.03] });
+  b.add(blob(0.2, { seed: 8 }), brandGradientX(-0.25, 0.25, 0.4), { position: [cx, 2.45, W + 0.08], scale: [1.1, 1, 0.18], shade: 0 });
+  // yarn basket
+  b.add(lathe([[0, 0], [0.22, 0], [0.27, 0.22], [0.29, 0.26], [0, 0.25]], 22), '#F3E3D3', { position: [2.45, 0, -1.9] });
+  for (const [dx, dz, c] of [[-0.08, 0, BRAND.pink], [0.1, 0.03, BRAND.teal], [0.0, -0.08, BRAND.lavender]]) b.add(sphere(0.12, 14, 10), lighten(c, 0.4), { position: [2.45 + dx, 0.3, -1.9 + dz] });
+  b.add(capsule(0.012, 0.35, 2, 5), lighten(BRAND.pink, 0.4), { position: [2.66, 0.35, -1.85], rotation: [0.2, 0, -0.5] });
+  b.addShadow(2.45, -1.88, 0.8, 0.55);
+  // big leafy plant at the far right
+  b.add(lathe([[0, 0], [0.3, 0], [0.38, 0.6], [0.42, 0.66], [0, 0.66]], 24), WHITE, { position: [5.55, 0, -2.4] });
+  for (const [dx, dy, s, seed] of [[0, 1.3, 0.5, 31], [-0.35, 1.0, 0.38, 32], [0.35, 1.05, 0.4, 33], [0.05, 1.75, 0.34, 34]]) {
+    b.add(blob(s, { seed, detail: 3, wobble: 0.1 }), lighten(BRAND.teal, 0.2 + (seed % 2) * 0.15), { position: [5.55 + dx, dy, -2.4], scale: [1, 1.15, 0.9] });
+  }
+  b.addShadow(5.55, -2.35, 1.3, 0.8);
 
-  const sx = -4.6;
-  b.add(roundedBox(1.6, 0.1, 0.32, 0.05), '#FFFFFF', { position: [sx, 2.0, W + 0.16] });
-  b.add(lathe([[0, 0], [0.11, 0], [0.13, 0.18], [0, 0.18]], 16), lighten(BRAND.pink, 0.45), { position: [sx - 0.45, 2.05, W + 0.16] });
-  b.add(blob(0.13, { seed: 4, detail: 2 }), lighten(BRAND.teal, 0.3), { position: [sx - 0.45, 2.33, W + 0.16], scale: [1, 1.2, 1] });
-  b.add(roundedBox(0.34, 0.3, 0.2, 0.08), lighten(BRAND.lavender, 0.45), { position: [sx + 0.4, 2.2, W + 0.16] });
-  b.add(puck(0.55, 0.5, 28), lighten(BRAND.lavender, 0.45), { position: [-4.1, 0, -1.6] });
-  b.add(torus(0.5, 0.06, 8, 28), lighten(BRAND.lavender, 0.3), { position: [-4.1, 0.42, -1.6], rotation: [Math.PI / 2, 0, 0] });
-  b.addShadow(-4.1, -1.6, 1.5, 1.1);
+  // --- left wide-screen decor: wall shelf, pouf, bookcase
+  const sx = -3.75;
+  b.addWallShadow(sx, 2.0, W, 1.9, 0.35, 0.5);
+  b.add(roundedBox(1.6, 0.1, 0.32, 0.05), WHITE, { position: [sx, 2.08, W + 0.16] });
+  b.add(lathe([[0, 0], [0.11, 0], [0.13, 0.18], [0, 0.18]], 16), lighten(BRAND.pink, 0.45), { position: [sx - 0.45, 2.13, W + 0.16] });
+  b.add(blob(0.13, { seed: 4, detail: 2 }), lighten(BRAND.teal, 0.3), { position: [sx - 0.45, 2.41, W + 0.16], scale: [1, 1.2, 1] });
+  b.add(roundedBox(0.34, 0.3, 0.2, 0.08), lighten(BRAND.lavender, 0.45), { position: [sx + 0.4, 2.28, W + 0.16] });
+  b.add(blob(0.1, { seed: 6, wobble: 0.08, detail: 3 }), brandGradientX(-0.1, 0.1, 0.4), { position: [sx, 2.23, W + 0.16] });
+  for (const k of [-1, 1]) b.add(sphere(0.01, 6, 4), INK, { position: [sx + k * 0.035, 2.25, W + 0.25] });
+  b.add(puck(0.55, 0.5, 28), lighten(BRAND.lavender, 0.45), { position: [-3.3, 0, -1.5] });
+  b.add(torus(0.5, 0.06, 8, 28), lighten(BRAND.lavender, 0.3), { position: [-3.3, 0.42, -1.5], rotation: [Math.PI / 2, 0, 0] });
+  b.addStitches([-3.82, 0.25, -1.0], [-2.78, 0.25, -1.0], 10, lighten(BRAND.lavender, 0.25), { r: 0.012 });
+  b.addShadow(-3.3, -1.5, 1.5, 1.1);
+  const bx = -5.4, bz = -2.6;
+  b.add(roundedBox(1.3, 2.1, 0.6, 0.16), WHITE, { position: [bx, 1.05, bz] });
+  for (let r = 0; r < 3; r++) {
+    b.add(roundedBox(1.1, 0.5, 0.05, 0.06), lighten(BRAND.periwinkle, 0.8), { position: [bx, 0.42 + r * 0.62, bz + 0.27] });
+    for (let i = 0; i < 4 - (r % 2); i++) {
+      const c = [BRAND.pink, BRAND.lavender, BRAND.periwinkle, BRAND.teal][(i + r) % 4], h = 0.3 + ((i + r) % 3) * 0.05;
+      b.add(roundedBox(0.12, h, 0.3, 0.04), lighten(c, 0.38), { position: [bx - 0.4 + i * 0.15 + r * 0.05, 0.2 + r * 0.62 + h / 2, bz + 0.12] });
+    }
+  }
+  b.add(sphere(0.13, 14, 10), lighten(BRAND.pink, 0.45), { position: [bx + 0.3, 0.95, bz + 0.12] });
+  b.addShadow(bx, bz + 0.05, 1.8, 0.9);
+  b.addWallShadow(bx, 1.1, W + 0.035, 1.6, 2.4, 0.35);
 
-  // --- toy ball (sits behind-right of the pet; rocks gently)
-  const ball = new ClayBuilder({ themed: true }).add(sphere(0.27, 28, 18), (x, y, z, c) => {
+  // --- toy ball on the rug, front right of the pet (rocks gently)
+  const ball = new ClayBuilder({ themed: true }).add(sphere(0.22, 28, 18), (x, y, z, c) => {
     const a = Math.atan2(z, x); const k = Math.floor(((a + Math.PI) / (2 * Math.PI)) * 6) % 3;
-    c.set(Math.abs(y) > 0.24 ? '#FFFFFF' : [lighten(BRAND.pink, 0.3), lighten(BRAND.periwinkle, 0.3), '#FFFFFF'][k]);
+    c.set(Math.abs(y) > 0.19 ? WHITE : [lighten(BRAND.pink, 0.3), lighten(BRAND.periwinkle, 0.3), WHITE][k]);
   }, { shade: 0.1 }).buildMesh('living:toyBall');
-  const ballPos = new THREE.Vector3(1.6, 0.27, -1.05);
+  const ballPos = new THREE.Vector3(1.08, 0.22 + 0.045, 1.2);
   ball.position.copy(ballPos);
-  group.add(ball);
-  b.addShadow(ballPos.x, ballPos.z + 0.05, 0.8, 0.5);
+  liveGroup.add(ball);
+  b.addShadow(ballPos.x, ballPos.z + 0.04, 0.65, 0.42, 0.05);
 
-  group.add(b.build('living:static'));
+  const staticGroup = new THREE.Group();
+  staticGroup.add(b.build('living:static'));
 
   return makeRoom({
     id: 'living',
-    group,
+    staticGroup,
+    liveGroup,
     update(dt, t) {
-      leaves.rotation.z = Math.sin(t * 0.7) * 0.035;
-      leaves.rotation.x = Math.sin(t * 0.5 + 1) * 0.02;
       ball.rotation.z = Math.sin(t * 0.9) * 0.08;
-      ball.position.x = ballPos.x - Math.sin(t * 0.9) * 0.08 * 0.27;
+      ball.position.x = ballPos.x - Math.sin(t * 0.9) * 0.08 * 0.22;
     },
   });
 }

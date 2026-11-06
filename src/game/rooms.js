@@ -11,7 +11,8 @@ const easeInOut = (t) => (t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) 
 /**
  * @param {{
  *   scene: import('three').Scene,
- *   createRoom: (id: string, opts?: { theme?: 'light'|'dark' }) => object,
+ *   createRoom: (id: string, opts?: { theme?: 'light'|'dark', furniture?: Record<string, string> }) => object,
+ *   getFurniture?: (id: string) => Record<string, string>|null,   // saved furniture of a room (Sprint 4)
  *   roomIds: string[],
  *   onEnter: (room: object, id: string, prevId: string|null) => void,
  *   onLeave?: (room: object, id: string) => void,
@@ -19,7 +20,7 @@ const easeInOut = (t) => (t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) 
  *   keyTarget?: EventTarget,
  * }} deps
  */
-export function createRoomManager({ scene, createRoom, roomIds, onEnter, onLeave, reduceMotion = false, keyTarget = window }) {
+export function createRoomManager({ scene, createRoom, roomIds, onEnter, onLeave, getFurniture = null, reduceMotion = false, keyTarget = window }) {
   let id = null, room = null;
   let leaving = null; // { room, dir }
   let t = 1, ar = false, theme = 'light';
@@ -49,7 +50,9 @@ export function createRoomManager({ scene, createRoom, roomIds, onEnter, onLeave
     if (!next || next === id || leaving) return false;
     const prevId = id;
     const dir = typeof dirOrId === 'number' ? Math.sign(dirOrId) : (roomIds.indexOf(next) > roomIds.indexOf(id) ? 1 : -1);
-    const r = createRoom(next, { theme });   // Prop: rooms start in the current theme
+    let furniture;
+    try { furniture = getFurniture?.(next) || undefined; } catch (e) { console.error('[rooms] furniture', e); }
+    const r = createRoom(next, { theme, furniture });   // Prop: rooms start in the current theme + saved furniture
     applyTheme(r);
     setAr(r, ar);
     scene.add(r.group);

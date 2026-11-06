@@ -2,9 +2,10 @@
  * Game state and save — needs per character key (owner decision 2026-10-25),
  * selected character, current room, wall-clock decay, localStorage save.
  *
- * Save key `moldable-pet:v1` (the key stays; `version` inside moves), shape v3:
- * { version: 3, selected, room, chosen, coins, savedAt,
- *   owned: [itemIds],                       // shared by every character (Sprint 2)
+ * Save key `moldable-pet:v1` (the key stays; `version` inside moves), shape v4:
+ * { version: 4, selected, room, chosen, coins, savedAt,
+ *   owned: [itemIds],                       // wardrobe + furniture ids, shared by every character
+ *   furniture: { living: {slot: id}, kitchen: {…}, bathroom: {…} },   // shared (Sprint 4), defaults always owned
  *   settings: { cameraHidden: bool,         // camera view choice (S2-04)
  *     theme: 'light'|'dark',                // manual lamp toggle (Sprint 3 #2), default light
  *     minigameControl: 'touch'|'head' },    // Snack Rain control (Sprint 3 #3), default touch
@@ -12,8 +13,9 @@
  *     outfit: { head, eyes, body },         // per character (S2-11)
  *     best: { snackRain: number },          // best minigame score per character (snack-rain GDD 3.8)
  *     wearBonusAt: ms } } }                 // last outfit need bonus (economy GDD 3.5 cooldown)
- * v0 (prototype), v1 (Sprint 1, no outfits / settings / best) and v2 (Sprint 2,
- * no theme / minigameControl → light / touch) saves migrate.
+ * v0 (prototype), v1 (Sprint 1, no outfits / settings / best), v2 (Sprint 2,
+ * no theme / minigameControl → light / touch) and v3 (Sprint 3, no furniture →
+ * every slot at its default) saves migrate.
  *
  * The pure helpers (`newSave`, `migrateSave`, `tickSave`) are unit-tested in
  * `tests/unit/needs.test.mjs`. `createGameState` wraps them with an injected
@@ -21,10 +23,11 @@
  * @module game/state
  */
 import { startLevels, sanitizeLevels, decayNeeds, addNeed } from './needs.js';
-import { sanitizeOwned, sanitizeOutfit, emptyOutfit } from './wardrobe.js';
+import { sanitizeOutfit, emptyOutfit } from './wardrobe.js';
+import { sanitizeOwnedAll, sanitizeFurniture, defaultFurniture } from './furniture.js';
 
 export const SAVE_KEY = 'moldable-pet:v1';
-export const SAVE_VERSION = 3;
+export const SAVE_VERSION = 4;
 /** Allowed values of the Sprint 3 settings (first = default). */
 export const THEMES = Object.freeze(['light', 'dark']);
 export const MINIGAME_CONTROLS = Object.freeze(['touch', 'head']);
@@ -47,7 +50,7 @@ export const DEFAULT_CHARACTER = 'flower';
 export const DEFAULT_ROOM = 'living';
 
 /**
- * @typedef {{ needs: object, foods: object, personas: object, wardrobe?: object|null, minigames?: object|null }} GameData
+ * @typedef {{ needs: object, foods: object, personas: object, wardrobe?: object|null, minigames?: object|null, furniture?: object|null }} GameData
  */
 
 /** Character keys that have persona data (every one of them is simulated). */
@@ -68,7 +71,8 @@ export function newSave(data, now) {
   return {
     version: SAVE_VERSION, selected: DEFAULT_CHARACTER, room: DEFAULT_ROOM, chosen: false,
     coins: Number.isFinite(start) && start > 0 ? Math.floor(start) : 0, savedAt: now,
-    owned: sanitizeOwned(null, wardrobe), settings: sanitizeSettings(null), chars,
+    owned: sanitizeOwnedAll(null, wardrobe, data.furniture || null), settings: sanitizeSettings(null), chars,
+    furniture: data.furniture ? defaultFurniture(data.furniture) : sanitizeFurniture(null, null, []),
   };
 }
 
@@ -105,8 +109,10 @@ export function migrateSave(raw, data, now, roomIds) {
   out.coins = Number.isFinite(src.coins) && src.coins >= 0 ? Math.floor(src.coins) : 0;
   out.savedAt = Number.isFinite(src.savedAt) ? src.savedAt : now;
   const wardrobe = data.wardrobe || null;
-  out.owned = sanitizeOwned(src.owned, wardrobe);
+  out.owned = sanitizeOwnedAll(src.owned, wardrobe, data.furniture || null);
   out.settings = sanitizeSettings(src.settings);
+  // v3 and older have no furniture → every slot at its default (Sprint 4)
+  out.furniture = sanitizeFurniture(src.furniture, data.furniture || null, out.owned);
   const score = (b) => (b && Number.isFinite(b.snackRain) && b.snackRain > 0 ? Math.floor(b.snackRain) : 0);
   for (const k of keys) {
     const c = src.chars && src.chars[k];
@@ -186,6 +192,13 @@ export function createGameState({ data, storage, now = () => Date.now(), roomIds
     outfit(key = save.selected) { return save.chars[key]?.outfit || null; },
     /** Replace a character's outfit (already validated by wardrobe.equipItem). */
     setOutfit(outfit, key = save.selected) { const c = save.chars[key]; if (c) c.outfit = { ...outfit }; },
+    /** Saved furniture of a room `{ slot: id }` (copy), or of every room when no id is given. */
+    furniture(room) {
+      if (room == null) { const o = {}; for (const r of Object.keys(save.furniture)) o[r] = { ...save.furniture[r] }; return o; }
+      return { ...(save.furniture[room] || {}) };
+    },
+    /** Replace the saved furniture (already validated by furniture.equipFurniture). */
+    setFurniture(all) { const o = {}; for (const r of Object.keys(all || {})) o[r] = { ...all[r] }; save.furniture = o; },
     /** Replace coins + owned after a buy (wardrobe.buyItem result). */
     setPurse(coins, owned) { save.coins = Math.max(0, Math.floor(coins)); save.owned = owned.slice(); },
     /** Add earned coins (never negative). @returns {number} new total */
