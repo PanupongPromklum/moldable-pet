@@ -256,7 +256,42 @@ Make a **sample board** (`design/ui/icon-samples-s4.html` + PNG screenshot in `p
 ### Audio — echo
 SFX names added: `place` (furniture set down, soft thunk), `jingle` (tiny bell sparkle for Christmas items), `preview` (soft whoosh-pop).
 
+## Sprint 5 additions (2026-11-07, kiln)
+
+Owner said "ทำส่วนอื่นต่อเลย" without answering the open questions, so **every GDD default applies** (growth: 45/180 engaged minutes, no offline growth, played characters migrate to `kid`, 5 trait names kept, favourite game fun ×1.2; minigames: mimic 3 slips, hop head = tilt flick, picker always shown; conversation: recognition OK with the one-time Thai notice + "ใช้พูดตามแทน", talk/echo switch on mic long-press, **typed chat yes**, babble voice not TTS, one turn per press, caption 2 s, no AI). The GDDs are the spec: `design/gdd/growth-personality.md`, `design/gdd/minigames-2.md`, `design/gdd/conversation.md`. This section only fixes interfaces and ownership.
+
+### Ownership (new paths)
+| Path | Owner |
+|---|---|
+| `assets/data/growth.json`, `assets/data/conversation.json` numbers, `minigames.json` new blocks, `personas.json` new events | loop |
+| `assets/data/conversation.json` intents + lines, `src/audio/listen.js`, `src/audio/babble.js`, `src/conversation/` | echo |
+| `src/game/minigames/` (incl. new `index.js` registry, `mimic*.js`, `bubbles*.js`, `hop*.js`) | **wire-games** |
+| `src/main.js`, `src/game/state.js`, `src/game/growth*.js`, `src/engine/`, `src/input/`, `index.html` | **wire-core** |
+| `src/props/minigame.js` (+ new `src/props/minigame-*.js`) | prop |
+
+### Character — clay
+```js
+pet.setGrowth({ scale, eyeScale, roundness, jiggle, hopScale }, { transitionSec });  // eased; scale also scales outfits
+pet.setTraitMark(traitIdOrNull);   // 'cuddly'|'playful'|'foodie'|'stylish'|'cheerful'|null — small visual mark per growth GDD 3.5
+pet.getGrowth();
+```
+Mimic needs ≥ 6 clearly different poses/faces the player can tell apart at phone size (growth/minigames GDD 3.2): reuse expressions + actions, add what is missing.
+
+### Audio — echo
+`sfx.setPitchOffset(semitones)` (talk-back uses the same offset), new sfx `note` (mimic pad tones, `{ index }`), `call` (bubble colour call), `pop` variants for bubbles if needed. Conversation modules exactly as `conversation.md` 3.11: `createListener`, `createBabble`, `createKeywordBrain` (+ `brain.reply(heard, context) → Promise<Reply>`), pure and unit-tested (`tests/unit/conversation*.test.mjs`).
+
+### HUD — glaze
+- Growth: `hud.showGrowthCard({ kind: 'stage'|'trait'|'drift', name, stageLabel, traitLabel, because })` (handler `onGrowthCardClose()`); character chip / select shows `{ stage, stageLabel, progress 0..1, hint }` per character (`hud.showSelect(chars)` items gain those fields; `hud.setCharacter({ key, name, stage, stageLabel, progress })`).
+- Minigame picker: `hud.showMinigamePicker({ games: [{ id, title, howTo, best, controls, favorite, last }], charName })`, `hud.hideMinigamePicker()`, handlers `onMinigamePick(id)`, `onMinigameOther()` (result card "เกมอื่น"). Game HUD per game: `hud.startMinigame({ id, title, durationSec })` + `hud.updateMinigame({...})` grows `{ round, slips, sequence, call: { color, label } }`; mimic pads: `hud.showMimicPads(pads: [{ id, label, icon }])`, `hud.flashMimicPad(id, kind: 'demo'|'ok'|'wrong')`, `hud.setMimicPadsEnabled(bool)`, `hud.hideMimicPads()`, handler `onMimicPad(id)`.
+- Conversation: `hud.setMic(state)` gains `'thinking'`; `hud.caption(textOrNull, ms)`; `hud.showTalkHints(hints[])`; `hud.showTalkNotice()` → handlers `onTalkNoticeOk()`, `onTalkNoticeEcho()`; mic long-press → `hud.showMicSheet({ mode })` → `onTalkMode('talk'|'echo')`; typed chat: keyboard button next to the mic → `hud.showTypeBox()` → `onTypeSend(text)`; `hud.pulseFollowUp(id)` for a reply's `followUp`.
+
+### Game — wire-core / wire-games
+- Save **v5**: `chars[key].growth` (growth GDD 3.10), `chars[key].best[gameId]` (existing `best.snackRain` kept), `settings.talkMode` (`auto|talk|echo`), `settings.talkNoticeSeen`, `lastGame`. v4 → v5 migration per growth GDD 3.9 (option B).
+- `src/game/growth-rules.js` pure (formulas 4.x) + `src/game/growth.js` wiring; events fed from care, minigame, wardrobe, decor and conversation paths.
+- `src/game/minigames/index.js` (wire-games): registry `MINIGAMES = { snackRain, mimic, bubbles, hop }`, each `create(ctx)` with the same lifecycle Snack Rain already has — wire-games documents the ctx/lifecycle at the top of `index.js` **first**, then wire-core wires picker → registry in `main.js`. Pure rules in `*-rules.js` with unit tests.
+
 ## Change log
+- 2026-11-07 v5 — Sprint 5: growth + trait, minigame picker + mimic/bubbles/hop, conversation (keyword brain, typed chat), save v5; GDD defaults applied.
 - 2026-11-06 v4 — Sprint 4: furniture slots + shop, Christmas furniture/outfits, baked static scenery, Moldable filled icon samples.
 - 2026-10-25 v1 — kiln.
 - 2026-10-25 v1.1 — per-character needs, random return style (owner decisions).
