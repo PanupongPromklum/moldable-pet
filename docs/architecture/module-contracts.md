@@ -181,7 +181,83 @@ Coins: `hud.setCoins(n)` animates the change.
 5. **Petting on phones.** A slow stroke over the pet's head counts as petting: a drag that starts on the head region (upper part of the body) strokes and pets instead of stretching; dragging from lower on the body still stretches. Gentle strokes must raise ใกล้ชิด clearly (loop retunes `actions.petPerSecond` etc.). The head gives a soft, small dent following the finger while stroking.
 6. **Performance** (next sprint): phones stutter; profile and optimise after the features above, then consider a graphics quality setting.
 
+## Sprint 4 additions (2026-11-06, kiln — owner interview)
+
+Owner decisions: furniture swaps **per slot** (no free placement) and is bought with coins; a **Christmas** set (furniture + outfits) is on sale all year as its own category; static scenery is **baked** (rendered once to a background image, still a 3D clay look) so phones run smoother; HUD icons become **filled Moldable symbols** (soft rounded clay forms, brand gradient for every icon, translucent edges, soft shadow — reference `design/art/reference/icon-style-moldable-categories.png`), **samples first for owner review**, the in-game icons are not swapped until approved. Sprint 5 (design docs only this sprint): growth stages over a few hours of play + raised personality (option C), free keyword conversation (AI later), minigames จำท่าทาง / เป่าฟองสบู่ / กระโดดข้ามก้อน.
+
+### Furniture slots and item ids (fixed — loop prices, prop meshes, glaze UI, wire state)
+`*` = default item for the slot (owned from the start, price 0, today's look). Ids are unique across furniture **and** wardrobe.
+
+| Room | Slot (label) | Items |
+|---|---|---|
+| living | `sofa` โซฟา | `sofa-classic`*, `sofa-cloud`, `sofa-xmas` |
+| living | `rug` พรม | `rug-round`*, `rug-flower`, `rug-snow` |
+| living | `wall` ของแต่งผนัง | `frame-blob`*, `wall-books`, `garland-xmas` |
+| living | `window` หน้าต่าง | `window-round`*, `window-arch`, `window-snow` |
+| living | `corner` มุมห้อง | `plant-pot`*, `plant-tall`, `xmas-tree` |
+| living | `lamp` โคมไฟ | `lamp-floor`*, `lamp-mushroom`, `lamp-star` |
+| living | `side` ข้างโซฟา | `table-mug`*, `toy-box`, `fireplace-xmas` |
+| kitchen | `fridge` ตู้เย็น | `fridge-classic`*, `fridge-retro`, `fridge-gingerbread` |
+| kitchen | `wall` ชั้นผนัง | `shelf-jars`*, `shelf-plants`, `wreath-xmas` |
+| kitchen | `rug` พรม | `mat-kitchen`*, `mat-fruit`, `mat-snow` |
+| bathroom | `mirror` กระจก | `mirror-oval`*, `mirror-cloud`, `mirror-holly` |
+| bathroom | `wall` ราวผ้า | `towel-rail`*, `towel-stripes`, `stocking-xmas` |
+| bathroom | `rug` พรม | `mat-bath`*, `mat-duck`, `mat-snow-bath` |
+
+Christmas (`theme: "xmas"`): `sofa-xmas, rug-snow, garland-xmas, window-snow, xmas-tree, lamp-star, fireplace-xmas, fridge-gingerbread, wreath-xmas, mat-snow, mirror-holly, stocking-xmas, mat-snow-bath`. Everything else is `"basic"`. Christmas colours: brand pastels plus muted berry/pine tones from the palette — never bright red or bright green. Every slot must be visible on a 390×844 phone (wide-screen-only extras stay as fixed decor, not slots).
+
+### Christmas outfits (fixed ids — clay meshes, loop prices, glaze thumbnails)
+head `hat-santa` (หมวกซานต้า), `antlers` (เขากวาง) · eyes `glasses-snow` (แว่นเกล็ดหิมะ) · body `scarf-xmas` (ผ้าพันคอคริสต์มาส), `bell-collar` (กระดิ่ง). Same slot rules and anchors as Sprint 2. wardrobe.json items gain `"theme": "basic" | "xmas"`.
+
+### Data — loop
+`assets/data/furniture.json`:
+```json
+{ "rooms": { "living": { "slots": { "sofa": { "label": "โซฟา" } } } },
+  "themes": { "basic": { "label": "พื้นฐาน" }, "xmas": { "label": "คริสต์มาส" } },
+  "items": [ { "id": "sofa-cloud", "room": "living", "slot": "sofa", "name": "โซฟาก้อนเมฆ", "price": 0, "theme": "basic", "default": false } ] }
+```
+`items[]` order = display order. Default items have `"default": true, "price": 0`.
+
+### Rooms — prop
+```js
+const room = createRoom('living', { theme, furniture: { sofa: 'sofa-xmas' } });  // missing slots → default item
+room.furniture;                      // { slot: itemId } currently shown (all slots filled)
+room.setFurniture({ corner: 'xmas-tree' });   // swap only the named slots; unknown ids → console.warn + ignore
+room.staticGroup;                    // THREE.Group: everything that never moves (baked)
+room.liveGroup;                      // THREE.Group: anything animated or interactive (toilet, swaying leaves, toy ball, twinkling tree lights, flush water…)
+room.staticVersion;                  // integer, +1 whenever staticGroup content changes (setFurniture, setTheme)
+import { FURNITURE_SLOTS, createFurniturePreview } from './rooms/index.js';
+FURNITURE_SLOTS;                     // { living: ['sofa', …], kitchen: […], bathroom: […] }
+createFurniturePreview(itemId);      // → { object3d: Group, fit: { center: Vector3, radius } } for shop thumbnails
+```
+`room.group` still contains both groups. Living-room work is split: **prop-living** owns `src/rooms/living.js` and `src/props/clay.js`; **prop-utility** owns `kitchen.js`, `bathroom.js` and may add files under `src/props/furniture/` (no edits to `clay.js`; ask prop-living through kiln for a shared helper). Rooms also get **more detail and cuteness** — affordable now because static detail is baked: soft bevels, stitched cushions, tiny props, baked soft contact shadows. Live parts stay light (draw calls and triangles count every frame).
+
+### Bake — wire (`src/engine/bake.js`, stage)
+The stage renders the active room's `staticGroup` once (same camera, same lights, current pixel ratio) into a texture and shows it as the screen background; per frame only `liveGroup`, the pet, food and FX render. Re-bake when: `staticVersion` changes, theme changes, viewport resizes, the HUD reserve/framing changes (minigame view), or the room switches (bake the incoming room before its transition starts). The pet's own contact shadow is live. Fallback flag `?nobake` renders everything live (debug and A/B timing). Report before/after draw calls, triangles and frame time (Playwright, phone viewport) in the sprint file.
+
+### Furniture shop — glaze (HUD) + wire (state)
+A "แต่งห้อง" button in every room (bottom cluster). Sheet like the wardrobe (pet room stays visible above it, sheet ≤ 45% height): slot tabs for the current room, a theme filter chip row (ทั้งหมด / พื้นฐาน / คริสต์มาส), item cards with thumbnail, name, price or "มีแล้ว"/"ใช้อยู่".
+```js
+hud.showDecor({ room, slots: [{ id, label }], items: [{ id, slot, name, price, theme, thumb }], owned, furniture, coins, themes });
+hud.updateDecor(partial); hud.hideDecor();
+// handlers
+onDecor()                    // open
+onDecorPreview(slot, idOrNull)   // tap a card: the room shows it right away (try before you buy); null = back to the equipped item
+onDecorBuy(id)               // confirmation inside the sheet, no browser dialogs; enough coins → bought + equipped
+onDecorEquip(slot, id)       // owned item → equip
+onDecorClose()               // close: unbought previews revert
+```
+Thumbnails: wire renders `createFurniturePreview` items to small PNG data URLs once per session (offscreen, cached) and passes them as `thumb`. Christmas outfit thumbnails: same way as the existing wardrobe thumbnails.
+Save v4 (wire): `furniture: { living: {slot: id}, kitchen: {…}, bathroom: {…} }` shared by all characters; furniture ids go in the shared `owned` list; defaults always owned. v3 saves migrate (all defaults).
+
+### Icons — glaze
+Make a **sample board** (`design/ui/icon-samples-s4.html` + PNG screenshot in `production/qa/evidence/`): need icons อิ่ม, ห้องน้ำ, สนุก, ใกล้ชิด, plus เหรียญ and แต่งห้อง, at real HUD size (on the meter ring) and large, light and dark themes, full and low states (low = fades + muted pink edge). Code-only, never added to the Figma DS. Do not swap the live HUD icons until the owner approves.
+
+### Audio — echo
+SFX names added: `place` (furniture set down, soft thunk), `jingle` (tiny bell sparkle for Christmas items), `preview` (soft whoosh-pop).
+
 ## Change log
+- 2026-11-06 v4 — Sprint 4: furniture slots + shop, Christmas furniture/outfits, baked static scenery, Moldable filled icon samples.
 - 2026-10-25 v1 — kiln.
 - 2026-10-25 v1.1 — per-character needs, random return style (owner decisions).
 - 2026-10-26 v3 — Sprint 3: chip name only, manual light/dark, head-tilt minigame control, slimmer soft hands, head-stroke petting.
