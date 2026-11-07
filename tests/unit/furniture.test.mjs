@@ -9,7 +9,7 @@ import {
 import { buyItem } from '../../src/game/wardrobe.js';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
-import { migrateSave, newSave, createGameState, SAVE_KEY } from '../../src/game/state.js';
+import { migrateSave, newSave, createGameState, SAVE_KEY, SAVE_VERSION } from '../../src/game/state.js';
 
 const load = (f) => JSON.parse(readFileSync(fileURLToPath(new URL(`../../assets/data/${f}`, import.meta.url)), 'utf8'));
 const BASE = { needs: load('needs.json'), foods: load('foods.json'), personas: load('personas.json') };
@@ -132,7 +132,7 @@ const DATA = { ...BASE, wardrobe: makeWardrobe(), furniture: makeFurniture() };
 
 test('newSave_isV4_withDefaultFurniture_andDefaultsOwned', () => {
   const s = newSave(DATA, T0);
-  eq(s.version, 4, 'version');
+  eq(s.version, SAVE_VERSION, 'version');
   deepEq(s.furniture, defaultFurniture(DATA.furniture), 'furniture');
   for (const id of ['sofa-classic', 'plant-pot', 'mat-bath', 'bow-ribbon']) assert(s.owned.includes(id), `owned ${id}`);
 });
@@ -143,8 +143,8 @@ test('migrateSave_v3_keepsEverything_andAddsDefaultFurniture', () => {
   // Act
   const m = migrateSave(JSON.parse(JSON.stringify(v3)), DATA, T0, ROOMS);
   // Assert
-  eq(m.version, 4, 'version'); eq(m.selected, 'gumdrop', 'selected'); eq(m.room, 'bathroom', 'room'); eq(m.coins, 310, 'coins');
-  deepEq(m.settings, v3.settings, 'settings');
+  eq(m.version, SAVE_VERSION, 'version'); eq(m.selected, 'gumdrop', 'selected'); eq(m.room, 'bathroom', 'room'); eq(m.coins, 310, 'coins');
+  deepEq(m.settings, { ...v3.settings, talkMode: 'auto', talkNoticeSeen: false }, 'settings (v5 adds talk settings)');
   deepEq(m.chars.gumdrop.needs, v3.chars.gumdrop.needs, 'needs'); eq(m.chars.gumdrop.tLast, T0 - 1000, 'tLast');
   deepEq(m.chars.gumdrop.outfit, v3.chars.gumdrop.outfit, 'outfit'); eq(m.chars.gumdrop.best.snackRain, 220, 'best');
   eq(m.chars.gumdrop.wearBonusAt, T0 - 5000, 'bonus');
@@ -173,7 +173,7 @@ test('createGameState_furniturePersistsThroughStorage_sharedByCharacters', () =>
   a.select('cloud');
   assert(a.persist(), 'persist');
   const b = createGameState({ data: DATA, storage: st, now: () => T0 });
-  eq(JSON.parse(st.mem.get(SAVE_KEY)).version, 4, 'on disk v4');
+  eq(JSON.parse(st.mem.get(SAVE_KEY)).version, SAVE_VERSION, 'on disk current version');
   eq(b.furniture('living').corner, 'xmas-tree', 'furniture kept'); eq(b.coins, 240, 'coins');
   b.select('flower'); eq(b.furniture('living').corner, 'xmas-tree', 'same for every character');
   const copy = b.furniture('living'); copy.corner = 'x'; eq(b.furniture('living').corner, 'xmas-tree', 'getter returns a copy');

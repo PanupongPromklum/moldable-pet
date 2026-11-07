@@ -92,6 +92,18 @@
   --mp-preview-tag-bg: #252941;     /* "ลองดู" tag = coach pill colours, 14.9:1 */
   --mp-preview-tag-text: #FFFFFF;
 
+  /* ---- S5 growth, minigames, conversation (story S5-05) ---- */
+  --mp-grow-ring: #5A68B5;          /* [เสนอ] growth progress ring on the chip / select card = primary, 5.1:1 on #FFF */
+  --mp-grow-track: #D9D6EA;         /* [เสนอ] = --mp-line */
+  --mp-pad-min: 84px;               /* [เสนอ] mimic pad height (GDD ≥ 76 px); width ≥ 76 px at 360 px with 4 pads */
+  --mp-pad-tint: 22%;               /* [เสนอ] pad ground = pose ink 22 % over the surface */
+  --mp-pad-edge: 48%;               /* [เสนอ] pad edge = pose ink 48 % over the surface */
+  --mp-pad-face: #252941;           /* [DS] text/primary — pattern glyphs on pastel swatches, 9.8:1+ on the lightest */
+  --mp-caption-bg: rgba(255, 255, 255, 0.9);   /* [เสนอ] "heard" caption under the bubble */
+  --mp-caption-text: #5C5F75;       /* = --mp-text-muted, 5.9:1 on the caption ground over the pastel rooms */
+  --mp-follow-ring: #5A68B5;        /* [เสนอ] followUp pulse ring (primary), 3:1+ on rooms and glass */
+  --mp-switch-off: #9A9DB3;         /* [เสนอ] "โหมดสบายๆ" switch track off — 3.0:1 on #F5F5F5 (non-text) */
+
   /* ---- Type ([DS] families; sizes for a 390 px screen) ---- */
   --mp-font-th: 'Prompt', 'Poppins', system-ui, sans-serif;
   --mp-font-en: 'Poppins', 'Prompt', system-ui, sans-serif;
@@ -202,4 +214,14 @@
   --mp-preview-tag-text: #252941;   /* 11.7:1 */
 
   --mp-shadow: 0 6px 20px rgba(0, 0, 0, 0.35);
+
+  /* S5 [เสนอ] */
+  --mp-grow-ring: #9BB0DE;          /* 7.7:1 on #1E1E1E */
+  --mp-grow-track: #444444;
+  --mp-pad-tint: 26%;
+  --mp-pad-edge: 55%;
+  --mp-caption-bg: rgba(30, 30, 30, 0.9);
+  --mp-caption-text: #B3B3B3;       /* 7.6:1 on the caption ground */
+  --mp-follow-ring: #9BB0DE;
+  --mp-switch-off: #7A7A7A;         /* 3.4:1 on #2C2C2C */
 }

@@ -107,10 +107,11 @@ export function createTalkback(opts = {}) {
       if (my !== session) return;
       const sr = ctx.sampleRate;
       let data = null, rate = 1;
+      const st = semitones + (Number(opts.getPitchOffset?.()) || 0);
       if (method === 'wsola') {
-        try { data = pitchShift(samples, sr, semitones); } catch { data = null; }
+        try { data = pitchShift(samples, sr, st); } catch { data = null; }
       }
-      if (!data) { data = samples; rate = Math.pow(2, semitones / 12); }
+      if (!data) { data = samples; rate = Math.pow(2, st / 12); }
       finishPhrase(data, sr);
       const env = levelEnvelope(data, sr, LEVEL_FPS);
       let src;

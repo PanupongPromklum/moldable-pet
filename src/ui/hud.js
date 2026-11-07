@@ -70,6 +70,16 @@
  * Wardrobe  showWardrobe/updateWardrobe accept `themes` (wardrobe.json → themes); items carry
  *           `theme`. A theme chip row (ทั้งหมด / พื้นฐาน / คริสต์มาส) shows when ≥ 2 themes exist.
  *
+ * ── Sprint 5 API changes (for wire) — S5-05 ────────────────────────────────
+ * Full list at the top of hud-s5.js. In short: showGrowthCard/hideGrowthCard, showSelect + setCharacter
+ * take { stage, stageLabel, progress, hint, traitLabel }, showMinigamePicker/hideMinigamePicker,
+ * showMinigameResult({ headline }) + "เกมอื่น", startMinigame({ id, hint }), updateMinigame({ round, slips,
+ * slipsMax, sequence, call }), showMimicPads/flashMimicPad/setMimicPadsEnabled/hideMimicPads,
+ * setMic('thinking'), caption, showTalkHints, showTalkNotice/hideTalkNotice, showMicSheet/hideMicSheet,
+ * setTalkMode, showTypeBox/hideTypeBox, pulseFollowUp.
+ * Intro    showMinigameIntro({ …, howTo?, coach?, relaxed?: boolean })  howTo replaces "เลือกวิธีเล่น";
+ *          coach = first-play line; relaxed shows the "โหมดสบายๆ" switch → onMinigameRelaxed(on).
+ *
  * ── Toilet flow (S2-03) — one control at a time ─────────────────────────────
  * Chosen rule: `setFlushVisible(true)` is the "sitting" stage. It clears the coach mark,
  * hides room navigation and shows ONE centred primary "กดชักโครก" button. While it is
@@ -80,6 +90,12 @@
  * @module ui/hud
  */
 import { icon, foodIcon, accessoryIcon, filledIcon } from './icons.js';
+import { installS5, HUD_S5_STRINGS } from './hud-s5.js';
+
+export {
+  growthWords, selectHint, growthCardText, padColumns, mimicKeyIndex, shouldSendOnEnter, cleanTyped,
+  followUpTarget, pickerFocusId, gridMove, HUD_S5_STRINGS,
+} from './hud-s5.js';
 
 /** Room ids in swipe order (matches ROOM_IDS in src/rooms). */
 export const HUD_ROOMS = ['living', 'kitchen', 'bathroom'];
@@ -135,6 +151,7 @@ export const HUD_STRINGS = {
     listening: { label: 'กำลังฟัง', aria: () => 'กำลังฟัง แตะเพื่อปิดไมค์' },
     recording: { label: 'กำลังอัดเสียง', aria: () => 'กำลังอัดเสียง แตะเพื่อปิดไมค์' },
     playing: { label: 'กำลังพูดตาม', aria: (n) => `${n}กำลังพูดตาม` },
+    thinking: { label: 'กำลังคิด…', aria: () => 'กำลังคิด' },   // S5
   },
   camera: {
     off: { aria: 'เปิดกล้องเพื่อใช้มือเล่น', msg: '' },
@@ -227,6 +244,8 @@ export const HUD_STRINGS = {
     again: 'เล่นอีกครั้ง',
     back: 'กลับห้อง',
   },
+  /** S5 pieces (growth, picker, mimic, conversation): see hud-s5.js. */
+  ...HUD_S5_STRINGS,
 };
 
 const clamp01 = (v) => Math.max(0, Math.min(1, Number(v) || 0));
@@ -357,6 +376,8 @@ export function createHUD(root, handlers = {}, options = {}) {
   // copy has its own gradient ids (a copy inside a hidden sheet would otherwise blank the others).
   const coinDot = () => `<span class="mp-coin-dot mp-coin-dot--filled" aria-hidden="true">${filledIcon('coin', 26)}</span>`;
 
+  /** S5 module handle ({ api, hooks }); null until installS5 runs below. */
+  let s5 = null;
   const state = {
     room: 'living', char: { key: 'flower', name: 'ไผ่' }, mic: 'off', camera: 'off', camHidden: false,
     coins: null, coinShown: 0, coinRaf: 0, flush: false, trayOpen: true, needs: {}, coachText: null,
@@ -514,7 +535,7 @@ export function createHUD(root, handlers = {}, options = {}) {
   el.cam.addEventListener('click', () => call('onCamera'));
   el.lamp.addEventListener('click', () => call('onThemeToggle'));
   el.camView.addEventListener('click', () => call('onCameraView', !state.camHidden));
-  el.mic.addEventListener('click', () => call('onMic'));
+  el.mic.addEventListener('click', () => { if (!s5 || s5.hooks.micClickAllowed()) call('onMic'); });
   el.toastX.addEventListener('click', () => hideToast());
   el.flush.addEventListener('click', () => call('onAction', 'flush'));
   el.wardBtn.addEventListener('click', () => call('onWardrobe'));
@@ -581,6 +602,7 @@ export function createHUD(root, handlers = {}, options = {}) {
       el.ctx.innerHTML = `${ctx.filled ? filledIcon(ctx.ico, 30) : icon(ctx.ico, 22)}<span>${esc(ctx.text)}</span>`;
     }
     renderCoach();
+    if (s5) s5.hooks.renderHints();
   }
 
   function renderCoach() {
@@ -590,12 +612,14 @@ export function createHUD(root, handlers = {}, options = {}) {
   }
 
   function renderMic() {
-    const m = S.mic[state.mic] || S.mic.off;
+    const m5 = s5 && s5.hooks.micCopy(state.mic);
+    const m = m5 || S.mic[state.mic] || S.mic.off;
     el.mic.dataset.state = state.mic;
     el.mic.setAttribute('aria-label', m.aria(state.char.name));
     el.mic.setAttribute('aria-pressed', String(state.mic !== 'off'));
+    if (s5) el.mic.setAttribute('aria-description', s5.hooks.longPressHint);
     el.micLabel.textContent = m.label;
-    const ico = state.mic === 'recording' ? 'stop' : state.mic === 'playing' ? 'wave' : 'mic';
+    const ico = state.mic === 'recording' ? 'stop' : state.mic === 'playing' ? 'wave' : state.mic === 'thinking' ? 'dots' : 'mic';
     el.micIco.innerHTML = icon(ico, state.mic === 'recording' ? 30 : 32);
   }
 
@@ -629,8 +653,18 @@ export function createHUD(root, handlers = {}, options = {}) {
   }
   function positionBubble() {
     const b = state.bubble;
-    if (!b.on || b.x < 0) return;
-    const p = clampBubble(b.x, b.y, b.w, b.h, { vw: geo.vw, vh: geo.vh, minTop: geo.minTop, margin: 12 });
+    if (b.x < 0) return;
+    const box = { vw: geo.vw, vh: geo.vh, minTop: geo.minTop, margin: 12 };
+    // S5: the "heard" caption sits right above the head; the bubble stacks above the caption.
+    const cap = s5 && s5.hooks.captionBox();
+    let headY = b.y;
+    if (cap) {
+      const c = clampBubble(b.x, b.y, cap.w, cap.h, { ...box, minTop: box.minTop + (b.on ? b.h + 4 : 0) });
+      s5.hooks.placeCaption(c.left, c.top);
+      headY = c.top;
+    }
+    if (!b.on) return;
+    const p = clampBubble(b.x, headY, b.w, b.h, box);
     el.bubble.style.transform = `translate3d(${Math.round(p.left)}px, ${Math.round(p.top)}px, 0)`;
     el.bubbleTail.style.left = `${Math.round(p.tail)}px`;
   }
@@ -662,7 +696,8 @@ export function createHUD(root, handlers = {}, options = {}) {
       const locked = !!c.locked;
       const on = sel.chosen === c.key;
       const role = locked ? (c.role || s.lockedRole) : (c.role || '');
-      const label = locked ? `${c.name} ${s.soon}` : `${c.name} ${role} ${c.mbti || ''}${c.key === currentKey ? ' ' + s.current : ''}`;
+      const g5 = s5 ? s5.hooks.selectCard(c) : { html: '', aria: '', name: c.name };
+      const label = locked ? `${c.name} ${s.soon}` : `${g5.name} ${role} ${c.mbti || ''} ${g5.aria}${c.key === currentKey ? ' ' + s.current : ''}`;
       return `
       <button type="button" class="mp-card${on ? ' is-on' : ''}${locked ? ' is-locked' : ''}" role="radio" aria-checked="${on}" ${locked ? 'aria-disabled="true"' : ''} data-key="${esc(c.key)}" aria-label="${esc(label.trim())}">
         <span class="mp-card-pic" style="background:var(--mp-tint-${esc(c.key)}, var(--mp-bg-light))">
@@ -670,8 +705,8 @@ export function createHUD(root, handlers = {}, options = {}) {
           ${locked ? `<span class="mp-card-soon">${icon('lock', 14)}${esc(s.soon)}</span>` : ''}
           ${on ? `<span class="mp-card-check" aria-hidden="true">${icon('check', 16)}</span>` : ''}
         </span>
-        <span class="mp-card-row"><span class="mp-card-name">${esc(c.name)}</span>${!locked && c.mbti ? `<span class="mp-card-mbti mp-num">${esc(c.mbti)}</span>` : ''}</span>
-        <span class="mp-card-role">${esc(role)}</span>
+        <span class="mp-card-row"><span class="mp-card-name">${esc(g5.name || c.name)}</span>${!locked && c.mbti ? `<span class="mp-card-mbti mp-num">${esc(c.mbti)}</span>` : ''}</span>
+        <span class="mp-card-role">${esc(role)}</span>${g5.html}
       </button>`;
     }).join('');
     const chosen = chars.find((c) => c.key === sel.chosen);
@@ -1104,6 +1139,9 @@ export function createHUD(root, handlers = {}, options = {}) {
   }
 
   function gameHintText() {
+    if (state.game && state.game.hint) return state.game.hint;
+    const h5 = s5 && s5.hooks.gameHint(state.control);
+    if (h5) return h5;
     if (state.control === 'head') return S.game.hintHead;
     return finePointer.matches ? S.game.hintMouse : S.game.hintTouch;
   }
@@ -1136,11 +1174,17 @@ export function createHUD(root, handlers = {}, options = {}) {
         <div class="mp-intro-head">
           <div class="mp-intro-titles">
             <h2 class="mp-intro-title" id="mp-intro-title">${esc(it.title)}</h2>
-            <p class="mp-intro-sub">${esc(g.introSub)}</p>
+            <p class="mp-intro-sub">${esc(it.howTo || g.introSub)}</p>
           </div>
           <button type="button" class="mp-iconbtn mp-iconbtn--soft mp-intro-x" aria-label="${esc(g.introClose)}">${icon('close', 20)}</button>
         </div>
-        <div class="mp-intro-opts" role="radiogroup" aria-label="${esc(g.introGroup)}">${opts}</div>
+        ${it.coach ? `<p class="mp-intro-coach">${icon('hand', 18)}<span>${esc(it.coach)}</span></p>` : ''}
+        <div class="mp-intro-opts${it.controls.length < 2 ? ' is-single' : ''}" role="radiogroup" aria-label="${esc(g.introGroup)}">${opts}</div>
+        ${it.relaxed == null ? '' : `
+        <button type="button" class="mp-switch" role="switch" aria-checked="${!!it.relaxed}">
+          <span class="mp-switch-text"><span class="mp-switch-label">${esc(S.intro.relaxed)}</span><span class="mp-switch-hint">${esc(S.intro.relaxedHint)}</span></span>
+          <span class="mp-switch-track" aria-hidden="true"><span class="mp-switch-knob"></span></span>
+        </button>`}
         <button type="button" class="mp-btn-primary mp-intro-go">${icon('fun', 22)}<span>${esc(g.ready)}</span></button>
       </div>`;
     if (focus) {
@@ -1182,6 +1226,12 @@ export function createHUD(root, handlers = {}, options = {}) {
     if (!state.intro) return;
     if (ev.target.closest('.mp-intro-x')) { closeIntro(true); call('onMinigameExit'); return; }
     if (ev.target.closest('.mp-intro-go')) { call('onMinigameReady'); return; }
+    if (ev.target.closest('.mp-switch')) {
+      state.intro.relaxed = !state.intro.relaxed;
+      renderIntro('.mp-switch');
+      call('onMinigameRelaxed', state.intro.relaxed);
+      return;
+    }
     const opt = ev.target.closest('.mp-opt');
     if (opt) pickControl(opt.dataset.control);
   });
@@ -1245,14 +1295,25 @@ export function createHUD(root, handlers = {}, options = {}) {
       if (id !== 'living' && state.ward) api.hideWardrobe();
       if (state.decor && state.decor.room !== id) closeDecorSelf();
       renderRoom();
+      if (s5) s5.hooks.roomChanged();
     },
 
-    /** @param {{key:string, name:string}} c */
+    /**
+     * @param {{key:string, name:string, stage?:'baby'|'kid'|'grown', stageLabel?:string, progress?:number}} c
+     *        S5: stage + progress draw a thin growth ring around the chip avatar (name stays alone).
+     */
     setCharacter(c = {}) {
-      state.char = { key: c.key || state.char.key, name: c.name || state.char.name };
+      const sameChar = !c.key || c.key === state.char.key;
+      state.char = {
+        key: c.key || state.char.key, name: c.name || state.char.name,
+        stage: c.stage ?? (sameChar ? state.char.stage : undefined),
+        stageLabel: c.stageLabel ?? (sameChar ? state.char.stageLabel : undefined),
+        progress: c.progress ?? (sameChar ? state.char.progress : undefined),
+      };
       el.name.textContent = state.char.name;
       el.ava.src = portrait(state.char.key);
       el.who.setAttribute('aria-label', S.chip(state.char.name));
+      if (s5) s5.hooks.chip(state.char);
       renderMic();
       if (state.ward) { state.ward.charKey = state.char.key; renderWardrobe(); }
     },
@@ -1310,7 +1371,7 @@ export function createHUD(root, handlers = {}, options = {}) {
       renderCoach();
     },
 
-    /** @param {'off'|'listening'|'recording'|'playing'} s */
+    /** @param {'off'|'listening'|'recording'|'playing'|'thinking'} s  S5 adds 'thinking' (slow brain only) */
     setMic(s) {
       state.mic = S.mic[s] ? s : 'off';
       renderMic();
@@ -1371,8 +1432,10 @@ export function createHUD(root, handlers = {}, options = {}) {
       const ids = controls.map((c) => c.id);
       const selected = ids.includes(opts.selected) ? opts.selected : ids.includes(state.control) ? state.control : ids[0];
       const firstOpen = !state.intro;
+      if (s5) { s5.api.hideMinigamePicker(); s5.hooks.closeSheets(); }
       state.intro = {
         controls, selected, title: opts.title || S.game.title,
+        howTo: opts.howTo || '', coach: opts.coach || '', relaxed: typeof opts.relaxed === 'boolean' ? opts.relaxed : null,
         returnFocus: firstOpen ? document.activeElement : state.intro.returnFocus,
       };
       state.control = selected;
@@ -1422,11 +1485,14 @@ export function createHUD(root, handlers = {}, options = {}) {
     },
 
     /**
-     * Character select overlay.
-     * @param {{key:string, name:string, role?:string, mbti?:string, locked?:boolean}[]} chars
+     * Character select overlay. S5: each card shows stage, a progress ring to the next stage (no minutes)
+     * and the hint ("ดูท่าจะเป็นสายขี้อ้อนนะ…"; "อีกนิดจะโตแล้ว!" from 85 %); grown + traitLabel → "ไผ่ · ขี้อ้อน".
+     * @param {{key:string, name:string, role?:string, mbti?:string, locked?:boolean, stage?:string, stageLabel?:string,
+     *          progress?:number, hint?:string, traitLabel?:string}[]} chars
      * @param {string} [currentKey] current character; when set, the overlay can be closed
      */
     showSelect(chars = [], currentKey) {
+      if (s5) { s5.hooks.closeSheets(); s5.api.hideMinigamePicker(); }
       const firstOpen = !state.select;
       state.select = {
         chars, current: currentKey, closable: !!currentKey,
@@ -1569,7 +1635,8 @@ export function createHUD(root, handlers = {}, options = {}) {
     /**
      * Start the minigame HUD: hides the normal HUD, runs a 3-2-1 countdown.
      * Calls onMinigameTick(3), (2), (1), (0 = go) for sfx.
-     * @param {{title?:string, durationSec:number, countdown?:number, control?:string}} opts
+     * @param {{id?:string, title?:string, durationSec:number, countdown?:number, control?:string, hint?:string}} opts
+     *        S5: id = 'snackRain'|'mimic'|'bubbles'|'hop' picks the per-game hint and HUD bits
      * @returns {Promise<void>} resolves when "go" shows — start the round then
      */
     startMinigame(opts = {}) {
@@ -1578,11 +1645,13 @@ export function createHUD(root, handlers = {}, options = {}) {
       if (state.decor) closeDecorSelf();
       if (opts.control) state.control = opts.control;
       if (!state.control) state.control = 'touch';
+      if (s5) { s5.api.hideMinigamePicker(); s5.hooks.closeSheets(); }
       if (state.intro) { state.game = { countTimers: [] }; closeIntro(false); }
       const durationSec = Math.max(1, Number(opts.durationSec) || 45);
       const count = Math.max(0, Math.floor(opts.countdown ?? 3));
-      state.game = { durationSec, timeLeft: durationSec, score: 0, coins: 0, streak: 0, started: false, countTimers: [] };
+      state.game = { durationSec, timeLeft: durationSec, score: 0, coins: 0, streak: 0, started: false, countTimers: [], hint: opts.hint || '' };
       const g = state.game;
+      if (s5) s5.hooks.startGame(opts);
       el.gameTitle.textContent = opts.title || S.game.title;
       el.result.hidden = true; el.result.innerHTML = '';
       el.game.hidden = false;
@@ -1618,10 +1687,17 @@ export function createHUD(root, handlers = {}, options = {}) {
       });
     },
 
-    /** @param {{score?:number, timeLeft?:number, streak?:number, coins?:number, control?:string}} u */
+    /**
+     * @param {{score?:number, timeLeft?:number, streak?:number, coins?:number, control?:string, round?:number,
+     *          slips?:number, slipsMax?:number, sequence?:{length:number, done:number, phase:'watch'|'repeat'}|null,
+     *          call?:{color:string, label:string, pattern?:string, warn?:boolean}|null}} u
+     *        S5: round = current sequence length (mimic), slips = slips used (3 dots fade), sequence = progress dots
+     *        above the pads, call = bubble colour chip (colour + pattern + name; warn shows "เปลี่ยนสี!")
+     */
     updateMinigame(u = {}) {
       const g = state.game;
       if (!g) return;
+      if (s5) s5.hooks.updateGame(u);
       if (u.control && u.control !== state.control) {
         state.control = u.control;
         renderCtl();
@@ -1640,7 +1716,11 @@ export function createHUD(root, handlers = {}, options = {}) {
       renderGameNumbers();
     },
 
-    /** Result card with "เล่นอีกครั้ง" (onMinigameAgain) and "กลับห้อง" (onMinigameExit). */
+    /**
+     * Result card with "เล่นอีกครั้ง" (onMinigameAgain) and "กลับห้อง" (onMinigameExit). S5: when
+     * handlers.onMinigameOther exists the card shows ✕ (กลับห้อง) + "เกมอื่น" + "เล่นอีกครั้ง".
+     * @param {{score?:number, best?:number, coins?:number, headline?:string}} r headline e.g. "ไปได้ถึง 7 ท่า!"
+     */
     showMinigameResult(r = {}) {
       const g = state.game;
       if (!g) return;
@@ -1651,19 +1731,22 @@ export function createHUD(root, handlers = {}, options = {}) {
       const coins = int0(r.coins ?? g.coins);
       const isBest = score > 0 && score >= best;
       const s = S.game;
+      const other = typeof handlers.onMinigameOther === 'function';
       el.game.classList.add('is-result');
       el.result.setAttribute('aria-labelledby', 'mp-result-title');
       el.result.innerHTML = `
         <div class="mp-result-card">
           ${isBest ? `<span class="mp-result-badge">${icon('star', 16)}<span>${esc(s.newBest)}</span></span>` : ''}
-          <h2 class="mp-result-title" id="mp-result-title">${esc(s.resultTitle)}</h2>
+          ${other ? `<button type="button" class="mp-iconbtn mp-iconbtn--soft mp-result-x" aria-label="${esc(S.result.close)}">${icon('close', 20)}</button>` : ''}
+          <h2 class="mp-result-title" id="mp-result-title">${esc(r.headline || s.resultTitle)}</h2>
           <div class="mp-result-score"><span class="mp-num">${fmt(score)}</span><span class="mp-result-l">${esc(s.score)}</span></div>
           <div class="mp-result-row">
             <div class="mp-result-cell"><span class="mp-result-l">${esc(s.best)}</span><span class="mp-num mp-result-v">${fmt(Math.max(best, score))}</span></div>
             <div class="mp-result-cell"><span class="mp-result-l">${esc(s.coins)}</span><span class="mp-result-v">${coinDot()}<span class="mp-num">+${fmt(coins)}</span></span></div>
           </div>
           <div class="mp-result-actions">
-            <button type="button" class="mp-btn-outline mp-result-back">${esc(s.back)}</button>
+            ${other ? `<button type="button" class="mp-btn-outline mp-result-other">${esc(S.result.other)}</button>`
+              : `<button type="button" class="mp-btn-outline mp-result-back">${esc(s.back)}</button>`}
             <button type="button" class="mp-btn-primary mp-result-again">${esc(s.again)}</button>
           </div>
         </div>`;
@@ -1677,6 +1760,7 @@ export function createHUD(root, handlers = {}, options = {}) {
       if (!state.game) return;
       clearCountdown();
       state.game = null;
+      if (s5) s5.hooks.endGame();
       el.game.hidden = true;
       el.result.hidden = true; el.result.innerHTML = '';
       root.classList.remove('is-game');
@@ -1691,7 +1775,7 @@ export function createHUD(root, handlers = {}, options = {}) {
      * @returns {string|null} food id
      */
     foodElementAt(x, y) {
-      if (el.tray.hidden || state.select || state.ward || state.decor || state.game || state.intro) return null;
+      if (el.tray.hidden || state.select || state.ward || state.decor || state.game || state.intro || (s5 && s5.hooks.anyOpen())) return null;
       for (const b of el.trayGrid.querySelectorAll('[data-food-id]')) {
         const r = b.getBoundingClientRect();
         if (x >= r.left && x <= r.right && y >= r.top && y <= r.bottom) return b.dataset.foodId;
@@ -1711,6 +1795,7 @@ export function createHUD(root, handlers = {}, options = {}) {
       clearTimeout(state.toastTimer); clearTimeout(state.camMsgTimer); clearTimeout(state.bubble.timer); clearTimeout(state.themeTimer);
       cancelAnimationFrame(state.coinRaf);
       clearCountdown();
+      if (s5) s5.hooks.dispose();
       root.innerHTML = '';
       root.classList.remove('mp-hud', 'is-selecting', 'is-wardrobe', 'is-decor', 'is-game', 'is-flush', 'is-intro', 'is-theming');
     },
@@ -1718,8 +1803,17 @@ export function createHUD(root, handlers = {}, options = {}) {
 
   el.result.addEventListener('click', (ev) => {
     if (ev.target.closest('.mp-result-again')) call('onMinigameAgain');
-    else if (ev.target.closest('.mp-result-back')) call('onMinigameExit');
+    else if (ev.target.closest('.mp-result-other')) call('onMinigameOther');
+    else if (ev.target.closest('.mp-result-back, .mp-result-x')) call('onMinigameExit');
   });
+
+  // ---------- S5 (hud-s5.js) ----------
+  s5 = installS5({
+    root, el, state, S, call, handlers, api, reducedMotion, finePointer,
+    bump, measure, renderMic, positionBubble, closeDecorSelf, placeToast,
+  });
+  Object.assign(api, s5.api);
+  s5.hooks.renderHints();
 
   // initial paint
   api.setCharacter(state.char);

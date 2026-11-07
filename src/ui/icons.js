@@ -63,6 +63,18 @@ export const LINE_ICONS = {
   sofa: '<path d="M6 11V8.5a3 3 0 0 1 3-3h6a3 3 0 0 1 3 3V11"/><path d="M6 13.5a2 2 0 0 0-4 0V17a1.5 1.5 0 0 0 1.5 1.5h17A1.5 1.5 0 0 0 22 17v-3.5a2 2 0 0 0-4 0V15H6z"/><path d="M5 18.5V20M19 18.5V20"/>',
   /** S4 ลองดู (preview) — a sparkle. NEW, waiting for owner approval. */
   sparkle: '<path d="M12 3.5c.6 4.6 2.9 6.9 7.5 7.5-4.6.6-6.9 2.9-7.5 7.5-.6-4.6-2.9-6.9-7.5-7.5 4.6-.6 6.9-2.9 7.5-7.5z"/><path d="M19 17.5v3M17.5 19h3"/>',
+  /** S5 mic "thinking" — three soft dots. NEW, waiting for owner approval. */
+  dots: '<circle cx="6" cy="12" r="1.6" fill="currentColor"/><circle cx="12" cy="12" r="1.6" fill="currentColor"/><circle cx="18" cy="12" r="1.6" fill="currentColor"/>',
+  /** S5 typed chat send — a rounded paper plane. NEW, waiting for owner approval. */
+  send: '<path d="M4.5 11.2L19.3 4.6c.6-.3 1.2.3.9.9l-6.6 14.8c-.3.6-1.2.6-1.4-.1l-1.6-5.5-5.5-1.6c-.7-.2-.7-1.1-.1-1.4z"/><path d="M10.6 13.4l4-4"/>',
+  /** S5 small keyboard glyph (inside the type box). NEW, waiting for owner approval. */
+  keyboard: '<rect x="2.5" y="6.5" width="19" height="11" rx="3"/><path d="M6.5 10h.01M10 10h.01M14 10h.01M17.5 10h.01M6.5 13.5h.01M17.5 13.5h.01M9.5 13.5h5"/>',
+  /** S5 mic sheet "พูดตาม" — echo arcs. NEW, waiting for owner approval. */
+  echo: '<path d="M12 4.5a2.5 2.5 0 0 0-2.5 2.5v4a2.5 2.5 0 0 0 5 0V7A2.5 2.5 0 0 0 12 4.5z"/><path d="M6 10.5a6 6 0 0 0 12 0M12 16.5v3"/><path d="M3 7.5c-.7 1.9-.7 4.1 0 6M21 7.5c.7 1.9.7 4.1 0 6"/>',
+  /** S5 mic sheet "คุยกัน" — two speech bubbles. NEW, waiting for owner approval. */
+  chat: '<path d="M4 5.5h10a1.5 1.5 0 0 1 1.5 1.5v5a1.5 1.5 0 0 1-1.5 1.5H8.5L5.5 16v-2.5H4A1.5 1.5 0 0 1 2.5 12V7A1.5 1.5 0 0 1 4 5.5z"/><path d="M18 9h1.5A1.5 1.5 0 0 1 21 10.5v5a1.5 1.5 0 0 1-1.5 1.5H18V19.5l-3-2.5h-3.5a1.5 1.5 0 0 1-1.5-1.5"/>',
+  /** S5 privacy notice — a soft shield. NEW, waiting for owner approval. */
+  shield: '<path d="M12 3.5l7 2.6v5.4c0 4.4-3 7.7-7 9-4-1.3-7-4.6-7-9V6.1z"/><path d="M9 12l2.2 2.2L15.5 10"/>',
 };
 LINE_ICONS.bowl = LINE_ICONS.hunger;
 LINE_ICONS.ball = LINE_ICONS.fun;
@@ -142,7 +154,7 @@ export function accessoryIcon(id, size = 40) {
 }
 
 /** Names of all new line icons (for the icon sheet / demo). */
-export const NEW_ICON_NAMES = ['hunger', 'toilet', 'fun', 'social', 'coin', 'gear', 'mic', 'stop', 'wave', 'camera', 'camera-off', 'arrow-left', 'arrow-right', 'chevron-down', 'flush', 'hand', 'check', 'lock', 'close', 'eye', 'eye-off', 'shirt', 'none', 'heart', 'star', 'timer', 'lamp', 'lamp-off', 'finger', 'head-tilt', 'sofa', 'sparkle'];
+export const NEW_ICON_NAMES = ['hunger', 'toilet', 'fun', 'social', 'coin', 'gear', 'mic', 'stop', 'wave', 'camera', 'camera-off', 'arrow-left', 'arrow-right', 'chevron-down', 'flush', 'hand', 'check', 'lock', 'close', 'eye', 'eye-off', 'shirt', 'none', 'heart', 'star', 'timer', 'lamp', 'lamp-off', 'finger', 'head-tilt', 'sofa', 'sparkle', 'dots', 'send', 'keyboard', 'echo', 'chat', 'shield'];
 
 /* ============================================================================
  * S4 — FILLED Moldable symbols. Owner-approved 2026-11-07 (board: design/ui/icon-samples-s4.html).
@@ -176,7 +188,16 @@ export const FILLED_INKS = {
   lilac: ['#EADFF2', '#CBA5D1'],
   plum: ['#D3B1DA', '#A578B5'],
   peri: ['#C3C8EE', '#7E7CB8'],
+  // S5 [เสนอ] — mimic pad / bubble colours named in minigames.json (pink, lilac, sky, lavender, peach, butter).
+  // Soft pastels from the same family; no bright red, green or orange.
+  sky: ['#D6E2EC', '#9BB0DE'],          // = blue
+  lavender: ['#E6E2F8', '#ACA4DE'],     // [เสนอ]
+  peach: ['#FCE7DC', '#EEB297'],        // [เสนอ]
+  butter: ['#FBF2D4', '#E5C46C'],       // [เสนอ]
 };
+
+/** S5 face ink on pads and game cards (DS text/primary/default). */
+const FACE = '#252941';
 
 /**
  * Filled icon bodies. Each is a function of a helper `k` that turns an ink name into a
@@ -240,8 +261,135 @@ export const FILLED_ICONS = {
 };
 FILLED_ICONS.decorate = FILLED_ICONS.decor;
 
+/* ---- S5 filled symbols. NEW, waiting for owner approval (board: design/ui/icon-samples-s5.html). ----
+ * Same rules as S4: chunky soft forms, no outline, brand inks, soft highlight + shadow. Faces use
+ * FACE ink (#252941) dots and arcs only, like the characters. Pose icons take their ink from
+ * `opts.ink` (minigames.json mimic.poses[].color) so pads and bubbles share one colour table. */
+const eye = (x, y, r = 2.2) => `<circle cx="${x}" cy="${y}" r="${r}" fill="${FACE}"/>`;
+const arc = (d, w = 2.2) => `<path d="${d}" fill="none" stroke="${FACE}" stroke-width="${w}" stroke-linecap="round" stroke-linejoin="round"/>`;
+const blush = (x, y) => `<ellipse cx="${x}" cy="${y}" rx="2.8" ry="1.7" fill="#EB92B3" fill-opacity=".55"/>`;
+Object.assign(FILLED_ICONS, {
+  /** ฝนขนม — a wrapped candy and a drop falling into a round bowl. */
+  snackRain: (k) => `
+    <path d="M9.5 13.5l-4.5-3 .8 6.2zM22.5 9.5l4.5-3-.8 6.2z" ${k('lilac')}/>
+    <ellipse cx="16" cy="12" rx="7.2" ry="5.6" ${k('pink')} transform="rotate(-18 16 12)"/>
+    <ellipse cx="13.6" cy="10" rx="2.4" ry="1.3" ${k.hl} transform="rotate(-25 13.6 10)"/>
+    <circle cx="34.5" cy="13" r="5" ${k('plum')}/>
+    <ellipse cx="33" cy="11.4" rx="1.8" ry="1.1" ${k.hl}/>
+    <path d="M6 25.5h36a2.3 2.3 0 0 1 2.2 2.8C42.6 36.6 34.4 42.5 24 42.5S5.4 36.6 3.8 28.3A2.3 2.3 0 0 1 6 25.5z" ${k('blue')} opacity=".95"/>
+    <ellipse cx="13" cy="31" rx="5" ry="2.1" ${k.hl} transform="rotate(12 13 31)"/>`,
+
+  /** จำท่าทาง — two blob faces copying each other, with a note. */
+  mimic: (k) => `
+    <circle cx="31.5" cy="20" r="11.5" ${k('lilac')}/>
+    ${eye(27.8, 18.5, 1.8)}${eye(35.2, 18.5, 1.8)}${arc('M28.5 23.5q3 2.6 6 0', 1.9)}
+    <circle cx="17.5" cy="30" r="13" ${k('pink')} opacity=".95"/>
+    <ellipse cx="12.4" cy="23.6" rx="3.4" ry="2" ${k.hl} transform="rotate(-30 12.4 23.6)"/>
+    ${eye(13.4, 29, 2)}${eye(21.8, 29, 2)}${arc('M14 34q3.5 3 7 0', 2)}
+    <path d="M40.5 33.5v-8.2l4-1.2" fill="none" stroke="#A578B5" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>
+    <ellipse cx="38.6" cy="34.4" rx="2.9" ry="2.3" ${k('plum')} transform="rotate(-20 38.6 34.4)"/>`,
+
+  /** เป่าฟองสบู่ — three see-through bubbles rising from a wand. */
+  bubbles: (k) => `
+    <path d="M7.5 43.5l9-10" fill="none" stroke="#7E7CB8" stroke-width="3" stroke-linecap="round"/>
+    <circle cx="19" cy="30.5" r="5.2" fill="none" stroke="#7E7CB8" stroke-width="2.6"/>
+    <circle cx="32" cy="16" r="11.5" ${k('blue')} opacity=".85"/>
+    <path d="M25.5 11.5a8 8 0 0 1 6-4.5" fill="none" stroke="#FFFFFF" stroke-opacity=".85" stroke-width="2.4" stroke-linecap="round"/>
+    <circle cx="13.5" cy="14" r="7" ${k('pink')} opacity=".85"/>
+    <path d="M9.6 11.5a4.6 4.6 0 0 1 3.4-2.6" fill="none" stroke="#FFFFFF" stroke-opacity=".85" stroke-width="2" stroke-linecap="round"/>
+    <circle cx="38" cy="35" r="6" ${k('lilac')} opacity=".88"/>
+    <path d="M34.6 33a4 4 0 0 1 2.8-2.4" fill="none" stroke="#FFFFFF" stroke-opacity=".85" stroke-width="1.8" stroke-linecap="round"/>`,
+
+  /** กระโดดข้ามก้อน — a blob in mid-hop over a soft pebble. */
+  hop: (k) => `
+    <rect x="3" y="40" width="42" height="5" rx="2.5" ${k('blue')} opacity=".8"/>
+    <rect x="27" y="29" width="15" height="11.5" rx="5.5" ${k('peri')}/>
+    <ellipse cx="31.5" cy="32" rx="3" ry="1.6" ${k.hl}/>
+    <circle cx="8" cy="33" r="1.7" ${k('plum')} opacity=".7"/><circle cx="10.5" cy="26" r="1.9" ${k('plum')} opacity=".8"/>
+    <path d="M18.5 5.5c6.6 0 11.5 4.6 11.5 10.6 0 5.4-4.6 8.4-11.5 8.4S7 21.5 7 16.1C7 10.1 11.9 5.5 18.5 5.5z" ${k('pink')}/>
+    <ellipse cx="13.6" cy="10.4" rx="3.4" ry="1.9" ${k.hl} transform="rotate(-25 13.6 10.4)"/>
+    ${eye(15.2, 14.6, 1.9)}${eye(23, 14.6, 1.9)}${arc('M16.5 18.6q2.6 2.3 5.2 0', 1.9)}`,
+
+  /** พิมพ์คุย — a chunky keyboard with a small speech bubble. */
+  keyboard: (k) => `
+    <rect x="3.5" y="19" width="41" height="23" rx="8" ${k('lilac')}/>
+    <ellipse cx="11" cy="23.2" rx="4.4" ry="1.8" ${k.hl}/>
+    <g fill="#FFFFFF" fill-opacity=".78"><rect x="9" y="25.5" width="5" height="4.5" rx="1.8"/><rect x="16.5" y="25.5" width="5" height="4.5" rx="1.8"/><rect x="24" y="25.5" width="5" height="4.5" rx="1.8"/><rect x="31.5" y="25.5" width="7" height="4.5" rx="1.8"/><rect x="13" y="33" width="20" height="4.5" rx="2.2"/></g>
+    <path d="M27 3.5h14a4 4 0 0 1 4 4v5a4 4 0 0 1-4 4h-6.5l-4.5 3.8v-3.8H27a4 4 0 0 1-4-4v-5a4 4 0 0 1 4-4z" ${k('pink')} opacity=".95"/>
+    <circle cx="29" cy="10" r="1.5" fill="#FFFFFF"/><circle cx="34" cy="10" r="1.5" fill="#FFFFFF"/><circle cx="39" cy="10" r="1.5" fill="#FFFFFF"/>`,
+
+  /** โตขึ้น — a sprout with two leaves in a round blob pot, plus a sparkle. */
+  growth: (k) => `
+    <path d="M23 31V20" fill="none" stroke="#7FA9B1" stroke-width="3.2" stroke-linecap="round"/>
+    <path d="M23 22c-1-6.5-6-10-13-9.5.4 6.6 5.6 10.4 13 9.5z" ${k('teal')}/>
+    <path d="M23.5 19.5c.6-7 5.6-11.6 13.5-11.5-.2 7.4-5.4 12.2-13.5 11.5z" ${k('blue')}/>
+    <ellipse cx="29.5" cy="12" rx="2.8" ry="1.4" ${k.hl} transform="rotate(-35 29.5 12)"/>
+    <path d="M10.5 29h25a2 2 0 0 1 2 2.3l-1.6 8.2a5 5 0 0 1-4.9 4H15a5 5 0 0 1-4.9-4l-1.6-8.2a2 2 0 0 1 2-2.3z" ${k('pink')} opacity=".95"/>
+    <ellipse cx="15.5" cy="33.6" rx="3.4" ry="1.7" ${k.hl}/>
+    <path d="M40.5 23c.6 3.3 1.6 4.3 4.9 4.9-3.3.6-4.3 1.6-4.9 4.9-.6-3.3-1.6-4.3-4.9-4.9 3.3-.6 4.3-1.6 4.9-4.9z" ${k('plum')}/>`,
+
+  /* Mimic poses: frame shape + face (shape and face carry the meaning, the ink only adds to it). */
+  /** ยิ้ม — circle, smiling. */
+  'pose-smile': (k) => `
+    <circle cx="24" cy="24.5" r="18" ${k(k.ink || 'pink')}/>
+    <ellipse cx="15.8" cy="15.6" rx="4.4" ry="2.5" ${k.hl} transform="rotate(-35 15.8 15.6)"/>
+    ${eye(18, 22.5)}${eye(30, 22.5)}${arc('M18 29q6 5.2 12 0', 2.4)}`,
+  /** ตกใจ — star, round "O" mouth. */
+  'pose-surprised': (k) => `
+    <path d="M24.0 9.0 L28.8 19.4 L40.2 20.7 L31.8 28.5 L34.0 39.8 L24.0 34.2 L14.0 39.8 L16.2 28.5 L7.8 20.7 L19.2 19.4z" ${k(k.ink || 'lilac')} stroke="url(#${k.id(k.ink || 'lilac')})" stroke-width="5" stroke-linejoin="round"/>
+    <ellipse cx="18.6" cy="18" rx="2.6" ry="1.5" ${k.hl} transform="rotate(-30 18.6 18)"/>
+    ${eye(19.8, 24, 2)}${eye(28.2, 24, 2)}<ellipse cx="24" cy="30" rx="2.4" ry="2.9" fill="${FACE}"/>`,
+  /** ขยิบตา — drop, one eye winking. */
+  'pose-wink': (k) => `
+    <path d="M24 5.5c6.5 8.4 15 15.4 15 24.2a15 15 0 0 1-30 0C9 20.9 17.5 13.9 24 5.5z" ${k(k.ink || 'sky')}/>
+    <ellipse cx="17" cy="22" rx="3.2" ry="2" ${k.hl} transform="rotate(-40 17 22)"/>
+    ${arc('M15.6 29q2.6-2.6 5.2 0', 2.3)}${eye(30.4, 28.6)}${arc('M19.5 35q4.5 3.4 9 0', 2.3)}`,
+  /** ง่วง — moon, eyes closed, a small "z". */
+  'pose-sleepy': (k) => `
+    <mask id="${k.id('moon')}"><rect width="48" height="48" fill="#FFFFFF"/><circle cx="33.5" cy="13.5" r="12.5" fill="#000000"/></mask>
+    <circle cx="23" cy="25" r="18.5" ${k(k.ink || 'lavender')} mask="url(#${k.id('moon')})"/>
+    <ellipse cx="11.4" cy="20.5" rx="2" ry="3.4" ${k.hl} transform="rotate(20 11.4 20.5)"/>
+    ${arc('M11.5 28.2q2.3 2 4.6 0', 2.2)}${arc('M18.6 34.4q2.3 2 4.6 0', 2.2)}${arc('M17.6 39.2q1.6.9 3.1-.4', 2)}
+    ${arc('M36 25.5h5l-5 5.5h5', 2)}`,
+  /** เขิน — heart, happy closed eyes and blush. */
+  'pose-shy': (k) => `
+    <path d="M24 42C10 33 5 25 5 18a9.6 9.6 0 0 1 19-2.6A9.6 9.6 0 0 1 43 18c0 7-5 15-19 24z" ${k(k.ink || 'peach')}/>
+    <ellipse cx="12" cy="15.5" rx="3.4" ry="2" ${k.hl} transform="rotate(-30 12 15.5)"/>
+    ${arc('M14.6 23.5q2.5-2.6 5 0', 2.2)}${arc('M28.4 23.5q2.5-2.6 5 0', 2.2)}${blush(13.5, 28.5)}${blush(34.5, 28.5)}
+    ${arc('M21.2 30.2q1.4 1.1 2.8 0q1.4-1.1 2.8 0', 2)}`,
+  /** ดีใจ — sun, big open smile. */
+  'pose-joy': (k) => `
+    <g ${k(k.ink || 'butter')}><circle cx="41.5" cy="24" r="4.4"/><circle cx="36.4" cy="36.4" r="4.4"/><circle cx="24" cy="41.5" r="4.4"/><circle cx="11.6" cy="36.4" r="4.4"/><circle cx="6.5" cy="24" r="4.4"/><circle cx="11.6" cy="11.6" r="4.4"/><circle cx="24" cy="6.5" r="4.4"/><circle cx="36.4" cy="11.6" r="4.4"/></g>
+    <circle cx="24" cy="24" r="14.5" ${k(k.ink || 'butter')}/>
+    <ellipse cx="18" cy="16.4" rx="3.6" ry="2" ${k.hl} transform="rotate(-30 18 16.4)"/>
+    ${arc('M16.6 22.5q2.4-2.6 4.8 0', 2.2)}${arc('M26.6 22.5q2.4-2.6 4.8 0', 2.2)}
+    <path d="M18 27.2h12a6 6 0 0 1-12 0z" fill="${FACE}"/><path d="M21 31.2a4 4 0 0 0 6 0" fill="#EB92B3" fill-opacity=".8"/>`,
+});
+
 /** Ids of the filled sample icons, in board order. */
 export const FILLED_ICON_NAMES = ['hunger', 'toilet', 'fun', 'social', 'coin', 'decor'];
+
+/**
+ * S5 bubble-colour pattern (minigames.json bubbles.colors[].pattern) as a small line glyph, so the
+ * colour call never relies on colour alone. 24 grid, FACE ink. NEW, waiting for owner approval.
+ * @param {'heart'|'star'|'dot'|'stripe'|string} pattern
+ * @param {number} [size=18]
+ * @returns {string} `<svg>` markup, decorative
+ */
+export function patternGlyph(pattern, size = 18) {
+  const P = {
+    heart: '<path d="M12 18.5s-6-3.7-6-8a3.3 3.3 0 0 1 6-1.9 3.3 3.3 0 0 1 6 1.9c0 4.3-6 8-6 8z" fill="currentColor"/>',
+    star: '<path d="M12 5l2 4.6 5 .5-3.8 3.3 1.1 4.9L12 15.7l-4.3 2.6 1.1-4.9L5 10.1l5-.5z" fill="currentColor" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/>',
+    dot: '<circle cx="8" cy="9" r="2.3" fill="currentColor"/><circle cx="16" cy="9" r="2.3" fill="currentColor"/><circle cx="12" cy="16" r="2.3" fill="currentColor"/>',
+    stripe: '<path d="M5 9.5h14M5 14.5h14" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"/>',
+  };
+  const body = P[pattern] || P.dot;
+  return `<svg class="mp-ico" width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" aria-hidden="true" focusable="false">${body}</svg>`;
+}
+
+/** S5 filled icons (NEW, waiting for owner approval), in board order. */
+export const FILLED_ICON_NAMES_S5 = ['snackRain', 'mimic', 'bubbles', 'hop', 'keyboard', 'growth',
+  'pose-smile', 'pose-surprised', 'pose-wink', 'pose-sleepy', 'pose-shy', 'pose-joy'];
 
 let filledSeq = 0;
 
@@ -249,7 +397,8 @@ let filledSeq = 0;
  * Build a FILLED Moldable icon (S4) as an SVG string. Call it once per placement: ids are unique per call.
  * @param {string} name key of FILLED_ICONS (hunger | toilet | fun | social | coin | decor)
  * @param {number} [size=32] rendered size in px
- * @param {{uid?: string, title?: string}} [opts] uid = stable id prefix; title = accessible name
+ * @param {{uid?: string, title?: string, ink?: string}} [opts] uid = stable id prefix; title = accessible name;
+ *        ink = S5 pose icons only: a FILLED_INKS name (pink | lilac | sky | lavender | peach | butter …)
  *        (without a title the icon is decorative: aria-hidden)
  * @returns {string} `<svg>` markup; '' for an unknown name
  */
@@ -262,6 +411,7 @@ export function filledIcon(name, size = 32, opts = {}) {
   k.id = (part) => `${uid}-${part}`;
   k.hl = `fill="url(#${uid}-hl)"`;
   k.brand = `fill="url(#${uid}-brand)"`;
+  k.ink = opts.ink && FILLED_INKS[opts.ink] ? opts.ink : null;   // S5 pose icons: colour from the data
   const markup = body(k);
   const grads = [...used].map((ink) => {
     const [a, b] = FILLED_INKS[ink];

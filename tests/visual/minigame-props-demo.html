@@ -1,0 +1,189 @@
+<!doctype html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Minigame props demo — S5-04</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Prompt:wght@400;500&family=Poppins:wght@400;500&display=swap">
+<style>
+  :root { --ink: #252941; --panel: rgba(255, 255, 255, 0.82); }
+  html, body { margin: 0; height: 100%; overflow: hidden; background: #F2F1FB; color: var(--ink); font-family: 'Prompt', 'Poppins', sans-serif; }
+  body.dark { --ink: #F3F1FF; --panel: rgba(44, 42, 74, 0.82); background: #3A3768; }
+  body.cb canvas { filter: grayscale(1); }
+  #stage { position: fixed; inset: 0; }
+  canvas { display: block; width: 100%; height: 100%; }
+  .lbl { position: fixed; transform: translate(-50%, 0); font-size: 12px; padding: 2px 8px; border-radius: 999px; background: var(--panel); white-space: nowrap; pointer-events: none; }
+  #title { position: fixed; left: 12px; top: 10px; font-size: 13px; padding: 4px 10px; border-radius: 999px; background: var(--panel); }
+</style>
+<script type="importmap">
+{ "imports": {
+  "three": "https://cdn.jsdelivr.net/npm/three@0.162.0/build/three.module.js",
+  "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.162.0/examples/jsm/"
+} }
+</script>
+</head>
+<body>
+<div id="stage"></div>
+<div id="title"></div>
+<script type="module">
+/*
+ * Query params: view=sheet|bubbles|hop|mimic · theme=light|dark · cb=1 (greyscale check) · pet=0 · t=<seconds> (freeze time)
+ * window.__demo: { ready, stats() → { props: {name: {tris, draws}}, scene: {draws, tris} } }
+ */
+import * as THREE from 'three';
+import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
+import { STAGE_LIGHTS } from '../../src/engine/stage.js';
+import * as M from '../../src/props/minigame.js';
+
+const q = new URLSearchParams(location.search);
+const view = q.get('view') || 'sheet';
+const theme = q.get('theme') === 'dark' ? 'dark' : 'light';
+if (theme === 'dark') document.body.classList.add('dark');
+if (q.get('cb') === '1') document.body.classList.add('cb');
+document.getElementById('title').textContent = `S5-04 minigame props · ${view} · ${theme}${q.get('cb') === '1' ? ' · greyscale' : ''}`;
+
+const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+renderer.outputColorSpace = THREE.SRGBColorSpace;
+renderer.toneMapping = THREE.NeutralToneMapping;
+renderer.setClearColor(0x000000, 0);
+document.getElementById('stage').appendChild(renderer.domElement);
+const scene = new THREE.Scene();
+const pmrem = new THREE.PMREMGenerator(renderer);
+scene.environment = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
+const L = STAGE_LIGHTS[theme];
+scene.add(new THREE.HemisphereLight(L.hemi.sky, L.hemi.ground, L.hemi.intensity));
+const key = new THREE.DirectionalLight(L.key.color, L.key.intensity); key.position.set(1.4, 4.6, 4.2); scene.add(key);
+const fill = new THREE.DirectionalLight(L.fill.color, L.fill.intensity); fill.position.set(-2.2, -1.4, 3.2); scene.add(fill);
+const rim = new THREE.DirectionalLight(L.rim.color, L.rim.intensity); rim.position.set(-2.6, 2.6, -3.2); scene.add(rim);
+const camera = new THREE.PerspectiveCamera(30, 1, 0.1, 80);
+
+const props = {};   // name -> object for stats
+const labels = [];  // [object, text, dy]
+function label(obj, text, dy = -0.42) { labels.push([obj, text, dy]); }
+function add(name, obj, x, y, z = 0, text) { obj.position.set(x, y, z); scene.add(obj); props[name] = obj; if (text) label(obj, text); return obj; }
+
+let pet = null;
+async function addPet(x, y, s = 0.55, rotY = 0) {
+  if (q.get('pet') === '0') return;
+  try {
+    const { createCharacter } = await import('../../src/characters/character.js');
+    pet = createCharacter(q.get('char') || 'flower');
+    pet.object3d.position.set(x, y, 0); pet.object3d.scale.setScalar(s); pet.object3d.rotation.y = rotY;
+    scene.add(pet.object3d);
+  } catch (e) { console.warn('pet not available', e); }
+}
+
+const bursts = [];
+const live = [];  // per-frame updaters
+let focusY = 0, worldH = 6;
+
+if (view === 'sheet') {
+  // row 1: bubbles (+ coin bubble)
+  const ids = ['pink', 'lilac', 'sky', 'butter', 'coin'];
+  ids.forEach((id, i) => add('bubble:' + id, M.createBubbleMesh(id), -1.6 + i * 0.8, 2.15, 0, `${M.BUBBLE_COLORS[id].label} · ${M.BUBBLE_COLORS[id].pattern}`));
+  // row 2: pop bursts frozen mid-way, wand x2, pop star
+  [['pink', {}], ['coin', {}], ['sky', { soft: true }], ['lilac', { reducedMotion: true }]].forEach(([id, o], i) => {
+    const b = M.createPopBurst(id, o); b.update(0.12);
+    add('burst:' + id + (o.soft ? ':soft' : o.reducedMotion ? ':rm' : ''), b.object3d, -1.6 + i * 0.8, 1.0, 0, o.soft ? 'pop soft' : o.reducedMotion ? 'pop reduced' : 'pop ' + id);
+  });
+  const w1 = M.createBubbleWand(); w1.setColor('butter'); add('wand', w1.object3d, 1.6, 0.62, 0, 'ที่เป่าฟอง');
+  // row 3: pop star, mimic podium (small), wand neutral
+  add('popStar', M.createPopStar(), -1.6, -0.15, 0, 'ดาวป๊อป');
+  const w2 = M.createBubbleWand(); w2.setColor(null); add('wand:neutral', w2.object3d, -0.8, -0.55, 0, 'wand neutral');
+  const st = M.createMimicStage({ radius: 0.6, beam: true }); st.setGlow('wink'); st.update(1);
+  add('mimicStage', st.object3d, 0.7, -0.45, 0, 'เวที (wink)');
+  label(st.object3d, '', 0);
+  // row 4: hop ground + obstacles + coin
+  const g = M.createHopGround(4.2); add('hopGround', g.object3d, 0, -1.75, -0.2);
+  add('hop:pebble', M.createHopObstacle('pebble'), -1.5, -1.75, 0, 'ก้อนกรวด');
+  add('hop:cushion', M.createHopObstacle('cushion'), -0.45, -1.75, 0, 'หมอนนุ่ม');
+  add('hop:demon', M.createHopObstacle('demon'), 0.6, -1.75, 0, 'ปีศาจ');
+  add('hopCoin', M.createHopCoin(), 1.5, -1.45, 0, 'เหรียญ');
+  for (const k of ['hop:pebble', 'hop:cushion', 'hop:demon']) labels.find((l) => l[0] === props[k])[2] = -0.2;
+  focusY = 0.2; worldH = 5.6;
+} else if (view === 'bubbles') {
+  // in-game composition, portrait: bubbles rising above the pet who holds the wand
+  const layout = [['pink', -0.9, 2.6], ['sky', 0.2, 2.9], ['butter', 1.0, 2.3], ['lilac', -0.3, 1.9], ['pink', 0.7, 1.4],
+    ['coin', -1.0, 1.2], ['sky', -0.4, 0.6], ['lilac', 1.05, 0.5], ['butter', 0.15, 3.6]];
+  layout.forEach(([id, x, y], i) => { const b = add('bubble' + i, M.createBubbleMesh(id), x, y, 0); b.rotation.y = (i % 3 - 1) * 0.15; });
+  const b = M.createPopBurst('pink'); b.update(0.1); add('burst', b.object3d, -0.25, 3.3, 0);
+  const w = M.createBubbleWand(); w.setColor('pink'); add('wand', w.object3d, 0.55, -0.55, 0.4); w.object3d.rotation.z = -0.35;
+  const star = add('popStar', M.createPopStar(), -1.15, 0.0, 0.2);
+  await addPet(0, -1.0, 0.6);
+  focusY = 1.2; worldH = 6.4;
+} else if (view === 'hop') {
+  const g = M.createHopGround(5.5); add('hopGround', g.object3d, 0, -0.6, 0);
+  g.setOffset(0.5);
+  add('demon', M.createHopObstacle('demon'), -0.1, -0.6, 0);
+  add('pebble', M.createHopObstacle('pebble'), 0.5, -0.6, 0);
+  add('cushion', M.createHopObstacle('cushion'), 1.05, -0.6, 0);
+  for (let i = 0; i < 3; i++) { const c = add('coin' + i, M.createHopCoin(), 0.3 + i * 0.32, 0.35 + Math.sin((i + 0.5) / 3 * Math.PI) * 0.25, 0); c.rotation.y = 0.5 * i; c.scale.setScalar(0.8); }
+  await addPet(-0.8, -0.6, 0.42, 0.5);
+  focusY = 0.2; worldH = 5.2;
+} else if (view === 'mimic') {
+  const st = M.createMimicStage(); st.setGlow(q.get('pose') || 'smile'); st.update(1);
+  add('mimicStage', st.object3d, 0, -1.0, 0);
+  await addPet(0, -1.0, 0.75);
+  focusY = 0.3; worldH = 5.2;
+}
+
+M.applyMinigameTheme(scene, theme);
+
+/* ---------- stats ---------- */
+function tris(obj) {
+  let n = 0;
+  obj.traverseVisible((o) => {
+    if (!o.isMesh) return;
+    const g = o.geometry, t = (g.index ? g.index.count : g.attributes.position.count) / 3;
+    n += t * (o.isInstancedMesh ? o.count : 1);
+  });
+  return Math.round(n);
+}
+function draws(obj) { let n = 0; obj.traverseVisible((o) => { if (o.isMesh) n++; }); return n; }
+
+const lblEls = labels.map(([, t]) => { const d = document.createElement('div'); d.className = 'lbl'; d.textContent = t; if (!t) d.style.display = 'none'; document.body.appendChild(d); return d; });
+
+function resize() {
+  const w = innerWidth, h = innerHeight;
+  renderer.setSize(w, h, false);
+  camera.aspect = w / h;
+  const wh = Math.max(worldH, (worldH * 0.72) / camera.aspect * (view === 'sheet' ? 1.1 : 0.62));
+  const dist = wh / (2 * Math.tan(THREE.MathUtils.degToRad(15)));
+  camera.position.set(0, focusY + 0.2 * dist / 8, dist);
+  camera.lookAt(0, focusY, 0);
+  camera.updateProjectionMatrix();
+}
+addEventListener('resize', resize); resize();
+
+const v = new THREE.Vector3();
+const clock = new THREE.Clock();
+const freeze = q.has('t');
+let time = freeze ? +q.get('t') : 0;
+function frame() {
+  const dt = freeze ? 0 : Math.min(clock.getDelta(), 0.1);
+  time += dt;
+  if (props.hopCoin) props.hopCoin.rotation.y = time * 2;
+  if (pet && pet.update) try { pet.update(dt, time); } catch (e) {}
+  renderer.render(scene, camera);
+  labels.forEach(([o, , dy], i) => {
+    o.getWorldPosition(v); v.y += dy; v.project(camera);
+    lblEls[i].style.left = ((v.x + 1) / 2 * innerWidth) + 'px';
+    lblEls[i].style.top = ((1 - v.y) / 2 * innerHeight) + 'px';
+  });
+  requestAnimationFrame(frame);
+}
+frame();
+
+window.__demo = {
+  ready: true,
+  stats() {
+    const p = {};
+    for (const [k, o] of Object.entries(props)) p[k] = { tris: tris(o), draws: draws(o) };
+    renderer.render(scene, camera);
+    return { props: p, scene: { draws: renderer.info.render.calls, tris: renderer.info.render.triangles } };
+  },
+};
+</script>
+</body>
+</html>

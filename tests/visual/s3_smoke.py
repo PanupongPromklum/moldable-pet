@@ -194,6 +194,8 @@ def run(pw, label, viewport, touch, scheme):
     S(page, '(M.snackCfg.durationSec = 30, 0)')
     page.click('.mp-ctx[data-ctx="play"]')
     time.sleep(0.4)
+    S(page, "(M.pickGame && document.querySelector('.mp-picker, [data-sheet=\"picker\"]') ? M.pickGame('snackRain') : 0, 0)")   # Sprint 5: เล่น opens the picker first
+    time.sleep(0.4)
     check('intro card opens with saved choice (touch)', page.locator('.mp-intro:not([hidden]) .mp-opt[data-control="touch"].is-on').count() == 1)
     shot(page, f'{label}-intro')
     page.click('.mp-opt[data-control="head"]')
@@ -217,6 +219,8 @@ def run(pw, label, viewport, touch, scheme):
 
     # ---- head control, camera unavailable → toast + touch ----
     page.click('.mp-ctx[data-ctx="play"]')
+    time.sleep(0.3)
+    S(page, "(M.pickGame('snackRain'), 0)")   # Sprint 5 picker
     time.sleep(0.3)
     page.click('.mp-opt[data-control="head"]')
     time.sleep(0.2)

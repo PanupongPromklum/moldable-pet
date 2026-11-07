@@ -1,0 +1,165 @@
+<!doctype html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+<title>Minigame demo — S5-06</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600&family=Prompt:wght@400;500;600&display=swap">
+<!-- TEST PAGE (wire-games): stage + living room + pet + real HUD + mood + minigame registry, without main.js. -->
+<style>
+  html, body { margin: 0; height: 100%; overflow: hidden; overscroll-behavior: none; }
+  body { background: var(--mp-bg, #F5F5F5); color: var(--mp-ink, #1E1E1E); font-family: "Prompt", "Poppins", system-ui, sans-serif;
+    -webkit-tap-highlight-color: transparent; user-select: none; }
+  #app { position: fixed; inset: 0; overflow: hidden; }
+  #stage { position: absolute; inset: 0; overflow: hidden; }
+  #stage > canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+  #gl { touch-action: none; }
+  #ov { pointer-events: none; }
+  #hud { position: absolute; inset: 0; pointer-events: none; z-index: 2; box-sizing: border-box;
+    padding: env(safe-area-inset-top, 0px) env(safe-area-inset-right, 0px) env(safe-area-inset-bottom, 0px) env(safe-area-inset-left, 0px); }
+  #bar { position: fixed; z-index: 6; left: 50%; transform: translateX(-50%); bottom: 8px; display: flex; gap: 6px; }
+  #bar button { font: 500 13px Prompt, Poppins, sans-serif; border: 0; border-radius: 999px; padding: 6px 12px; background: #5A68B5; color: #fff; }
+  #bar[hidden] { display: none; }
+</style>
+<script type="importmap">
+{ "imports": {
+  "three": "https://cdn.jsdelivr.net/npm/three@0.162.0/build/three.module.js",
+  "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.162.0/examples/jsm/"
+} }
+</script>
+</head>
+<body>
+<div id="app">
+  <div id="stage"><canvas id="ov" aria-hidden="true"></canvas></div>
+  <div id="hud"></div>
+  <div id="bar" hidden></div>
+</div>
+<script type="module">
+/*
+ * Query: game=snackRain|mimic|bubbles|hop · pet=flower|splat|… · theme=light|dark · first=1 (first play)
+ *        relaxed=1 · control=touch|head · seed=n (deterministic rng) · ui=1 (start buttons) · autostart=0
+ * window.__demo: { inst, game, stage, hud, frames, start(id), fakeHead }
+ * fakeHead: { axis, roll } set from tests (head control without a camera).
+ */
+import * as THREE from 'three';
+import { createStage } from '../../src/engine/stage.js';
+import { createGameState } from '../../src/game/state.js';
+import { createMood } from '../../src/game/mood.js';
+import { createTimers } from '../../src/game/timers.js';
+import { createCharacter } from '../../src/characters/character.js';
+import * as RoomsMod from '../../src/rooms/index.js';
+import { createFoodMesh, FOOD_SIZE } from '../../src/props/foods.js';
+import { createHUD } from '../../src/ui/hud.js';
+import { sfx, SFX_NAMES } from '../../src/audio/sfx.js';
+import { MINIGAMES } from '../../src/game/minigames/index.js';
+import { seeded } from '../../src/game/minigames/common-rules.js';
+
+const q = new URLSearchParams(location.search);
+const $ = (id) => document.getElementById(id);
+const load = async (n) => { try { const r = await fetch(`../../assets/data/${n}.json`); return r.ok ? r.json() : null; } catch { return null; } };
+const [needs, foods, personas, wardrobe, minigames, furniture] = await Promise.all(['needs', 'foods', 'personas', 'wardrobe', 'minigames', 'furniture'].map(load));
+const props = await import('../../src/props/minigame.js').catch(() => null);
+const data = { needs, foods, personas, wardrobe, minigames, furniture };
+
+const mem = new Map();
+const storage = { getItem: (k) => mem.get(k) ?? null, setItem: (k, v) => mem.set(k, String(v)), removeItem: (k) => mem.delete(k) };
+const game = createGameState({ data, storage, roomIds: RoomsMod.ROOM_IDS });
+const petKey = q.get('pet') || 'flower';
+game.select?.(petKey);
+
+const theme = q.get('theme') === 'dark' ? 'dark' : 'light';
+document.documentElement.dataset.theme = theme;
+const stage = createStage({ container: $('stage'), overlay: $('ov'), hudReserve: { top: 120, bottom: 160 } });
+stage.setTheme?.(theme, RoomsMod.ROOM_THEME_LIGHTS?.[theme]);
+RoomsMod.applyStageLights?.(theme, stage.lights);
+const room = RoomsMod.createRoom('living', { theme });
+stage.scene.add(room.group);
+stage.setBakeSource?.({ getRoom: () => room });
+const pet = createCharacter(petKey);
+pet.object3d.position.copy(room.petSpot);
+stage.scene.add(pet.object3d);
+stage.setFocus(room.petSpot);
+const getPet = () => pet;
+
+let inst = null, current = null;
+const handlers = new Proxy({
+  onMimicPad: (id) => inst?.pad(id),
+  onMinigameExit: () => inst?.exit(),
+  onMinigameAgain: () => inst?.again(),
+  onMinigameOther: () => inst?.exit(),
+  onMinigameTick: (n) => sfx.play(n > 0 ? 'tick' : 'go'),
+}, { get: (t, k) => t[k] || (() => {}) });
+const hud = createHUD($('hud'), handlers);
+hud.setTheme?.(theme);
+hud.setCoins?.(game.coins ?? 0);
+hud.setCharacter?.({ key: petKey, name: personas?.[petKey]?.name || petKey });
+const timers = createTimers();
+const mood = createMood({ data, game, hud, sfx, timers, getPet });
+mood.setCharacter?.(petKey, 0, { greet: false });
+
+const fakeHead = { axis: null, roll: undefined };
+const rng = q.has('seed') ? seeded(Number(q.get('seed')) || 1) : Math.random;
+const frame = { from: 0, to: 0, now: 0, t: 1 };
+const ctx = {
+  stage, game, hud, sfx, mood, getPet, getHome: () => room.petSpot, data: minigames, props,
+  sfxNames: SFX_NAMES,
+  getCharKey: () => petKey, getPersona: () => personas?.[petKey] || {},
+  getControl: () => (q.get('control') === 'head' ? 'head' : 'touch'),
+  head: { axis: () => fakeHead.axis, roll: () => fakeHead.roll },
+  getControlX: () => (fakeHead.axis == null ? null : stage.size.left + stage.size.w * 0.5 * (1 + fakeHead.axis)),
+  foodIds: (foods?.foods || []).map((f) => f.id),
+  isLiked: (id) => (foods?.likes?.[petKey] || []).includes(id),
+  makeFoodMesh: (id) => { const m = createFoodMesh(id); m.scale.setScalar(0.45 / FOOD_SIZE); m.userData.baseScale = m.scale.x; return m; },
+  isFirstPlay: () => q.get('first') === '1',
+  relaxed: () => q.get('relaxed') === '1',
+  minigameMinScale: 1,
+  random: rng,
+  reduceMotion: matchMedia('(prefers-reduced-motion: reduce)').matches,
+  onCoins: (n) => hud.setCoins?.(n),
+  onNeedsChanged: () => {},
+  onEnd: (r) => { window.__demo.results.push(r); },
+  onStateChange(active) {
+    const v = MINIGAMES[current]?.view || { extraWidth: 0, hudReserve: { top: 120, bottom: 160 } };
+    frame.from = frame.now; frame.to = active ? v.extraWidth : 0; frame.t = 0;
+    stage.setHudReserve(active ? v.hudReserve : { top: 120, bottom: 160 });
+  },
+};
+
+function start(id) {
+  if (inst?.active) inst.exit();
+  inst?.dispose?.();
+  current = MINIGAMES[id] ? id : 'mimic';
+  inst = MINIGAMES[current].create(ctx);
+  window.__demo.inst = inst;
+  return inst.start();
+}
+
+addEventListener('pointerdown', (e) => { if (inst?.active && !hud.isHudPoint?.(e.clientX, e.clientY)) inst.pointerDown(e.clientX, e.clientY, e.pointerId); }, { passive: true });
+addEventListener('pointermove', (e) => { if (inst?.active) inst.pointerMove(e.clientX, e.clientY, e.pointerId, e.pointerType === 'mouse' ? true : !!e.buttons); }, { passive: true });
+addEventListener('pointerup', (e) => inst?.pointerUp(e.pointerId), { passive: true });
+addEventListener('pointercancel', (e) => inst?.pointerUp(e.pointerId), { passive: true });
+document.addEventListener('visibilitychange', () => inst?.setPaused(document.hidden, 'tab'));
+
+window.__demo = { get inst() { return inst; }, set inst(v) { inst = v; }, game, stage, hud, pet, room, frames: 0, start, fakeHead, results: [], MINIGAMES };
+
+stage.onTick((dt, time) => {
+  timers.update(time);
+  if (frame.t < 1) { frame.t = Math.min(1, frame.t + dt / 0.45); const k = frame.t * frame.t * (3 - 2 * frame.t); frame.now = frame.from + (frame.to - frame.from) * k; stage.setFocus(room.petSpot, frame.now); }
+  inst?.update(dt, time);
+  if (inst?.active) mood.keepAwake?.(time);
+  mood.update(dt, time);
+  pet.update(dt, time);
+  room.update?.(dt, time);
+});
+const head = new THREE.Vector3(), scr = { x: 0, y: 0 };
+stage.onAfterRender(() => { window.__demo.frames++; pet.getHeadTopWorld(head); stage.worldToScreen(head, scr); hud.placeBubble?.(scr.x, scr.y); });
+stage.start();
+
+if (q.get('ui') === '1') {
+  const bar = $('bar'); bar.hidden = false;
+  for (const id of Object.keys(MINIGAMES)) { const b = document.createElement('button'); b.textContent = id; b.onclick = () => start(id); bar.append(b); }
+}
+if (q.get('autostart') !== '0') setTimeout(() => start(q.get('game') || 'mimic'), 300);
+</script>
+</body>
+</html>

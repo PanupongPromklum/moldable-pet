@@ -7,9 +7,14 @@
  * Need numbers come from data. The short-term mood dynamics below (`TUNE`) are the
  * prototype's feel constants; they are presentation timing, kept in one place so
  * Loop can move them into `assets/data/` later.
+ *
+ * Sprint 5: `onCare(event, amount)` reports every care event to the growth
+ * tracker (growth GDD 3.4 event ids); `getVoice()` picks baby / normal / trait
+ * lines by the stage's vocabulary level (growth GDD 3.2).
  * @module game/mood
  */
 import { pickNeedMood, needState, pickReturnStyle, applyPet } from './needs.js';
+import { lineSource } from './growth-rules.js';
 
 const TUNE = {
   sayKindCooldown: 3.5, sayGlobalCooldown: 1.4, bubbleMs: 2300,
@@ -30,9 +35,13 @@ const clamp01 = (v) => (v < 0 ? 0 : v > 1 ? 1 : v);
  *   game: ReturnType<import('./state.js').createGameState>,
  *   hud: object, sfx: object, timers: ReturnType<import('./timers.js').createTimers>,
  *   getPet: () => object|null, random?: () => number,
+ *   onCare?: (event: string, amount?: number) => void,
+ *   getVoice?: () => ({ vocabLevel: number, trait: string|null, cfg: object }|null),
  * }} deps
  */
-export function createMood({ data, game, hud, sfx, timers, getPet, random = Math.random }) {
+export function createMood({ data, game, hud, sfx, timers, getPet, random = Math.random, onCare, getVoice }) {
+  const care = (ev, amount = 1) => { try { onCare?.(ev, amount); } catch (e) { console.error('[growth] care', e); } };
+  let needNow = null;
   const A = data.needs.actions;
   const m = { joy: 0.2, annoy: 0, surprise: 0, shy: 0, lastTouch: 0, petT: -9, pokes: [], lonelySaid: false, sleepySaid: false, winkT: -9, nextWink: 6 };
   let key = game.selected;
@@ -55,7 +64,8 @@ export function createMood({ data, game, hud, sfx, timers, getPet, random = Math
    */
   function say(event, force = false) {
     if (!force && (now - (sayLast[event] ?? -99) < TUNE.sayKindCooldown || now - sayGlobal < TUNE.sayGlobalCooldown)) return false;
-    const line = pick(P().lines?.[event]);
+    const voice = getVoice?.();
+    const line = pick(voice ? lineSource(P(), voice.cfg, event, voice, random) : P().lines?.[event]);
     if (!line) return false;
     sayLast[event] = now; sayGlobal = now;
     hud.say(line, TUNE.bubbleMs);
@@ -114,6 +124,12 @@ export function createMood({ data, game, hud, sfx, timers, getPet, random = Math
     /** Current expression name. */
     get expression() { return exprKey; },
     get characterKey() { return key; },
+    /** Need driving the face right now (null = none); trait idles yield to it (growth GDD 3.5). */
+    get needNow() { return needNow; },
+    /** Persona-or-trait idle helper: plays only when the pet is free. */
+    play,
+    /** Mark a care touch from outside (typed chat, conversation): resets the ignore timer. */
+    touch(time) { touch(time); },
 
     /** Mark an interaction in progress (e.g. 'sitting', 'eating') — need idles pause. */
     hold(reason, on) { if (on) holds.add(reason); else holds.delete(reason); },
@@ -141,6 +157,7 @@ export function createMood({ data, game, hud, sfx, timers, getPet, random = Math
       m.surprise = Math.max(m.surprise, TUNE.pokeSurprise); m.annoy += p.pokeAnnoy;
       m.pokes = m.pokes.filter((t) => time - t < S.windowSeconds); m.pokes.push(time);
       const spam = m.pokes.length >= S.count;
+      care('poke');
       if (spam) { m.annoy += TUNE.pokeSpamAnnoy; say('pokeSpam', true); game.bump('fun', S.fun); }
       else { say('poke'); game.bump('fun', A.pokeFun * p.playGain); }
       sfx.play('pop');
@@ -151,7 +168,7 @@ export function createMood({ data, game, hud, sfx, timers, getPet, random = Math
      * every counted frame. Social tapers near full, fun does not (needs GDD 4.2).
      */
     onPetTick(dt, time) {
-      const p = P(); touch(time);
+      const p = P(); touch(time); care('strokePerSec', dt);
       m.joy += dt * TUNE.joyPet * p.petGain; m.annoy -= dt * TUNE.annoyPetCalm; m.shy += dt * TUNE.shyPet; m.petT = time;
       const levels = game.needs();
       if (levels) applyPet(levels, A, p.petGain, dt);
@@ -174,7 +191,7 @@ export function createMood({ data, game, hud, sfx, timers, getPet, random = Math
     onRelease(amount, time) {
       touch(time); stretch = -1;
       if (amount >= A.boingMinStretch) {
-        say('boing'); m.joy += TUNE.boingJoy * P().playGain; sfx.play('boing'); play('jelly');
+        care('boing'); say('boing'); m.joy += TUNE.boingJoy * P().playGain; sfx.play('boing'); play('jelly');
         game.bump('fun', A.boingFun * P().playGain);
       }
     },
@@ -182,7 +199,7 @@ export function createMood({ data, game, hud, sfx, timers, getPet, random = Math
     onSquish(level, dt, time) {
       const was = squish; squish = level;
       if (level <= 0.04) return;
-      const p = P(); touch(time);
+      const p = P(); touch(time); care('squishPerSec', dt);
       if (was <= 0.04) sfx.play('squish');
       if (level < A.squishHardThreshold) {
         m.shy += dt * TUNE.squishShy; say('squish');
@@ -195,14 +212,14 @@ export function createMood({ data, game, hud, sfx, timers, getPet, random = Math
     /** Fast swipe through the pet (startle). */
     onSlap(time) { touch(time); m.surprise = 1; m.annoy += TUNE.slapAnnoy; say('slap', true); sfx.play('slap'); },
     onCarryStart(time) { touch(time); carried = true; stretch = -1; say('carried', true); sfx.play('pick'); },
-    onCarried(dt, time) { touch(time); game.bump('social', A.carriedSocialPerSecond * dt); },
+    onCarried(dt, time) { touch(time); care('carryPerSec', dt); game.bump('social', A.carriedSocialPerSecond * dt); },
     onCarryEnd() { carried = false; },
     /** A talk-back phrase finished playing. */
-    onTalkPhrase(time) { touch(time); game.bump('social', A.talkSocial * P().petGain); },
+    onTalkPhrase(time) { touch(time); care('talk'); game.bump('social', A.talkSocial * P().petGain); },
     /** First hand seen in a camera session. */
     onCameraHello(time) {
       if (cameraHelloDone) return;
-      cameraHelloDone = true; touch(time);
+      cameraHelloDone = true; touch(time); care('cameraHello');
       game.bump('social', A.cameraHelloSocial); say('cameraHello', true); play('hop');
     },
     /** Camera turned off: next session may greet again. */
@@ -237,6 +254,7 @@ export function createMood({ data, game, hud, sfx, timers, getPet, random = Math
       const p = P();
       const levels = game.needs();
       const needMood = levels ? pickNeedMood(levels, data.needs, p) : { need: null, expr: 'original' };
+      needNow = needMood.need || null;
 
       // need lines: immediately on first crossing into low/urgent, then on cooldown
       if (levels) {

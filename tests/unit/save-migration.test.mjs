@@ -1,4 +1,4 @@
-// Save v1 → v2 → v3 → v4 migration (owned, outfits, settings, best, theme, minigame control, furniture). Run: node tests/unit/save-migration.test.mjs
+// Save v1 → … → v5 migration (owned, outfits, settings, best, theme, minigame control, furniture, growth, talk settings, lastGame). Run: node tests/unit/save-migration.test.mjs
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { test, assert, eq, deepEq, done } from './_harness.mjs';
@@ -13,12 +13,12 @@ const T0 = 1_700_000_000_000;
 
 console.log('save migration');
 
-test('new save is v4 with starter items owned, empty outfits, camera shown, light theme, touch control, best 0', () => {
+test('new save is v5 with starter items owned, empty outfits, camera shown, light theme, touch control, best 0', () => {
   const s = newSave(DATA, T0);
-  eq(s.version, SAVE_VERSION, 'version'); eq(SAVE_VERSION, 4, 'v4');
+  eq(s.version, SAVE_VERSION, 'version'); eq(SAVE_VERSION, 5, 'v5');
   deepEq(s.owned, ['bow-ribbon', 'glasses-round'], 'owned');
   deepEq(s.chars.flower.outfit, { head: null, eyes: null, body: null }, 'outfit');
-  deepEq(s.settings, { cameraHidden: false, theme: 'light', minigameControl: 'touch' }, 'settings');
+  deepEq(s.settings, { cameraHidden: false, theme: 'light', minigameControl: 'touch', talkMode: 'auto', talkNoticeSeen: false }, 'settings');
   deepEq(s.chars.flower.best, { snackRain: 0 }, 'best per character');
   eq(s.coins, 0, 'no startCoins → 0');
 });
@@ -48,16 +48,16 @@ test('v1 save migrates: needs, coins, room kept; owned/outfit/settings/best adde
 test('v2 save migrates to v4: camera choice kept, theme light, control touch', () => {
   const v2 = { ...newSave(DATA, T0), version: 2, settings: { cameraHidden: true } };
   const m = migrateSave(JSON.parse(JSON.stringify(v2)), DATA, T0);
-  eq(m.version, 4, 'version');
-  deepEq(m.settings, { cameraHidden: true, theme: 'light', minigameControl: 'touch' }, 'settings');
+  eq(m.version, SAVE_VERSION, 'version');
+  deepEq(m.settings, { cameraHidden: true, theme: 'light', minigameControl: 'touch', talkMode: 'auto', talkNoticeSeen: false }, 'settings');
 });
 
 test('v3 settings round-trip; unknown theme or control falls back to the default', () => {
   const s = newSave(DATA, T0);
   s.settings.theme = 'dark'; s.settings.minigameControl = 'head';
-  deepEq(migrateSave(JSON.parse(JSON.stringify(s)), DATA, T0).settings, { cameraHidden: false, theme: 'dark', minigameControl: 'head' }, 'kept');
-  deepEq(sanitizeSettings({ theme: 'auto', minigameControl: 'hand', cameraHidden: 1 }), { cameraHidden: true, theme: 'light', minigameControl: 'touch' }, 'bad values');
-  deepEq(sanitizeSettings('x'), { cameraHidden: false, theme: 'light', minigameControl: 'touch' }, 'not an object');
+  deepEq(migrateSave(JSON.parse(JSON.stringify(s)), DATA, T0).settings, { cameraHidden: false, theme: 'dark', minigameControl: 'head', talkMode: 'auto', talkNoticeSeen: false }, 'kept');
+  deepEq(sanitizeSettings({ theme: 'auto', minigameControl: 'hand', cameraHidden: 1 }), { cameraHidden: true, theme: 'light', minigameControl: 'touch', talkMode: 'auto', talkNoticeSeen: false }, 'bad values');
+  deepEq(sanitizeSettings('x'), { cameraHidden: false, theme: 'light', minigameControl: 'touch', talkMode: 'auto', talkNoticeSeen: false }, 'not an object');
 });
 
 test('v2 save round-trips outfit, owned, settings and best', () => {
@@ -109,11 +109,65 @@ test('v3 save migrates to v4: every field kept, furniture at defaults, defaults 
   const D = { ...DATA, furniture: makeFurniture() };
   const v3 = makeV3Save(T0);
   const m = migrateSave(JSON.parse(JSON.stringify(v3)), D, T0, ['living', 'kitchen', 'bathroom']);
-  eq(m.version, 4, 'version'); eq(m.coins, 310, 'coins'); eq(m.room, 'bathroom', 'room'); eq(m.selected, 'gumdrop', 'selected');
-  deepEq(m.settings, v3.settings, 'settings'); deepEq(m.chars.gumdrop.outfit, v3.chars.gumdrop.outfit, 'outfit');
+  eq(m.version, SAVE_VERSION, 'version'); eq(m.coins, 310, 'coins'); eq(m.room, 'bathroom', 'room'); eq(m.selected, 'gumdrop', 'selected');
+  deepEq(m.settings, { ...v3.settings, talkMode: 'auto', talkNoticeSeen: false }, 'settings'); deepEq(m.chars.gumdrop.outfit, v3.chars.gumdrop.outfit, 'outfit');
   deepEq(m.chars.gumdrop.needs, v3.chars.gumdrop.needs, 'needs'); eq(m.chars.gumdrop.best.snackRain, 220, 'best');
   deepEq(m.furniture, { living: { sofa: 'sofa-classic', corner: 'plant-pot' }, bathroom: { rug: 'mat-bath' } }, 'furniture');
   for (const id of ['bow-ribbon', 'glasses-round', 'scarf', 'sofa-classic', 'plant-pot', 'mat-bath']) assert(m.owned.includes(id), `owned ${id}`);
+});
+
+// ---- Sprint 5: save v5 (growth GDD 3.9 / 3.10, minigames-2 GDD 3.0, conversation GDD 3.1) ----
+import { makeV4Save } from './fixtures/sprint5.mjs';
+
+test('AC8 v4 save (selected flower, gumdrop best 300) → flower + gumdrop kid at 2700, others baby; v5', () => {
+  const D = { ...DATA, furniture: makeFurniture() };
+  const m = migrateSave(JSON.parse(JSON.stringify(makeV4Save(T0))), D, T0, ['living', 'kitchen', 'bathroom']);
+  eq(m.version, 5, 'version');
+  for (const k of ['flower', 'gumdrop']) { eq(m.chars[k].growth.stage, 'kid', `${k} stage`); eq(m.chars[k].growth.activeSec, 2700, `${k} T`); eq(m.chars[k].growth.stageSeen, 'kid', `${k} no card`); }
+  for (const k of ['splat', 'diamond', 'cloud']) { eq(m.chars[k].growth.stage, 'baby', `${k} baby`); eq(m.chars[k].growth.activeSec, 0, `${k} T`); }
+  for (const k of Object.keys(m.chars)) {
+    eq(m.chars[k].growth.trait, null, `${k} trait`);
+    deepEq(m.chars[k].growth.tally, { cuddly: 0, playful: 0, foodie: 0, stylish: 0 }, `${k} tally`);
+  }
+  eq(m.chars.gumdrop.best.snackRain, 300, 'existing best kept in best.snackRain');
+  eq(m.growthIntro, true, 'one-time coach'); eq(m.lastGame, null, 'lastGame');
+  eq(m.settings.talkMode, 'auto', 'talkMode'); eq(m.settings.talkNoticeSeen, false, 'notice not seen');
+  eq(m.coins, 310, 'coins kept'); eq(m.furniture.living.sofa, 'sofa-cloud', 'furniture kept');
+});
+
+test('v4 outfit worn counts as played; a v4 save that never chose a character keeps everyone baby', () => {
+  const v4 = makeV4Save(T0);
+  v4.chars.cloud = { ...v4.chars.gumdrop, best: { snackRain: 0 }, outfit: { head: null, eyes: 'glasses-round', body: null } };
+  eq(migrateSave(JSON.parse(JSON.stringify(v4)), DATA, T0).chars.cloud.growth.stage, 'kid', 'outfit');
+  const fresh = { ...newSave(DATA, T0), version: 4 }; for (const k of Object.keys(fresh.chars)) delete fresh.chars[k].growth;
+  const m = migrateSave(JSON.parse(JSON.stringify(fresh)), DATA, T0);
+  for (const k of Object.keys(m.chars)) eq(m.chars[k].growth.stage, 'baby', `${k}`);
+  eq(m.growthIntro, true, 'coach still shown once (any migrated save)');
+});
+
+test('new save: everyone baby, no coach; v5 round-trips growth, best per game, lastGame, talk settings', () => {
+  const s = newSave(DATA, T0);
+  for (const k of Object.keys(s.chars)) eq(s.chars[k].growth.stage, 'baby', k);
+  eq(s.growthIntro, false, 'no coach');
+  const st = memStorage();
+  const a = createGameState({ data: DATA, storage: st, now: () => T0 });
+  const g = a.growth('cloud'); g.activeSec = 11000; g.stage = 'grown'; g.stageSeen = 'grown'; g.trait = 'foodie'; g.tally.foodie = 33;
+  eq(a.setBest('hop', 41), 41, 'hop best'); eq(a.setBest('mimic', 7, 'cloud'), 7, 'mimic best cloud'); eq(a.setBest('chess', 9), 0, 'unknown game ignored');
+  a.setLastGame('bubbles'); a.setLastGame('nope'); a.setSetting('talkMode', 'echo'); a.setSetting('talkNoticeSeen', true);
+  assert(a.persist(), 'persist');
+  const b = createGameState({ data: DATA, storage: st, now: () => T0 });
+  eq(b.growth('cloud').trait, 'foodie', 'trait'); eq(b.growth('cloud').stage, 'grown', 'stage'); eq(b.growth('cloud').tally.foodie, 33, 'tally');
+  eq(b.best().hop, 41, 'hop'); eq(b.best('cloud').mimic, 7, 'mimic'); eq(b.best().snackRain, 0, 'snackRain always present');
+  eq(b.lastGame, 'bubbles', 'lastGame'); eq(b.settings.talkMode, 'echo', 'talkMode'); eq(b.settings.talkNoticeSeen, true, 'notice');
+  b.setSetting('talkMode', 'shout'); eq(b.settings.talkMode, 'auto', 'invalid → auto');
+});
+
+test('v5 tampered growth is sanitised and never shrinks', () => {
+  const s = newSave(DATA, T0);
+  s.chars.flower.growth = { activeSec: -10, stage: 'grown', tally: { cuddly: 'lots' }, trait: 'mean' };
+  const m = migrateSave(JSON.parse(JSON.stringify(s)), DATA, T0);
+  eq(m.chars.flower.growth.stage, 'grown', 'stage kept'); eq(m.chars.flower.growth.activeSec, 0, 'T clamped');
+  eq(m.chars.flower.growth.trait, 'cheerful', 'unknown trait recomputed (tally 0 → cheerful)');
 });
 
 done();

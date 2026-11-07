@@ -25,7 +25,7 @@ Related: `design/gdd/minigame-snack-rain.md` (shared flow, pause, coins rules), 
 - **Best score per character per game**, saved by wire (`chars[key].best[gameId]`; the existing Snack Rain best migrates into `best.snackRain`).
 - **First play of each game** (per save): one coach line on the intro card and the first `firstPlayEasySec` (8 s) at the easiest settings.
 - Head control uses the existing Sprint 3 pipeline (MediaPipe Face Landmarker, `src/input/head-rules.js`): it gives **head roll** (tilt left/right, degrees, calibrated neutral, dead zone 4°, full 20°) and a secondary nose-x cue. It does **not** give pitch (nod) or facial expressions today.
-- Persona lines (new events): `pickGame`, `favGame`, `mimicGood`, `mimicSlip`, `bubbleCall` (uses `{color}`), `bubbleWrong`, `hopBump`; existing `minigameStart`, `minigameWin`, `minigameDemon` reused. All lines cooldown `lineCooldownSec` (6 s).
+- Persona lines (new events): `pickGame`, `favGame`, `mimicGood`, `mimicSlip`, `bubbleCall` (uses `{color}` = `bubbles.colors[].label`), `bubbleWrong`, `hopBump`, and per-game start lines `mimicStart`, `bubbleStart`, `hopStart` (added in S5-01 because today's `minigameStart` lines talk about snacks); existing `minigameWin` (end) and `minigameDemon` (hop demon) reused. Each game's `lines` block in `minigames.json` names its events (`start`, `end`, …); the picker's are `picker.lines.open` / `favorite`. All lines cooldown `lineCooldownSec` (6 s).
 
 ### 3.1 Minigame picker (from "เล่น")
 1. ห้องนั่งเล่น กด "เล่น" (`onAction('play')`) → ชีตเลือกเกม (สูงไม่เกิน 45% เหมือนชีตชุด ตัวละครยังเห็นด้านบน) ตัวละครพูด `pickGame` ("เล่นอะไรกันดี?")

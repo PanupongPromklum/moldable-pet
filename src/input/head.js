@@ -143,6 +143,15 @@ export function createHeadControl({ getTime, feel = HEAD_FEEL, doc = document })
       return axis;
     },
     /**
+     * Head roll in degrees from the calibrated neutral (+ = tilt to the player's
+     * right), or null while calibrating / no face (hop's tilt flick, minigames-2 GDD 3.4).
+     * @returns {number|null}
+     */
+    roll() {
+      if (!on || calibrating || getTime() - seenT > feel.lostSeconds) return null;
+      return pose.roll - neutral.roll;
+    },
+    /**
      * Client x across [left, left + width], or null (see `axis`).
      * @param {number} left @param {number} width
      */

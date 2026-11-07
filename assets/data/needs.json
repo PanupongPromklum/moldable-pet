@@ -12,7 +12,9 @@
       "Seconds": "seconds",
       "Speed": "body-heights per second (pet height on screen = 1), screen-independent",
       "Taper": "petSocialTaperStart = social level where petting starts to slow; petSocialTaperMin = rate multiplier left at social 1.0",
-      "petHeadZoneFromTop": "fraction of body height measured down from the head top where a drag strokes instead of stretches"
+      "petHeadZoneFromTop": "fraction of body height measured down from the head top where a drag strokes instead of stretches",
+      "talkFun": "fun level added per understood play/joke/sing conversation turn (conversation.md 3.8)",
+      "talkSocialCapPerMinute": "max social level gained from talking in any rolling 60 s (conversation.md 4.4)"
     }
   },
   "needs": {
@@ -40,6 +42,8 @@
     "hardFunScale": 0.25,
     "carriedSocialPerSecond": 0.01,
     "talkSocial": 0.04,
+    "talkFun": 0.01,
+    "talkSocialCapPerMinute": 0.12,
     "cameraHelloSocial": 0.05,
     "flush": { "toilet": 1 },
     "flushReliefFun": 0.05,

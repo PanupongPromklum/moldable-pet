@@ -25,7 +25,15 @@ export const SFX_NAMES = Object.freeze([
   'coin', 'catch', 'bonk', 'tick', 'go', 'win', 'equip', 'buy',
   // Sprint 4 (S4-07): furniture shop + Christmas set.
   'place', 'jingle', 'preview',
+  // Sprint 5: mimic pad tones (opts.index 0..5) and the bubble colour call.
+  'note', 'call',
 ]);
+
+/** Pet-voice sounds that follow the life-stage pitch offset (growth GDD 3.2, `setPitchOffset`). */
+const PET_VOICE = new Set(['giggle', 'yawn', 'chirp', 'boing', 'squish']);
+let pitchMul = 1, pitchOffset = 0;
+/** Mimic pad notes: F major pentatonic F5 G5 A5 C6 D6 F6. */
+const NOTE_STEPS = [698.5, 784, 880, 1046.5, 1174.7, 1396.9];
 
 /**
  * Jingle shake pattern: [time (s), bell (0 = C7, 1 = A6), strength]. Fixed (no Math.random)
@@ -74,8 +82,8 @@ function envelope(c, peak, t, dur, attack = 0.012) {
 function tone(c, out, t, f0, f1, dur, type = 'sine', vol = 0.12, opt = {}) {
   const o = c.createOscillator();
   o.type = type;
-  o.frequency.setValueAtTime(f0, t);
-  o.frequency.exponentialRampToValueAtTime(Math.max(30, f1), t + dur);
+  o.frequency.setValueAtTime(f0 * pitchMul, t);
+  o.frequency.exponentialRampToValueAtTime(Math.max(30, f1 * pitchMul), t + dur);
   let node = o;
   if (opt.lowpass) {
     const f = c.createBiquadFilter();
@@ -95,8 +103,8 @@ function tone(c, out, t, f0, f1, dur, type = 'sine', vol = 0.12, opt = {}) {
 function contour(c, out, t, path, dur, type, vol, filterPath, attack = 0.06) {
   const o = c.createOscillator();
   o.type = type;
-  o.frequency.setValueAtTime(path[0][1], t);
-  for (const [dt, hz] of path.slice(1)) o.frequency.exponentialRampToValueAtTime(hz, t + dt);
+  o.frequency.setValueAtTime(path[0][1] * pitchMul, t);
+  for (const [dt, hz] of path.slice(1)) o.frequency.exponentialRampToValueAtTime(hz * pitchMul, t + dt);
   const f = c.createBiquadFilter();
   f.type = 'lowpass'; f.Q.value = 1.2;
   f.frequency.setValueAtTime(filterPath[0][1], t);
@@ -313,6 +321,17 @@ const RECIPES = {
     tone(c, o, t + 0.19, 1046.5, 1050, 0.12, 'sine', 0.025 * v, { attack: 0.003 }); // tiny C6 glint
     return 0.31;
   },
+  note: (c, o, t, v, opts = {}) => { // soft marimba-like pad tone, one per mimic pose (index 0..5)
+    const hz = NOTE_STEPS[Math.max(0, Math.min(NOTE_STEPS.length - 1, Number(opts.index) || 0))];
+    tone(c, o, t, hz, hz * 1.001, 0.32, 'sine', 0.12 * v, { attack: 0.004 });
+    tone(c, o, t, hz * 2, hz * 2.002, 0.12, 'sine', 0.025 * v, { attack: 0.002 });
+    return 0.34;
+  },
+  call: (c, o, t, v) => { // two-note "hey!" (A5 → D6) when the bubble colour is about to change
+    tone(c, o, t, 880, 900, 0.09, 'triangle', 0.07 * v, { attack: 0.006, lowpass: 2600 });
+    tone(c, o, t + 0.1, 1174.7, 1190, 0.13, 'triangle', 0.07 * v, { attack: 0.006, lowpass: 2600 });
+    return 0.25;
+  },
 };
 
 /* ---------- optional music bed (lo-fi ~100 BPM, F major; music bus is ducked under SFX) ---------- */
@@ -361,7 +380,8 @@ export const sfx = {
    * @param {string} name one of SFX_NAMES
    * @param {{volume?: number}} [opts] volume multiplier 0..2 (default 1)
    */
-  play(name, { volume = 1 } = {}) {
+  play(name, opts = {}) {
+    const volume = opts?.volume ?? 1;
     if (!enabled) return;
     const recipe = RECIPES[name];
     if (!recipe) return;
@@ -377,7 +397,9 @@ export const sfx = {
         if (!out) return;
         const v = Math.min(2, Math.max(0, Number(volume) || 0));
         if (v <= 0) return;
-        const dur = recipe(c, out, now + 0.005, v);
+        pitchMul = PET_VOICE.has(name) ? Math.pow(2, pitchOffset / 12) : 1;
+        let dur = 0;
+        try { dur = recipe(c, out, now + 0.005, v, opts || {}); } finally { pitchMul = 1; }
         duckMusic(dur);
       };
       if (c.state === 'running') { go(); return; }
@@ -387,6 +409,14 @@ export const sfx = {
       resumeAudio().then((ok) => { if (ok && Date.now() - t0 < 200) go(); });
     } catch { /* never throw from audio */ }
   },
+
+  /**
+   * Life-stage pitch for pet-voice sounds and talk-back (growth GDD 3.2; babble uses its own).
+   * @param {number} semitones
+   */
+  setPitchOffset(semitones) { pitchOffset = Number.isFinite(semitones) ? Math.max(-12, Math.min(12, semitones)) : 0; },
+  /** @returns {number} current pet-voice pitch offset (semitones) */
+  getPitchOffset() { return pitchOffset; },
 
   /**
    * Turn SFX on or off (settings toggle). Does not affect talk-back.

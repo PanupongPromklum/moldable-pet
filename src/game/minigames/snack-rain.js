@@ -252,7 +252,10 @@ export function createSnackRain(deps) {
     onNeedsChanged?.();
     onCoins?.(total);
     game.persist?.();
-    return { score: st.score, best, coins, newBest: st.score > prevBest, completed };
+    const r = { id: 'snackRain', score: st.score, best, coins, newBest: st.score > prevBest, completed,
+      fractionPlayed: clamp01(elapsed / Math.max(1e-6, cfg.durationSec)), needs: d };
+    deps.onEnd?.(r);   // S5 registry (index.js): main may record lastGame / growth events
+    return r;
   }
 
   function finish() {

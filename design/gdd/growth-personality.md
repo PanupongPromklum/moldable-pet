@@ -156,6 +156,17 @@ Options considered:
 - `stage` เก็บไว้เพื่อกฎ "ไม่หด" (5.6) `stageSeen` = ขั้นล่าสุดที่โชว์การ์ดแล้ว `trait` = null จนกว่าจะโต `traitAt` / `lastChangeAt` เป็น ms epoch (ใช้แสดงผลเท่านั้น ไม่ใช้นับเวลา) `drift.minutes` = จำนวนถังติดต่อกันที่ candidate ไม่ตรง `day` ใช้กับ soft cap (เวลาท้องถิ่น)
 - ถังที่ยังไม่ปิด (< 60 s) ไม่บันทึก เสียได้มากสุด 1 นาทีของ tally ต่อครั้งที่ปิดแอป — ยอมรับได้
 
+### 3.10b Persona line events (fixed in S5-01, `personas.json`)
+| Event id | When | Placeholder |
+|---|---|---|
+| `growUp` | after the stage card (baby → kid, kid → grown) | — |
+| `traitReveal` | after the trait card at `grown` | `{trait}` = `traits.<id>.label` |
+| `traitDrift` | after the drift card | `{trait}` = new trait label |
+| `traits.<id>.lines.traitHint` | kid-stage hint (3.6), from the leading trait's set | — |
+| `askPet` / `askPlay` / `snackHint` / `decorLike` | trait behaviour of cuddly / playful / foodie / stylish (`growth.json traits.<id>.behaviorLine`; cheerful uses `hello`), at most once per `behaviorLineCooldownSec` (60 s) | — |
+
+Lines are written for `{trait}` with "แบบ" ("เราเป็นแบบ{trait}แล้ว!") so every label reads naturally. `lines.baby.<event>` per persona and grown trait lines `traits.<id>.lines.<event>` (other than `traitHint`) are optional: missing → `growth.json babble.<event>` for babies, plain persona lines for grown (so `traitLineShare` has no effect until trait lines are written). Per-character growth numbers live only in `growth.json personas.<key>` (not in `personas.json`). `growth.json` also carries the card text templates (`cards.*`), `lines.*` (event id map), `migration.*` (3.9), `hint.nearGrowProgress` / `nearGrowText` (3.6), `glowSec` and `doubleStageGapSec` (3.3, 5.8).
+
 ### 3.11 Proposed interfaces (for kiln to fix in the contract)
 - clay: `pet.setGrowth({ scale, eyeScale, roundness, jiggle, hopScale })` (eased by the character over `transitionSec`), `pet.setTraitMark(traitIdOrNull)`
 - echo: `sfx.setPitchOffset(semitones)`, talkback adds the same offset; conversation reads `{ vocabLevel, trait }`
@@ -222,7 +233,7 @@ The final tuning pass should run a seeded simulation of 4 player profiles × 5 c
 | System | Relationship | Owner |
 |---|---|---|
 | Needs (`needs-system.md`) | ไม่มีผลต่อกัน (ตั้งใจ) ยกเว้น mood idle มีสิทธิ์ก่อน trait idle; ต้องเพิ่มหมายเหตุใน needs GDD | loop |
-| Personas (`personas.json`) | `growth` block ต่อตัว (bias, balancedMaxShare, tendencyOrder), `lines.baby.*`, `traits.<id>.lines.*`, events ใหม่ `growUp`, `askPet`, `askPlay`, `snackHint`, `decorLike`, `traitHint` | loop (lines with echo) |
+| Personas (`personas.json`) | events ใหม่ `growUp`, `traitReveal`, `traitDrift`, `askPet`, `askPlay`, `snackHint`, `decorLike`, `traits.<id>.lines.traitHint` (3.10b); optional `lines.baby.*`, `traits.<id>.lines.*`; ตัวเลขต่อตัว (bias, balancedMaxShare, tendencyOrder) อยู่ที่ `growth.json personas` | loop (lines with echo) |
 | Minigames (`minigame-snack-rain.md`, `minigames-2.md`) | เวลามินิเกมนับ engaged; mix ต่อเกม; ขนาดขั้นต่ำในมินิเกม | loop |
 | Economy / wardrobe / furniture | equip/buy/decor events → stylish | loop |
 | Conversation (`conversation.md`, S5-D3) | อ่าน `vocabLevel`, `trait`; ส่ง conversation event → cuddly | echo |

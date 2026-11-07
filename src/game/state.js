@@ -2,20 +2,28 @@
  * Game state and save — needs per character key (owner decision 2026-10-25),
  * selected character, current room, wall-clock decay, localStorage save.
  *
- * Save key `moldable-pet:v1` (the key stays; `version` inside moves), shape v4:
- * { version: 4, selected, room, chosen, coins, savedAt,
+ * Save key `moldable-pet:v1` (the key stays; `version` inside moves), shape v5:
+ * { version: 5, selected, room, chosen, coins, savedAt,
+ *   lastGame: 'snackRain'|'mimic'|'bubbles'|'hop'|null,   // picker "เล่นล่าสุด" (Sprint 5)
+ *   growthIntro: bool,                      // one-time coach after the v4 → v5 migration (growth GDD 3.9)
+ *   played: { <gameId>: true },             // first play per save (minigames-2 GDD 3.0 coach + easy start)
+ *   relaxed: { <gameId>: bool },            // "โหมดสบายๆ" per game (minigames-2 GDD 3.5)
  *   owned: [itemIds],                       // wardrobe + furniture ids, shared by every character
  *   furniture: { living: {slot: id}, kitchen: {…}, bathroom: {…} },   // shared (Sprint 4), defaults always owned
  *   settings: { cameraHidden: bool,         // camera view choice (S2-04)
  *     theme: 'light'|'dark',                // manual lamp toggle (Sprint 3 #2), default light
- *     minigameControl: 'touch'|'head' },    // Snack Rain control (Sprint 3 #3), default touch
+ *     minigameControl: 'touch'|'head',      // Snack Rain control (Sprint 3 #3), default touch
+ *     talkMode: 'auto'|'talk'|'echo',       // mic mode (conversation GDD 3.1), default auto
+ *     talkNoticeSeen: bool },               // one-time recognition privacy notice (GDD 3.10)
  *   chars: { <key>: { needs: {…}, tLast,
  *     outfit: { head, eyes, body },         // per character (S2-11)
- *     best: { snackRain: number },          // best minigame score per character (snack-rain GDD 3.8)
- *     wearBonusAt: ms } } }                 // last outfit need bonus (economy GDD 3.5 cooldown)
+ *     best: { snackRain, mimic?, bubbles?, hop? },   // best score per character per game (minigames-2 GDD 3.0)
+ *     wearBonusAt: ms,                      // last outfit need bonus (economy GDD 3.5 cooldown)
+ *     growth: {…} } } }                     // growth GDD 3.10 (see game/growth-rules.js newGrowth)
  * v0 (prototype), v1 (Sprint 1, no outfits / settings / best), v2 (Sprint 2,
  * no theme / minigameControl → light / touch) and v3 (Sprint 3, no furniture →
- * every slot at its default) saves migrate.
+ * every slot at its default) and v4 (Sprint 4, no growth → growth GDD 3.9
+ * option B: played characters start as kid, others baby) saves migrate.
  *
  * The pure helpers (`newSave`, `migrateSave`, `tickSave`) are unit-tested in
  * `tests/unit/needs.test.mjs`. `createGameState` wraps them with an injected
@@ -25,18 +33,22 @@
 import { startLevels, sanitizeLevels, decayNeeds, addNeed } from './needs.js';
 import { sanitizeOutfit, emptyOutfit } from './wardrobe.js';
 import { sanitizeOwnedAll, sanitizeFurniture, defaultFurniture } from './furniture.js';
+import { resolveGrowth, newGrowth, sanitizeGrowth, migrateGrowth } from './growth-rules.js';
 
 export const SAVE_KEY = 'moldable-pet:v1';
-export const SAVE_VERSION = 4;
+export const SAVE_VERSION = 5;
 /** Allowed values of the Sprint 3 settings (first = default). */
 export const THEMES = Object.freeze(['light', 'dark']);
 export const MINIGAME_CONTROLS = Object.freeze(['touch', 'head']);
+export const TALK_MODES = Object.freeze(['auto', 'talk', 'echo']);
+/** Minigame ids (module-contracts.md › Sprint 5: registry keys). */
+export const GAME_IDS = Object.freeze(['snackRain', 'mimic', 'bubbles', 'hop']);
 
 /**
  * Valid settings object from anything (missing / unknown values → defaults).
  * The system colour scheme never decides the theme (Sprint 3 #2).
  * @param {any} s
- * @returns {{ cameraHidden: boolean, theme: 'light'|'dark', minigameControl: 'touch'|'head' }}
+ * @returns {{ cameraHidden: boolean, theme: 'light'|'dark', minigameControl: 'touch'|'head', talkMode: 'auto'|'talk'|'echo', talkNoticeSeen: boolean }}
  */
 export function sanitizeSettings(s) {
   const o = s && typeof s === 'object' ? s : {};
@@ -44,14 +56,30 @@ export function sanitizeSettings(s) {
     cameraHidden: !!o.cameraHidden,
     theme: THEMES.includes(o.theme) ? o.theme : THEMES[0],
     minigameControl: MINIGAME_CONTROLS.includes(o.minigameControl) ? o.minigameControl : MINIGAME_CONTROLS[0],
+    talkMode: TALK_MODES.includes(o.talkMode) ? o.talkMode : TALK_MODES[0],
+    talkNoticeSeen: !!o.talkNoticeSeen,
   };
 }
 export const DEFAULT_CHARACTER = 'flower';
 export const DEFAULT_ROOM = 'living';
 
 /**
- * @typedef {{ needs: object, foods: object, personas: object, wardrobe?: object|null, minigames?: object|null, furniture?: object|null }} GameData
+ * @typedef {{ needs: object, foods: object, personas: object, wardrobe?: object|null, minigames?: object|null, furniture?: object|null, growth?: object|null, growthCfg?: object }} GameData
  */
+
+/** Resolved growth config (growth.json over the GDD defaults), cached on `data`. */
+export function growthCfg(data) {
+  if (!data.growthCfg) Object.defineProperty(data, 'growthCfg', { value: resolveGrowth(data.growth || null).cfg, enumerable: false, writable: true });
+  return data.growthCfg;
+}
+
+/** Sanitised best scores: snackRain always present, other game ids only when > 0. */
+function sanitizeBest(b) {
+  const out = { snackRain: 0 };
+  if (!b || typeof b !== 'object') return out;
+  for (const id of GAME_IDS) { const v = b[id]; if (Number.isFinite(v) && v > 0) out[id] = Math.floor(v); }
+  return out;
+}
 
 /** Character keys that have persona data (every one of them is simulated). */
 export function characterKeys(data) {
@@ -72,12 +100,13 @@ export function newSave(data, now) {
     version: SAVE_VERSION, selected: DEFAULT_CHARACTER, room: DEFAULT_ROOM, chosen: false,
     coins: Number.isFinite(start) && start > 0 ? Math.floor(start) : 0, savedAt: now,
     owned: sanitizeOwnedAll(null, wardrobe, data.furniture || null), settings: sanitizeSettings(null), chars,
+    lastGame: null, growthIntro: false, played: {}, relaxed: {},
     furniture: data.furniture ? defaultFurniture(data.furniture) : sanitizeFurniture(null, null, []),
   };
 }
 
 function newChar(data, now) {
-  return { needs: startLevels(data.needs), tLast: now, outfit: emptyOutfit(data.wardrobe || null), best: { snackRain: 0 }, wearBonusAt: 0 };
+  return { needs: startLevels(data.needs), tLast: now, outfit: emptyOutfit(data.wardrobe || null), best: { snackRain: 0 }, wearBonusAt: 0, growth: newGrowth() };
 }
 
 /**
@@ -113,18 +142,30 @@ export function migrateSave(raw, data, now, roomIds) {
   out.settings = sanitizeSettings(src.settings);
   // v3 and older have no furniture → every slot at its default (Sprint 4)
   out.furniture = sanitizeFurniture(src.furniture, data.furniture || null, out.owned);
-  const score = (b) => (b && Number.isFinite(b.snackRain) && b.snackRain > 0 ? Math.floor(b.snackRain) : 0);
+  out.lastGame = GAME_IDS.includes(src.lastGame) ? src.lastGame : null;
+  for (const id of GAME_IDS) {
+    if (src.played?.[id] === true) out.played[id] = true;
+    if (typeof src.relaxed?.[id] === 'boolean') out.relaxed[id] = src.relaxed[id];
+  }
+  // a save that already played Snack Rain (best > 0 anywhere) is not a first play of it
+  if (src.chars && Object.values(src.chars).some((c) => Number(c?.best?.snackRain) > 0)) out.played.snackRain = true;
+  // v4 and older have no growth → growth GDD 3.9 option B (played → kid, others baby)
+  const gc = growthCfg(data);
+  const pre5 = !(Number(src.version) >= 5);
   for (const k of keys) {
     const c = src.chars && src.chars[k];
+    if (pre5) out.chars[k].growth = migrateGrowth(k, src, gc);
     if (!c || typeof c !== 'object') continue;
     out.chars[k] = {
       needs: sanitizeLevels(c.needs, data.needs),
       tLast: Number.isFinite(c.tLast) ? c.tLast : now,
       outfit: sanitizeOutfit(c.outfit, wardrobe, out.owned),
-      best: { snackRain: score(c.best) },
+      best: sanitizeBest(c.best),
       wearBonusAt: Number.isFinite(c.wearBonusAt) && c.wearBonusAt > 0 ? c.wearBonusAt : 0,
+      growth: pre5 ? out.chars[k].growth : sanitizeGrowth(c.growth, gc, k),
     };
   }
+  out.growthIntro = pre5 ? !!raw.version || !!src.chosen : !!src.growthIntro;
   return out;
 }
 
@@ -181,6 +222,19 @@ export function createGameState({ data, storage, now = () => Date.now(), roomIds
     /** Item ids owned (shared across characters). */
     get owned() { return save.owned; },
     get settings() { return save.settings; },
+    /** Growth record of a character (default: selected), mutated in place by game/growth.js. */
+    growth(key = save.selected) { return save.chars[key]?.growth || null; },
+    get lastGame() { return save.lastGame; },
+    setLastGame(id) { save.lastGame = GAME_IDS.includes(id) ? id : save.lastGame; },
+    /** First play of a game in this save (minigames-2 GDD 3.0). */
+    isFirstPlay(id) { return GAME_IDS.includes(id) && !save.played[id]; },
+    markPlayed(id) { if (GAME_IDS.includes(id)) save.played[id] = true; },
+    /** "โหมดสบายๆ" of a game (default off). */
+    relaxed(id) { return !!save.relaxed[id]; },
+    setRelaxed(id, on) { if (GAME_IDS.includes(id)) save.relaxed[id] = !!on; },
+    /** One-time growth coach after migration (growth GDD 3.9). */
+    get growthIntro() { return save.growthIntro; },
+    clearGrowthIntro() { save.growthIntro = false; },
     /** Best scores of a character (default: selected), e.g. `{ snackRain }`. */
     best(key = save.selected) { return save.chars[key]?.best || { snackRain: 0 }; },
     /** Wall-clock ms of the character's last outfit need bonus. */
@@ -205,10 +259,10 @@ export function createGameState({ data, storage, now = () => Date.now(), roomIds
     addCoins(n) { save.coins = Math.max(0, save.coins + Math.floor(Number(n) || 0)); return save.coins; },
     /** Record a minigame score for a character (default: selected). @returns {number} best */
     setBest(game, score, key = save.selected) {
-      const c = save.chars[key]; if (!c) return 0;
+      const c = save.chars[key]; if (!c || !GAME_IDS.includes(game)) return 0;
       const b = Math.max(c.best[game] || 0, Math.floor(score) || 0); c.best[game] = b; return b;
     },
-    /** Change one setting (cameraHidden, theme, minigameControl); invalid values fall back to defaults. */
+    /** Change one setting (cameraHidden, theme, minigameControl, talkMode, talkNoticeSeen); invalid values fall back to defaults. */
     setSetting(k, v) { save.settings[k] = v; save.settings = sanitizeSettings(save.settings); },
     /** Live levels of the selected character (mutated in place by `bump`). */
     needs(key = save.selected) { return save.chars[key]?.needs; },

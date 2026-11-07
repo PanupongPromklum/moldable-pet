@@ -224,6 +224,7 @@ If instead ไผ่ was away 30 h: Δh_off = 12 h, every need ends at 0.15 (low
 | Character bible (narrative) | source | personalities behind needRates, food likes and lines |
 | Minigames (`minigame-snack-rain.md`, `minigames-2.md`) | depend on this | round-end fun/social/hunger deltas × `playGain` |
 | Growth & raised personality (`growth-personality.md`, S5) | independent by design | needs never speed up, slow down or change growth or the trait; mood idles from needs take priority over trait idles |
+| Conversation (`conversation.md`, S5, echo) | depends on this | a talk turn adds `talkSocial × petGain × intentGain` social (capped by `talkSocialCapPerMinute` per rolling minute) and `talkFun` for play/joke/sing; never lowers a need; resets the loneliness timer |
 | Future: sleep/energy | will depend on this | energy would join `moods.priority` |
 
 Each of these docs should list the needs system back as a dependency when they are written.
@@ -252,7 +253,9 @@ Each of these docs should list the needs system back as a dependency when they a
 | actions.stretch/squishFunPerSecond | needs | 0.02 | 0.01–0.05 | play time to refill fun |
 | actions.boingFun | needs | 0.03 | 0–0.06 | reward for big releases |
 | actions.hardFunScale | needs | 0.25 | 0–0.5 | discourages rough play |
-| actions.talkSocial / cameraHelloSocial | needs | 0.04 / 0.05 | 0–0.1 | value of voice and camera |
+| actions.talkSocial / cameraHelloSocial | needs | 0.04 / 0.05 | 0–0.1 | value of voice and camera (talkSocial is also the base of a conversation turn, `conversation.md` 4.4) |
+| actions.talkFun | needs | 0.01 | 0–0.05 | fun from an understood `play` / `joke` / `sing` conversation turn (`conversation.md` 3.8) |
+| actions.talkSocialCapPerMinute | needs | 0.12 | 0.05–0.3 | anti-farming: max social from talking per rolling 60 s, so talk never replaces petting and feeding (`conversation.md` 4.4) |
 | actions.flushReliefFun | needs | 0.05 | 0–0.1 | reward for timely toilet |
 | actions.toiletNoNeedAbove | needs | 0.7 | 0.5–0.9 | when the pet says it does not need to go |
 | actions.eatToiletCost | needs | 0.08 | 0.04–0.15 | fallback toilet cost per food |
