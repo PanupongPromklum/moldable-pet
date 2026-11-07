@@ -446,7 +446,7 @@ export function createHUD(root, handlers = {}, options = {}) {
       </div>
       <div class="mp-actions">
         <div class="mp-actions-start">
-          <button type="button" class="mp-ctx mp-ctx--outline mp-ward-btn" hidden>${icon('shirt', 22)}<span>${esc(S.wardrobe)}</span></button>
+          <button type="button" class="mp-ctx mp-ctx--outline mp-ward-btn" hidden>${filledIcon('shirt', 30)}<span>${esc(S.wardrobe)}</span></button>
           <button type="button" class="mp-ctx mp-ctx--outline mp-decor-btn" hidden>${filledIcon('decor', 30)}<span>${esc(S.decorBtn)}</span></button>
         </div>
         <div class="mp-mic-wrap">
@@ -594,7 +594,7 @@ export function createHUD(root, handlers = {}, options = {}) {
     el.trayDecor.hidden = !decorOn;
     let ctx = null;
     if (room === 'living') ctx = { id: 'play', ico: 'fun', text: S.play, kind: 'outline', filled: true };
-    else if (room === 'kitchen') ctx = { id: 'tray', ico: 'hunger', text: S.tray, kind: 'outline' };
+    else if (room === 'kitchen') ctx = { id: 'tray', ico: 'tray', text: S.tray, kind: 'outline', filled: true };
     el.ctx.hidden = !ctx;
     if (ctx) {
       el.ctx.dataset.ctx = ctx.id;

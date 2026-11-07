@@ -299,6 +299,33 @@ export const FILLED_ICONS = {
 };
 FILLED_ICONS.decorate = FILLED_ICONS.decor;
 
+/* Owner 2026-11-07: แต่งตัว and ถาดอาหาร buttons get S4 filled symbols too (same rules: chunky soft forms,
+ * brand inks, soft highlight + shadow, no outline). Code only, never in the Figma DS. */
+Object.assign(FILLED_ICONS, {
+  /** แต่งตัว — a chubby T-shirt with a soft collar and a little bow. */
+  shirt: (k) => `
+    <path d="M17 7.5l-9.6 4.6a2.6 2.6 0 0 0-1.4 3l1.6 5.3a2.3 2.3 0 0 0 3.1 1.5l2.8-1.2V39a3.5 3.5 0 0 0 3.5 3.5h13.6A3.5 3.5 0 0 0 34.1 39V20.7l2.8 1.2a2.3 2.3 0 0 0 3.1-1.5l1.6-5.3a2.6 2.6 0 0 0-1.4-3L30.6 7.5C29.4 11 27 12.9 23.8 12.9S18.2 11 17 7.5z" ${k('lilac')}/>
+    <ellipse cx="18.6" cy="21" rx="3" ry="5.4" ${k.hl}/>
+    <path d="M17 7.5c1.2 3.5 3.6 5.4 6.8 5.4s5.6-1.9 6.8-5.4l-2.8-1.3c-.9 2.3-2.2 3.5-4 3.5s-3.1-1.2-4-3.5z" ${k('pink')}/>
+    <path d="M7.6 12l-1.6.8a2.6 2.6 0 0 0-1.4 3l1.6 5.3c.3 1 1.1 1.6 2 1.7z" ${k('peri')} opacity=".8"/>
+    <path d="M40.4 12l1.6.8a2.6 2.6 0 0 1 1.4 3l-1.6 5.3c-.3 1-1.1 1.6-2 1.7z" ${k('peri')} opacity=".8"/>
+    <path d="M23.8 25.5c-2-2.6-6-2.8-6 0v3.6c0 2.8 4 2.6 6 0 2 2.6 6 2.8 6 0v-3.6c0-2.8-4-2.6-6 0z" ${k('pink')}/>
+    <circle cx="23.8" cy="27.3" r="2" ${k('plum')}/>`,
+
+  /** ถาดอาหาร — a round tray with an onigiri and a cupcake. */
+  tray: (k) => `
+    <path d="M14.5 6.5c2.2 0 9.5 9.8 9.5 14.6 0 3.1-2 4.4-9.5 4.4S5 24.2 5 21.1C5 16.3 12.3 6.5 14.5 6.5z" ${k('lavender')}/>
+    <ellipse cx="11.6" cy="14.6" rx="1.8" ry="3.4" ${k.hl} transform="rotate(30 11.6 14.6)"/>
+    <rect x="10" y="18" width="9" height="7.5" rx="1.6" ${k('teal')}/>
+    <path d="M27.5 18.5h15l-2.2 9h-10.6z" ${k('peri')}/>
+    <path d="M26.2 19c0-5.4 3.9-9 8.8-9s8.8 3.6 8.8 9z" ${k('pink')}/>
+    <circle cx="35" cy="7.6" r="2.6" ${k('plum')}/>
+    <ellipse cx="31" cy="13.6" rx="2.4" ry="1.3" ${k.hl} transform="rotate(-25 31 13.6)"/>
+    <rect x="2.5" y="26" width="43" height="9.5" rx="4.75" ${k('blue')}/>
+    <rect x="8" y="34.5" width="32" height="6.5" rx="3.25" ${k('lilac')} opacity=".9"/>
+    <ellipse cx="12.5" cy="28.9" rx="6" ry="1.6" ${k.hl}/>`,
+});
+
 /* ---- S5 filled symbols. NEW, waiting for owner approval (board: design/ui/icon-samples-s5.html). ----
  * Same rules as S4: chunky soft forms, no outline, brand inks, soft highlight + shadow. Faces use
  * FACE ink (#252941) dots and arcs only, like the characters. Pose icons take their ink from
