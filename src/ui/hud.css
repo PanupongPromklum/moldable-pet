@@ -45,6 +45,12 @@
 .mp-hud .mp-hit { pointer-events: auto; }
 .mp-num { font-family: var(--mp-font-en); font-variant-numeric: tabular-nums; }
 .mp-ico { display: block; flex-shrink: 0; }
+/* Clay-tube icons on solid primary / disabled buttons: the tube takes the button's text colour. */
+.mp-btn-primary .mp-tico .t-tube, .mp-ctx--primary .mp-tico .t-tube, .mp-btn-primary:disabled .mp-tico .t-tube { stroke: currentColor; }
+.mp-btn-primary .mp-tico .t-fill, .mp-ctx--primary .mp-tico .t-fill { fill: currentColor; stroke: currentColor; opacity: .28; }
+.mp-btn-primary .mp-tico .t-hl, .mp-ctx--primary .mp-tico .t-hl { display: none; }
+.mp-btn-primary .mp-tico, .mp-ctx--primary .mp-tico { color: currentColor !important; }
+@media (forced-colors: active) { .mp-tico .t-tube { stroke: CanvasText; } .mp-tico .t-fill, .mp-tico .t-hl { display: none; } }
 
 /* ---------- centred column ---------- */
 .mp-col {

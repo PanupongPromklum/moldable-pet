@@ -97,10 +97,42 @@ export const FOOD_ICONS = {
  * @param {number} [size=24] rendered size in px
  * @returns {string} `<svg>` markup, decorative (aria-hidden)
  */
-export function icon(name, size = 24) {
+export function icon(name, size = 24, opts = {}) {
+  // Owner 2026-11-07: no outline icons in the game. A hand-drawn filled symbol wins; every other
+  // icon is drawn as a Moldable "clay tube" graphic (tubeIcon). `opts.line` keeps the old outline (docs only).
+  if (!opts.line && FILLED_ICONS[name] && !TUBE_PREFERRED.has(name)) return filledIcon(name, Math.round(size * 1.15));
   const body = LINE_ICONS[name];
   if (!body) return '';
+  if (!opts.line) return tubeIcon(body, size, TUBE_FILL.has(name));
   return `<svg class="mp-ico" width="${size}" height="${size}" viewBox="0 0 24 24" ${LINE_ATTR} aria-hidden="true" focusable="false">${body}</svg>`;
+}
+
+/** Icons whose shapes are closed, so they get a soft gradient body under the tube. */
+const TUBE_FILL = new Set(['mic', 'stop', 'camera', 'camera-off', 'flush', 'lock', 'eye', 'eye-off', 'shirt', 'none', 'heart',
+  'star', 'timer', 'lamp', 'lamp-off', 'sparkle', 'send', 'keyboard', 'chat', 'shield', 'echo', 'sofa', 'coin', 'gear', 'head-tilt']);
+/** Small glyphs that read better as tubes than as the big filled symbol of the same name. */
+const TUBE_PREFERRED = new Set(['keyboard']);
+let tubeSeq = 0;
+
+/**
+ * Moldable "clay tube" icon: the 24-grid line drawing rendered as chunky rounded tubes in the brand
+ * gradient (like the Typography "A" in the Moldable style guide), closed shapes filled with a soft
+ * pastel gradient, a glossy highlight and a soft drop shadow. No dark outline. Colours come from
+ * `--mp-tube-*` tokens (light/dark); on primary buttons CSS switches the tube to `currentColor`.
+ * @param {string} body inner SVG of a LINE_ICONS entry
+ * @param {number} size px
+ * @param {boolean} fill give closed shapes a soft body
+ */
+export function tubeIcon(body, size = 24, fill = false) {
+  const u = `mpt${++tubeSeq}`;
+  const stop = (o, v, d) => `<stop offset="${o}" style="stop-color:var(${v},${d})"/>`;
+  const defs = `<defs><linearGradient id="${u}-s" x1="0" y1="0" x2="1" y2="1">${stop(0, '--mp-tube-a', '#6E7DC4')}${stop(0.55, '--mp-tube-b', '#9C74B8')}${stop(1, '--mp-tube-c', '#C9779F')}</linearGradient>`
+    + `<linearGradient id="${u}-f" x1=".2" y1="0" x2=".6" y2="1">${stop(0, '--mp-tube-fa', '#E4E9FA')}${stop(1, '--mp-tube-fb', '#F3D9E8')}</linearGradient>`
+    + `<filter id="${u}-sh" x="-25%" y="-25%" width="150%" height="160%"><feDropShadow dx="0" dy=".7" stdDeviation=".6" style="flood-color:var(--mp-fico-shadow,#252941);flood-opacity:var(--mp-fico-shadow-a,.2)"/></filter></defs>`;
+  const fillLayer = fill ? `<g class="t-fill" fill="url(#${u}-f)" stroke="url(#${u}-f)" stroke-width="2.2" stroke-linejoin="round">${body}</g>` : '';
+  return `<svg class="mp-ico mp-tico" width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" aria-hidden="true" focusable="false" style="color:var(--mp-tube-a,#6E7DC4)">${defs}`
+    + `<g filter="url(#${u}-sh)">${fillLayer}<g class="t-tube" fill="none" stroke="url(#${u}-s)" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round">${body}</g>`
+    + `<g class="t-hl" fill="none" stroke="#FFFFFF" stroke-opacity=".45" stroke-width=".6" stroke-linecap="round" stroke-linejoin="round" transform="translate(-.35 -.45)">${body}</g></g></svg>`;
 }
 
 /**
@@ -150,7 +182,13 @@ export const ACCESSORY_ICONS = {
  */
 export function accessoryIcon(id, size = 40) {
   const body = ACCESSORY_ICONS[id] || `<circle cx="12" cy="12" r="7" ${F('b')}/>`;
-  return `<svg class="mp-acc-ico" width="${size}" height="${size}" viewBox="0 0 24 24" ${LINE_ATTR} aria-hidden="true" focusable="false">${body}</svg>`;
+  // Owner 2026-11-07: graphic, not outline — bodies at full fill, edges as thin brand-gradient tubes, soft shadow.
+  const u = `mpa${++tubeSeq}`;
+  const st = (o, v, d) => `<stop offset="${o}" style="stop-color:var(${v},${d})"/>`;
+  return `<svg class="mp-acc-ico" width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="url(#${u}-s)" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false" style="--mp-acc-fill-opacity:1">`
+    + `<defs><linearGradient id="${u}-s" x1="0" y1="0" x2="1" y2="1">${st(0, '--mp-tube-a', '#6E7DC4')}${st(1, '--mp-tube-c', '#C9779F')}</linearGradient>`
+    + `<filter id="${u}-sh" x="-25%" y="-25%" width="150%" height="160%"><feDropShadow dx="0" dy=".7" stdDeviation=".6" style="flood-color:var(--mp-fico-shadow,#252941);flood-opacity:var(--mp-fico-shadow-a,.2)"/></filter></defs>`
+    + `<g filter="url(#${u}-sh)">${body}</g></svg>`;
 }
 
 /** Names of all new line icons (for the icon sheet / demo). */

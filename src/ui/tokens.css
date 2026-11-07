@@ -82,6 +82,9 @@
 
   /* ---- S4 filled Moldable icons (owner-approved 2026-11-07, live on the HUD) — inks live in icons.js FILLED_INKS ---- */
   --mp-fico-shadow: #252941;        /* [approved 2026-11-07] soft drop shadow under filled icons */
+  /* Clay-tube icons (owner 2026-11-07: no outline icons). Tube = brand gradient darkened for 3:1 on light panels. */
+  --mp-tube-a: #6E7DC4; --mp-tube-b: #9C74B8; --mp-tube-c: #C9779F;
+  --mp-tube-fa: #E4E9FA; --mp-tube-fb: #F3D9E8;
   --mp-fico-shadow-a: 0.2;          /* [approved 2026-11-07] */
   --mp-fico-low-opacity: 0.6;       /* [approved 2026-11-07] low state: icon fades … */
   --mp-fico-low-saturate: 0.45;     /* [approved 2026-11-07] … and loses colour; the pink edge comes from the meter ring */
@@ -206,6 +209,8 @@
   --mp-acc-fill-opacity: 0.7;
 
   --mp-fico-shadow: #000000;        /* [approved 2026-11-07] */
+  --mp-tube-a: #B4BEF2; --mp-tube-b: #D1AEE3; --mp-tube-c: #F0AECB;
+  --mp-tube-fa: #4A4F7A; --mp-tube-fb: #5E4766;
   --mp-fico-shadow-a: 0.5;          /* [approved 2026-11-07] */
   --mp-fico-low-opacity: 0.65;      /* [approved 2026-11-07] dark needs less fade, or the icon turns grey */
   --mp-fico-low-ground: #3A2E33;    /* [approved 2026-11-07] faint pink on #2C2C2C instead of #731412 (faded icons went muddy on it); #FFD1D1 edge 9.9:1 */
