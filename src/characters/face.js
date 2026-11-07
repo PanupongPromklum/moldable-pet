@@ -32,11 +32,14 @@ export const superD = (dx, dy, a, b, p) => Math.pow(Math.pow(Math.abs(dx) / a, p
  * @param {object} E eye data from SHAPES
  * @param {number} S eye scale
  * @param {number} i eye index 0/1
- * @param {object} st { eye, pupil, lidCurve, lidU[], lidL[], tilt[], arc[], blink, lx, ly }
+ * @param {object} st { eye, pupil, lidCurve, lidU[], lidL[], tilt[], arc[], blink, lx, ly } and optional
+ *   off[i] = [x, y] (eye centre offset inside the decal, body units; growth transition) and glint 0..1
+ *   (soft white catchlight on the pupil; the `cuddly` trait mark, S5-02)
  */
 export function drawEye(g, TEX, BOX, E, S, i, st) {
   g.setTransform(1, 0, 0, 1, 0, 0); g.clearRect(0, 0, TEX, TEX);
   g.translate(TEX / 2, TEX / 2); g.scale(TEX / BOX, -TEX / BOX);
+  const off = st.off && st.off[i]; if (off) g.translate(off[0], off[1]);
   const w = E.w * S * st.eye, h = E.h * S * st.eye;
   let lu = st.lidU[i], ll = st.lidL[i]; const sum = lu + ll;
   if (sum > .8) { const f = lerp(sum, 1, clamp((sum - .8) / .1, 0, 1)) / sum; lu *= f; ll *= f; }
@@ -54,7 +57,13 @@ export function drawEye(g, TEX, BOX, E, S, i, st) {
   if (E.clip) { g.save(); superPath(g, w, h, E.p); g.clip(); }
   const lim = E.clip ? 1.2 : 2.2;
   g.save(); g.translate(clamp(st.lx, -lim, lim) * w * .5, clamp(st.ly, -lim, lim) * h * .5); g.rotate(E.prot);
-  g.fillStyle = INK; g.beginPath(); g.ellipse(0, 0, E.pw * w * st.pupil, E.ph * h * st.pupil, 0, 0, Math.PI * 2); g.fill(); g.restore();
+  g.fillStyle = INK; g.beginPath(); g.ellipse(0, 0, E.pw * w * st.pupil, E.ph * h * st.pupil, 0, 0, Math.PI * 2); g.fill();
+  if (st.glint > .01) {
+    const pr = Math.min(E.pw * w, E.ph * h) * st.pupil;
+    g.fillStyle = WHITE; g.beginPath(); g.arc(E.pw * w * st.pupil * .34, E.ph * h * st.pupil * .36, pr * .36 * st.glint, 0, Math.PI * 2); g.fill();
+    g.globalAlpha = .85; g.beginPath(); g.arc(-E.pw * w * st.pupil * .3, -E.ph * h * st.pupil * .34, pr * .15 * st.glint, 0, Math.PI * 2); g.fill(); g.globalAlpha = 1;
+  }
+  g.restore();
   if (E.clip) g.restore();
   g.restore();
   const W = Math.max(w, h) * 2.4, c = st.lidCurve;

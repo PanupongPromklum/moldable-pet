@@ -7,7 +7,11 @@
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Prompt:wght@400;500&family=Poppins:wght@400;500&display=swap">
 <style>
 /* Visual test bench for src/characters (stories S1-02, S2-06 outfits). Not shipped.
-   ?sheet=head,eyes,body renders a 3×2 contact sheet of all six characters wearing that outfit. */
+   ?sheet=head,eyes,body renders a 3×2 contact sheet of all six characters wearing that outfit.
+   ?bench exposes window.renderCells(cells, cols, rows) (S5-02 growth / trait marks / mimic poses):
+   each cell { key, outfit?, growth?, trait?, expr?, action?, actionT?, pose?, label?, dist? }. */
+#labels { position: fixed; inset: 0; pointer-events: none; font-family: "Prompt", "Poppins", system-ui, sans-serif; }
+#labels div { position: absolute; font-size: 15px; color: #4a4d66; text-align: center; padding-top: 8px; }
 :root { --bg: #f4f3f9; --ink: #1f2130; --muted: #6b6e85; --chip: #ffffff; --line: #e3e2ee; --primary: #5A68B5; }
 * { box-sizing: border-box; }
 html, body { margin: 0; height: 100%; background: var(--bg); color: var(--ink); font-family: "Prompt", "Poppins", system-ui, sans-serif; }
@@ -25,6 +29,7 @@ label { font-size: 13px; display: flex; align-items: center; gap: 6px; }
 </head>
 <body>
 <div id="stage"></div>
+<div id="labels"></div>
 <div id="info"></div>
 <div id="ui">
   <div class="row" id="chars"><b>ตัวละคร</b></div>
@@ -37,6 +42,9 @@ label { font-size: 13px; display: flex; align-items: center; gap: 6px; }
     <label>mouth <input id="mouth" type="range" min="-0.05" max="1" step="0.05" value="-0.05"></label>
     <label>squish <input id="squish" type="range" min="0" max="0.45" step="0.01" value="0"></label>
   </div>
+  <div class="row" id="growth"><b>ขั้น (growth, S5-02)</b></div>
+  <div class="row" id="traits"><b>นิสัย (trait mark)</b></div>
+  <div class="row" id="mimic"><b>จำท่าทาง (mimic poses)</b></div>
   <div class="row" id="slot-head"><b>หัว (head)</b></div>
   <div class="row" id="slot-eyes"><b>ตา (eyes)</b></div>
   <div class="row" id="slot-body"><b>ตัว (body)</b></div>
@@ -51,7 +59,15 @@ label { font-size: 13px; display: flex; align-items: center; gap: 6px; }
 <script type="module">
 import * as THREE from 'three';
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
-import { createCharacter, CHARACTER_KEYS, EXPRESSION_KEYS, ACTION_KEYS, ACCESSORY_IDS, SLOT_OF, SLOTS, ACCESSORY_TH } from '../../src/characters/character.js';
+import { createCharacter, CHARACTER_KEYS, EXPRESSION_KEYS, ACTION_KEYS, ACCESSORY_IDS, SLOT_OF, SLOTS, ACCESSORY_TH, TRAIT_MARK_IDS, TRAIT_MARK_TH, MIMIC_POSES } from '../../src/characters/character.js';
+
+/** Stage proportions from the growth GDD 3.2 (the game reads them from assets/data/growth.json). */
+const STAGES = {
+  baby:  { scale: .70, eyeScale: 1.30, roundness: 1.08, jiggle: 1.30, hopScale: .70 },
+  kid:   { scale: .85, eyeScale: 1.12, roundness: 1.03, jiggle: 1.15, hopScale: .90 },
+  grown: { scale: 1, eyeScale: 1, roundness: 1, jiggle: 1, hopScale: 1 },
+};
+window.STAGES = STAGES;
 
 const stageEl = document.getElementById('stage');
 const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true, preserveDrawingBuffer: true });
@@ -77,6 +93,7 @@ floor.rotation.x = -Math.PI / 2; scene.add(floor);
 const sheetQ = new URLSearchParams(location.search).get('sheet');
 let pet = null, carried = false, sitting = false, talking = false;
 let outfit = { head: null, eyes: null, body: null };
+let stageNow = 'grown', traitNow = null;
 const slotBtns = { head: {}, eyes: {}, body: {} };
 const btn = (parent, label, on) => { const b = document.createElement('button'); b.type = 'button'; b.textContent = label; b.onclick = on; document.getElementById(parent).appendChild(b); return b; };
 const charBtns = {}, exprBtns = {};
@@ -85,6 +102,7 @@ function setChar(k) {
   pet = createCharacter(k); scene.add(pet.object3d);
   hemi.color.copy(pet.lightTint.sky); hemi.groundColor.copy(pet.lightTint.ground);
   pet.setCarried(carried); pet.setSitting(sitting); pet.setOutfit(outfit);
+  pet.setGrowth(STAGES[stageNow]); pet.setTraitMark(traitNow);
   for (const [kk, b] of Object.entries(charBtns)) b.setAttribute('aria-pressed', kk === k);
   for (const [kk, b] of Object.entries(exprBtns)) b.setAttribute('aria-pressed', kk === 'original');
   window.pet = pet;
@@ -92,6 +110,10 @@ function setChar(k) {
 for (const k of CHARACTER_KEYS) charBtns[k] = btn('chars', k, () => setChar(k));
 for (const k of EXPRESSION_KEYS) exprBtns[k] = btn('exprs', k, () => { pet.setExpression(k); for (const [kk, b] of Object.entries(exprBtns)) b.setAttribute('aria-pressed', kk === k); });
 for (const a of ACTION_KEYS) btn('acts', a, () => pet.play(a));
+for (const st of Object.keys(STAGES)) btn('growth', st, () => { stageNow = st; pet.setGrowth(STAGES[st], { transitionSec: 2.5 }); });
+btn('traits', '—', () => { traitNow = null; pet.setTraitMark(null); });
+for (const t of TRAIT_MARK_IDS) btn('traits', TRAIT_MARK_TH[t], () => { traitNow = t; pet.setTraitMark(t); });
+for (const m of MIMIC_POSES) btn('mimic', m.label, () => { pet.setExpression(m.expression); pet.play(m.action); });
 function markSlots() { for (const s of SLOTS) for (const [id, b] of Object.entries(slotBtns[s])) b.setAttribute('aria-pressed', String(id === String(outfit[s]))); }
 for (const s of SLOTS) {
   slotBtns[s].null = btn('slot-' + s, '—', () => { outfit[s] = null; pet.setOutfit({ [s]: null }); markSlots(); });
@@ -168,8 +190,51 @@ function runSheet(q) {
   window.__ready = true;
 }
 
+/**
+ * Bench: render cells (cols × rows) of characters in given states, frozen mid-action if asked.
+ * All cells share one camera distance per call, so growth stages compare at true size.
+ */
+function renderCells(cells, cols, rows, o = {}) {
+  document.getElementById('ui').style.display = 'none'; info.style.display = 'none';
+  floor.visible = o.floor ?? true;
+  const pets = cells.map((c) => {
+    const p = createCharacter(c.key, { idle: false });
+    if (c.growth) p.setGrowth(typeof c.growth === 'string' ? STAGES[c.growth] : c.growth);
+    if (c.outfit) p.setOutfit(c.outfit);
+    if (c.trait) p.setTraitMark(c.trait);
+    if (c.expr) p.setExpression(c.expr);
+    if (c.pose === 'sit') p.setSitting(true); if (c.pose === 'carry') p.setCarried(true);
+    if (c.mouth != null) p.setMouthOpen(c.mouth);
+    scene.add(p.object3d);
+    let t = 0; for (let i = 0; i < 100; i++) { t += 1 / 60; p.update(1 / 60, t); }
+    if (c.action) { const d = p.play(c.action); const n = Math.round((c.actionT ?? .3) * d * 60); for (let i = 0; i < n; i++) { t += 1 / 60; p.update(1 / 60, t); } }
+    if (c.after) { c.after(p); }
+    return p;
+  });
+  const W = innerWidth, H = innerHeight, cw = W / cols, ch = H / rows;
+  renderer.setSize(W, H, false); renderer.setScissorTest(true);
+  const cam = new THREE.PerspectiveCamera(30, cw / ch, .1, 60);
+  const d = o.dist ?? 7.4, ty = o.lookY ?? 1.0;
+  cam.position.set(0, ty + .15, d); cam.lookAt(0, ty, 0);
+  const lab = document.getElementById('labels'); lab.innerHTML = '';
+  renderer.setClearColor(0xf4f3f9, 1); renderer.clear();
+  pets.forEach((p, i) => {
+    pets.forEach(q => { q.object3d.visible = q === p; });
+    hemi.color.copy(p.lightTint.sky); hemi.groundColor.copy(p.lightTint.ground);
+    const cx = (i % cols) * cw, cy = (rows - 1 - Math.floor(i / cols)) * ch;
+    renderer.setViewport(cx, cy, cw, ch); renderer.setScissor(cx, cy, cw, ch);
+    renderer.render(scene, cam);
+    if (cells[i].label) { const el = document.createElement('div'); el.textContent = cells[i].label; el.style.left = cx + 'px'; el.style.top = (H - cy - ch) + 'px'; el.style.width = cw + 'px'; lab.appendChild(el); }
+  });
+  const out = pets.map(p => ({ key: p.key, growth: p.getGrowth(), trait: p.getTraitMark(), outfit: p.getOutfit(), height: p.height }));
+  window.__cells = pets;
+  return out;
+}
+window.renderCells = renderCells;
+
 const clock = new THREE.Clock();
-if (sheetQ !== null) runSheet(sheetQ);
+if (new URLSearchParams(location.search).has('bench')) { window.__ready = true; }
+else if (sheetQ !== null) runSheet(sheetQ);
 else { setChar('flower'); renderer.setAnimationLoop(loop); }
 function loop() {
   const dt = clock.getDelta(), t = clock.elapsedTime;
@@ -180,6 +245,7 @@ function loop() {
   renderer.render(scene, camera);
 }
 if (sheetQ === null) window.__ready = true;
+window.THREE = THREE;
 </script>
 </body>
 </html>

@@ -36,6 +36,7 @@ const smooth = (a, b, x) => { const t = Math.min(1, Math.max(0, (x - a) / (b - a
  *   getPet: () => object|null, getRoom: () => object|null, getRoomId: () => string|null,
  *   createFoodMesh: (id: string) => THREE.Object3D,
  *   onNeedsChanged?: () => void,
+ *   onCare?: (event: string) => void,   // growth tally (growth GDD 3.4): eat / eatLike / flush
  * }} deps
  */
 export function createCare(deps) {
@@ -122,6 +123,7 @@ export function createCare(deps) {
     const res = eatFood(game.needs(), foodId, key, data.foods, data.needs);
     if (res.outcome === 'eaten') { game.setLevels(res.levels); onNeedsChanged?.(); }
     const kind = res.kind || 'ok';
+    if (res.outcome === 'eaten') deps.onCare?.(kind === 'like' ? 'eatLike' : 'eat');
     const fr = data.personas[key]?.foodReaction?.[kind];
     pet?.play('gulp'); sfx.play('gulp');
     timers.after(0.35, () => {
@@ -255,6 +257,7 @@ export function createCare(deps) {
     syncControls();   // button goes away at once: it cannot be pressed twice
     sfx.play('flush');
     const res = flushToilet(game.needs(), data.needs);
+    deps.onCare?.('flush');
     game.setLevels(res.levels); onNeedsChanged?.();
     mood.say('flush', true);
     if (res.relieved) timers.after(Math.min(1, d * 0.6), () => { mood.say('relieved', true); mood.react('joy', 1.6); }, 'toilet');

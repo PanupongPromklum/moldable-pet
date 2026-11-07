@@ -96,7 +96,7 @@ def run(pw, label, viewport, touch):
     page.route('**/*', route)
     page.goto(URL)
     check('boot ok', boot(page))
-    check('new save is v4 with furniture defaults', S(page, "M.game.save.version === 4 && M.game.furniture('living').corner === 'plant-pot' && M.game.owned.includes('plant-pot')"))
+    check('new save is v4 with furniture defaults', S(page, "M.game.save.version >= 4 && M.game.furniture('living').corner === 'plant-pot' && M.game.owned.includes('plant-pot')"))
     S(page, "M.selectCharacter('flower')")
     check('living baked', baked_room(page, 'living'), json.dumps(bake(page)))
     check('no horizontal scroll', page.evaluate('document.documentElement.scrollWidth <= innerWidth'))
@@ -177,7 +177,7 @@ def run(pw, label, viewport, touch):
     S(page, 'M.game.persist()')
     page.reload()
     check('reload boots', boot(page))
-    check('furniture persists after reload', S(page, "M.game.save.version === 4 && M.rooms.room.furniture.corner === 'xmas-tree' && M.rooms.room.furniture.side === 'fireplace-xmas' && M.game.owned.includes('xmas-tree')"),
+    check('furniture persists after reload', S(page, "M.game.save.version >= 4 && M.rooms.room.furniture.corner === 'xmas-tree' && M.rooms.room.furniture.side === 'fireplace-xmas' && M.game.owned.includes('xmas-tree')"),
           json.dumps(S(page, 'M.rooms.room.furniture')))
     check('outfit persists after reload', S(page, "M.game.outfit().head === 'hat-santa'"))
     check('baked after reload', baked_room(page, 'living'))

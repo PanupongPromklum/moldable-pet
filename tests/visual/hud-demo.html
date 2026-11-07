@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="color-scheme" content="only light">
-<title>HUD demo — Moldable Pet (S1-04, S2, S3, S4)</title>
+<title>HUD demo — Moldable Pet (S1-04 … S5-05)</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Prompt:wght@400;500;600&family=Poppins:wght@400;500;600&display=swap">
@@ -77,6 +77,15 @@
   <button data-a="game">มินิเกม ฝนขนม (การ์ดเลือกวิธีเล่น)</button>
   <button data-a="theme">สลับไฟ (light / dark)</button>
   <button data-a="camfail">กล้องใช้ไม่ได้ → กลับเป็นนิ้ว</button>
+  <b>S5</b>
+  <button data-a="picker">ชีตเลือกเกม</button>
+  <button data-a="grow">การ์ดโตขึ้น → นิสัย → drift</button>
+  <button data-a="talk">คุย: ฟัง → คิด → ตอบ + caption</button>
+  <button data-a="hints">คำใบ้ "ลองพูดว่า"</button>
+  <button data-a="notice">ประกาศความเป็นส่วนตัว</button>
+  <button data-a="micsheet">ชีตเลือกวิธีคุย (กดค้างไมค์)</button>
+  <button data-a="type">ช่องพิมพ์คุย</button>
+  <button data-a="follow">pulseFollowUp (วน)</button>
 </div>
 
 <script type="module">
@@ -104,11 +113,22 @@ const PRESETS = [
   { hunger: 1, toilet: 1, fun: 1, social: 1 },
   { hunger: 0.05, toilet: 0.18, fun: 0.4, social: 0.9 },
 ];
-const MICS = ['off', 'listening', 'recording', 'playing'];
+const MICS = ['off', 'listening', 'recording', 'playing', 'thinking'];
+// S5 growth fields per character (as wire passes them to showSelect / setCharacter)
+const GROWTH = {
+  splat: { stage: 'baby', stageLabel: 'ก้อนจิ๋ว', progress: 0.35, hint: '' },
+  gumdrop: { stage: 'kid', stageLabel: 'ก้อนซน', progress: 0.5, hint: 'ดูท่าจะเป็นนักกินนะ…' },
+  diamond: { stage: 'grown', stageLabel: 'ก้อนโต', progress: 1, traitLabel: 'สายแฟ', hint: '' },
+  cloud: { stage: 'kid', stageLabel: 'ก้อนซน', progress: 0.9, hint: 'ดูท่าจะร่าเริงนะ…' },
+  flower: { stage: 'kid', stageLabel: 'ก้อนซน', progress: 0.62, hint: 'ดูท่าจะเป็นสายขี้อ้อนนะ…' },
+};
+const growChars = () => CHARS.map((c) => (c.locked ? c : { ...c, ...(GROWTH[c.key] || {}) }));
 const CAMS = ['off', 'loading', 'on', 'error'];
 
 let WARD = { slots: {}, items: [] };
 try { WARD = await (await fetch('../../assets/data/wardrobe.json')).json(); } catch { /* demo keeps going */ }
+let MG = {};
+try { MG = await (await fetch('../../assets/data/minigames.json')).json(); } catch { /* demo keeps going */ }
 let FURN = { rooms: {}, items: [], themes: {} };
 try { FURN = await (await fetch('../../assets/data/furniture.json')).json(); } catch { /* demo keeps going */ }
 
@@ -142,6 +162,8 @@ const s = { room: HUD_ROOMS.indexOf(q.get('room')) >= 0 ? q.get('room') : 'livin
   coins: 240, toilet: 'idle', coach: false, char: CHARS[5], needs: { ...PRESETS[0] }, best: 38,
   theme: 'light', control: q.get('ctl') || 'touch',
   owned: WARD.items.filter((i) => i.starter).map((i) => i.id), outfit: { head: null, eyes: 'glasses-round', body: null }, game: null,
+  gameId: q.get('pick') || 'snackRain', lastGame: 'mimic', bests: { snackRain: 214, mimic: 70, bubbles: 0, hop: 132 },
+  relaxed: {}, firstPlay: { bubbles: true, hop: true }, talkMode: q.get('talk') === 'echo' ? 'echo' : 'talk', noticeSeen: false,
   furniture: Object.fromEntries(Object.keys(FURN.rooms).map((r) => [r, Object.fromEntries(FURN.items.filter((x) => x.room === r && x.default).map((x) => [x.slot, x.id]))])),
   preview: {}, thumbsLate: q.get('thumbs') === 'late' || q.get('thumbs') === 'none' };
 if (q.get('coins')) s.coins = +q.get('coins');
@@ -174,18 +196,22 @@ const hud = createHUD(document.getElementById('hud'), {
     applyRoom();
   },
   onAction(id) {
-    if (id === 'play') openIntro();
+    if (id === 'play') { stopGame(); openPicker(); }
     if (id === 'flush') { s.needs.toilet = 1; hud.setNeeds(s.needs); s.toilet = 'idle'; hud.setFlushVisible(false); hud.say('โล่งเลย'); }
   },
-  onMic() { s.mic = s.mic === 0 ? 1 : 0; hud.setMic(MICS[s.mic]); },
+  onMic() {
+    if (s.talkMode === 'echo') { s.mic = s.mic === 0 ? 1 : 0; hud.setMic(MICS[s.mic]); return; }
+    if (!s.noticeSeen) { hud.showTalkNotice({ name: s.char.name }); return; }
+    talkTurn();
+  },
   onCamera() {
     if (CAMS[s.cam] === 'on') { s.cam = 0; hud.setCamera('off'); return; }
     s.cam = 1; hud.setCamera('loading');
     setTimeout(() => { s.cam = 2; hud.setCamera('on'); }, 1200);
   },
   onCameraView(hidden) { s.camHidden = hidden; hud.setCameraView(hidden); },
-  onCharacterChip() { hud.showSelect(CHARS, s.char.key); },
-  onSelect(key) { s.char = CHARS.find((c) => c.key === key); hud.setCharacter(s.char); pet.src = `../../assets/ui/characters/${PORTRAIT[key]}.png`; hud.hideSelect(); hud.say(`สวัสดี ${s.char.name}เอง`); },
+  onCharacterChip() { hud.showSelect(growChars(), s.char.key); },
+  onSelect(key) { s.char = growChars().find((c) => c.key === key); hud.setCharacter(s.char); pet.src = `../../assets/ui/characters/${PORTRAIT[key]}.png`; hud.hideSelect(); hud.say(`สวัสดี ${s.char.name}เอง`); },
   onWardrobe() { hud.showWardrobe(wardData()); },
   onEquip(slot, id) { s.outfit = { ...s.outfit, [slot]: id }; hud.updateWardrobe({ outfit: s.outfit }); if (id) hud.say('สวยไหม'); },
   onBuy(id) {
@@ -207,7 +233,20 @@ const hud = createHUD(document.getElementById('hud'), {
     showFurn(id);
   },
   onDecorClose() { s.preview = {}; furnEl.style.display = 'none'; },
-  onMinigameExit() { stopGame(); hud.endMinigame(); },
+  onMinigameExit() { stopGame(); stopMimic(); hud.endMinigame(); },
+  // ---- S5 ----
+  onMinigamePick(id) { s.gameId = id; s.lastGame = id; openIntro(); },
+  onMinigamePickerClose() { hud.say('ไว้เล่นกันทีหลังนะ'); },
+  onMinigameOther() { stopGame(); stopMimic(); hud.endMinigame(); openPicker(); },
+  onMinigameRelaxed(on) { s.relaxed[s.gameId] = on; },
+  onMimicPad(id) { if (q.get('game') !== 'mimic-states') hud.flashMimicPad(id, Math.random() < 0.8 ? 'ok' : 'wrong'); },
+  onGrowthCardClose() { hud.say('ขอบคุณที่เลี้ยงนะ'); },
+  onTalkNoticeOk() { s.noticeSeen = true; talkTurn(); },
+  onTalkNoticeEcho() { s.noticeSeen = true; s.talkMode = 'echo'; hud.setTalkMode('echo'); hud.toast('ใช้พูดตามแทนนะ', 2500); },
+  onTalkNoticeClose() {},
+  onTalkMode(m) { s.talkMode = m; hud.toast(m === 'talk' ? 'เปลี่ยนเป็นคุยกันแล้ว' : 'เปลี่ยนเป็นพูดตามแล้ว', 2500); },
+  onTypeSend(text) { hud.caption(text, 2000); setTimeout(() => { hud.say(reply(text)); if (/หิว|กิน/.test(text)) hud.pulseFollowUp('kitchen'); }, 300); },
+  onTypeClose() {},
   onMinigameAgain() { startGame(); },
   onMinigameControl(id) { s.control = id; },
   onMinigameReady() { startGame(); },
@@ -239,7 +278,39 @@ const CONTROLS = [
   { id: 'touch', label: 'นิ้ว / เมาส์', hint: 'ลากนิ้วหรือขยับเมาส์ซ้ายขวา' },
   { id: 'head', label: 'เอียงหัว', hint: 'ใช้กล้อง เอียงหัวซ้ายขวา' },
 ];
-function openIntro() { stopGame(); hud.showMinigameIntro({ controls: CONTROLS, selected: s.control }); }
+function gameMeta(id) {
+  const b = MG[id] || {};
+  return { id, title: b.title || id, howTo: b.howTo || (id === 'snackRain' ? 'รับขนมที่ตกลงมาให้ได้มากที่สุด' : ''), controls: b.controls || ['touch', 'head'] };
+}
+function openPicker() {
+  const order = (MG.picker && MG.picker.order) || ['snackRain', 'mimic', 'bubbles', 'hop'];
+  const fav = MG.picker && MG.picker.favorites && MG.picker.favorites[s.char.key];
+  hud.showMinigamePicker({
+    charName: s.char.name,
+    games: order.map((id) => ({ ...gameMeta(id), best: s.bests[id] || 0, favorite: id === fav, last: id === s.lastGame })),
+  });
+  hud.say('เล่นอะไรกันดี?');
+}
+function openIntro() {
+  stopGame();
+  const m = gameMeta(s.gameId);
+  const ctl = CONTROLS.filter((c) => m.controls.includes(c.id));
+  hud.showMinigameIntro({ controls: ctl, selected: ctl.some((c) => c.id === s.control) ? s.control : ctl[0].id, title: m.title,
+    howTo: s.gameId === 'snackRain' ? undefined : m.howTo, coach: s.firstPlay[s.gameId] ? 'ครั้งแรก เริ่มช้าๆ ก่อนนะ' : '', relaxed: !!s.relaxed[s.gameId] });
+}
+// Fake talk turn: listening (interim caption) → thinking → reply + caption 2 s.
+function talkTurn() {
+  hud.setMic('listening'); hud.showTalkHints(null);
+  hud.caption('หิว…');
+  setTimeout(() => hud.caption('หิวไหม'), 500);
+  setTimeout(() => { hud.setMic('thinking'); }, 1100);
+  setTimeout(() => { hud.setMic('off'); hud.caption('หิวไหม', 2000); hud.say('หิวว! หม่ำๆ!'); hud.pulseFollowUp('kitchen'); }, 1900);
+}
+function reply(t) { return /เก่ง|น่ารัก/.test(t) ? 'เขินจัง' : /หิว|กิน/.test(t) ? 'หิวว! หม่ำๆ!' : 'อื้อ? เล่าอีกสิ'; }
+const POSES = (MG.mimic && MG.mimic.poses) || [];
+const padsOf = (n) => POSES.slice(0, n).map((p) => ({ id: p.id, label: p.label, icon: p.id, color: p.color }));
+let mimicTimers = [];
+function stopMimic() { mimicTimers.forEach(clearTimeout); mimicTimers = []; }
 
 /** Toilet flow as wire should drive it (S2-03): coach only before sitting; button only while sitting. */
 function applyRoom() {
@@ -257,7 +328,15 @@ async function startGame() {
   const dur = 45;
   const g = s.game = { score: 0, coins: 0, streak: 0, t: dur, timer: 0 };
   hud.hideMinigameIntro();
-  await hud.startMinigame({ title: 'ฝนขนม', durationSec: dur, control: s.control });
+  const m = gameMeta(s.gameId);
+  if (s.gameId === 'mimic') { startMimic(); return; }
+  await hud.startMinigame({ id: s.gameId, title: m.title, durationSec: dur, control: s.control });
+  if (s.gameId === 'bubbles') {
+    const cols = (MG.bubbles && MG.bubbles.colors) || [];
+    let ci = 0;
+    hud.updateMinigame({ call: cols[0] && { color: cols[0].id, label: cols[0].label, pattern: cols[0].pattern } });
+    g.callTimer = setInterval(() => { ci = (ci + 1) % cols.length; hud.updateMinigame({ call: { color: cols[ci].id, label: cols[ci].label, pattern: cols[ci].pattern } }); }, 7000);
+  }
   if (s.game !== g) return;
   g.timer = setInterval(() => {
     g.t = Math.max(0, g.t - 0.5);
@@ -267,18 +346,30 @@ async function startGame() {
     if (g.t <= 0) endRound();
   }, 500);
 }
+async function startMimic() {
+  stopMimic();
+  await hud.startMinigame({ id: 'mimic', title: gameMeta('mimic').title, durationSec: 75, control: 'touch' });
+  hud.showMimicPads(padsOf(4));
+  hud.updateMinigame({ round: 2, slips: 0, sequence: { length: 2, done: 0, phase: 'watch' } });
+  const seq = ['smile', 'wink'];
+  seq.forEach((id, i) => mimicTimers.push(setTimeout(() => hud.flashMimicPad(id, 'demo'), 400 + i * 700)));
+  mimicTimers.push(setTimeout(() => { hud.setMimicPadsEnabled(true); hud.updateMinigame({ sequence: { length: 2, done: 0, phase: 'repeat' } }); }, 400 + seq.length * 700));
+}
 function endRound() {
   const g = s.game; if (!g) return;
-  clearInterval(g.timer);
+  clearInterval(g.timer); clearInterval(g.callTimer);
   s.best = Math.max(s.best, g.score);
+  s.bests[s.gameId] = Math.max(s.bests[s.gameId] || 0, g.score);
   hud.showMinigameResult({ score: g.score, best: s.best, coins: g.coins });
   hud.setCoins(s.coins += g.coins);
 }
-function stopGame() { if (s.game) clearInterval(s.game.timer); s.game = null; }
+function stopGame() { if (s.game) { clearInterval(s.game.timer); clearInterval(s.game.callTimer); } s.game = null; }
 
 applyTheme(q.get('theme') === 'dark' ? 'dark' : 'light');
 hud.setFoods(FOODS);
+s.char = growChars().find((c) => c.key === s.char.key);
 hud.setCharacter(s.char);
+if (s.talkMode === 'echo') hud.setTalkMode('echo');
 pet.src = `../../assets/ui/characters/${PORTRAIT[s.char.key]}.png`;
 hud.setCoins(s.coins);
 hud.setNeeds(s.needs);
@@ -289,7 +380,7 @@ if (q.get('cam')) { s.cam = CAMS.indexOf(q.get('cam')); hud.setCamera(q.get('cam
 if (q.get('camhidden')) { s.camHidden = true; hud.setCameraView(true); }
 if (q.get('preset')) { s.needs = { ...PRESETS[+q.get('preset')] }; hud.setNeeds(s.needs); }
 if (q.get('toast')) hud.toast('ไผ่ปวดห้องน้ำแล้ว', 60000, { icon: 'toilet' });
-if (q.get('select')) hud.showSelect(CHARS, q.get('select') === 'settings' ? s.char.key : undefined);
+if (q.get('select')) hud.showSelect(q.get('growth') === '0' ? CHARS : growChars(), q.get('select') === 'settings' ? s.char.key : undefined);
 if (q.get('ward')) {
   hud.showWardrobe(wardData());
   if (q.get('ward') === 'body' || q.get('ward') === 'buy') document.querySelector('.mp-ward-tab[data-slot="body"]')?.click();
@@ -312,6 +403,49 @@ if (q.get('decor')) {
   if (mode === 'buy' || mode === 'short') document.querySelector('.mp-decor .mp-try-buy')?.click();
 }
 if (q.get('game') === 'intro') openIntro();
+// ---- S5 screens: ?s5=picker | growth-stage | growth-trait | growth-drift | caption | hints | notice | notice-local
+//      | micsheet | micsheet-off | type | follow-<id>     ?game=intro5 | result5 | mimic | mimic-states | mimic6
+//      | bubbles | bubbles-warn | hop      ?mic=thinking (existing param)   &pick=<gameId> for intro5
+const S5 = q.get('s5') || '';
+const GAME = q.get('game') || '';
+if (S5 === 'picker') openPicker();
+if (S5.startsWith('growth-')) {
+  const kind = S5.slice(7);
+  hud.showGrowthCard({ kind, name: s.char.name, stageLabel: kind === 'stage' ? 'ก้อนซน' : 'ก้อนโต', traitLabel: kind === 'drift' ? 'ขี้เล่น' : 'ขี้อ้อน',
+    because: kind === 'stage' ? 'พูดเก่งขึ้นแล้วนะ' : kind === 'trait' ? 'เพราะเธอลูบหัวและคุยด้วยบ่อยมาก' : '' });
+}
+if (S5 === 'caption') { hud.caption('หิวไหม'); }
+if (S5 === 'hints') hud.showTalkHints(['หิวไหม', 'เก่งมาก', 'ไปเล่นกัน', 'ง่วงไหม']);
+if (S5 === 'notice' || S5 === 'notice-local') hud.showTalkNotice({ name: s.char.name, local: S5 === 'notice-local' });
+if (S5 === 'micsheet' || S5 === 'micsheet-off') hud.showMicSheet({ mode: s.talkMode, available: S5 === 'micsheet-off' ? false : true });
+if (S5 === 'type') { hud.showTypeBox(); hud.caption('เก่งมาก', 600000); }
+if (S5.startsWith('follow-')) hud.pulseFollowUp(S5.slice(7));
+if (GAME === 'intro5') { openIntro(); }
+if (GAME === 'result5') {
+  hud.startMinigame({ id: 'mimic', title: 'จำท่าทาง', durationSec: 75, countdown: 0 });
+  hud.updateMinigame({ score: 70, timeLeft: 0, coins: 13 });
+  hud.showMinigameResult({ score: 70, best: 90, coins: 13, headline: 'ไปได้ถึง 7 ท่า!' });
+}
+if (GAME.startsWith('mimic')) {
+  const n = GAME === 'mimic6' || GAME === 'mimic-states' ? 6 : 4;
+  hud.startMinigame({ id: 'mimic', title: 'จำท่าทาง', durationSec: 75, countdown: 0 });
+  hud.showMimicPads(padsOf(n));
+  if (GAME === 'mimic') {
+    hud.updateMinigame({ score: 30, timeLeft: 61, coins: 0, round: 4, slips: 0, sequence: { length: 4, done: 0, phase: 'watch' } });
+    hud.setMimicPadsEnabled(false); hud.flashMimicPad('wink', 'demo', 600000);
+  } else {
+    hud.updateMinigame({ score: 120, timeLeft: 38, coins: 2, round: 7, slips: 1, sequence: { length: 7, done: 3, phase: 'repeat' } });
+    hud.setMimicPadsEnabled(true);
+    if (GAME === 'mimic-states') { hud.flashMimicPad('smile', 'ok', 600000); hud.flashMimicPad('sleepy', 'wrong', 600000); hud.flashMimicPad('joy', 'hint', 600000); }
+  }
+}
+if (GAME === 'bubbles' || GAME === 'bubbles-warn') {
+  hud.startMinigame({ id: 'bubbles', title: 'เป่าฟองสบู่', durationSec: 45, countdown: 0, control: s.control });
+  hud.updateMinigame({ score: 90, timeLeft: 27, streak: 5, coins: 4, call: { color: 'lilac', label: 'ม่วง', pattern: 'star', warn: GAME === 'bubbles-warn' } });
+}
+if (GAME === 'hop') {
+  hud.startMinigame({ id: 'hop', title: 'กระโดดข้ามก้อน', durationSec: 45, control: s.control });
+}
 if (q.get('game') === 'play') {
   hud.startMinigame({ title: 'ฝนขนม', durationSec: 45, countdown: 0, control: s.control });
   hud.updateMinigame({ score: 128, timeLeft: 31.4, streak: 7, coins: 6 });
@@ -337,7 +471,7 @@ function frame(t) {
 requestAnimationFrame(frame);
 
 window.addEventListener('keydown', (e) => {
-  if (document.querySelector('.mp-hud.is-game, .mp-hud.is-wardrobe, .mp-hud.is-decor, .mp-hud.is-selecting')) return;
+  if (document.querySelector('.mp-hud.is-game, .mp-hud.is-wardrobe, .mp-hud.is-decor, .mp-hud.is-selecting, .mp-hud.is-typing, .mp-hud.is-picker, .mp-hud.is-notice')) return;
   if (e.key === 'ArrowLeft') { s.room = HUD_ROOMS[(HUD_ROOMS.indexOf(s.room) + 2) % 3]; s.toilet = 'idle'; applyRoom(); }
   if (e.key === 'ArrowRight') { s.room = HUD_ROOMS[(HUD_ROOMS.indexOf(s.room) + 1) % 3]; s.toilet = 'idle'; applyRoom(); }
 });
@@ -368,6 +502,17 @@ panel.addEventListener('click', (e) => {
   if (a === 'thumbs') { s.thumbsLate = true; s.preview = {}; hud.showDecor(decorData()); setTimeout(() => { s.thumbsLate = false; hud.updateDecor({ items: decorData().items }); }, 1500); }
   if (a === 'game') openIntro();
   if (a === 'theme') applyTheme(s.theme === 'dark' ? 'light' : 'dark');
+  if (a === 'picker') { if (s.room !== 'living') { s.room = 'living'; applyRoom(); } openPicker(); }
+  if (a === 'grow') {
+    const seq = ['stage', 'trait', 'drift']; s.growK = ((s.growK ?? -1) + 1) % 3; const kind = seq[s.growK];
+    hud.showGrowthCard({ kind, name: s.char.name, stageLabel: kind === 'stage' ? 'ก้อนซน' : 'ก้อนโต', traitLabel: kind === 'drift' ? 'ขี้เล่น' : 'ขี้อ้อน', because: kind === 'stage' ? 'พูดเก่งขึ้นแล้วนะ' : kind === 'trait' ? 'เพราะเธอลูบหัวและคุยด้วยบ่อยมาก' : '' });
+  }
+  if (a === 'talk') talkTurn();
+  if (a === 'hints') { s.hintsOn = !s.hintsOn; hud.showTalkHints(s.hintsOn ? ['หิวไหม', 'เก่งมาก', 'ไปเล่นกัน'] : null); }
+  if (a === 'notice') hud.showTalkNotice({ name: s.char.name });
+  if (a === 'micsheet') hud.showMicSheet({ mode: s.talkMode });
+  if (a === 'type') hud.showTypeBox();
+  if (a === 'follow') { const ids = ['kitchen', 'bathroom', 'play', 'wardrobe', 'decor', 'sleep']; s.fi = ((s.fi ?? -1) + 1) % ids.length; hud.pulseFollowUp(ids[s.fi]); hud.toast(`followUp: ${ids[s.fi]}`, 1500); }
   if (a === 'camfail') { s.control = 'touch'; hud.updateMinigame({ control: 'touch' }); hud.toast('เปิดกล้องไม่ได้ เลยเล่นด้วยนิ้วแทนนะ', 4000, { icon: 'camera-off', tone: 'warn' }); }
 });
 window.__hud = hud;

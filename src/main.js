@@ -20,6 +20,14 @@
  * (`game/furniture.js`), the "แต่งห้อง" shop (preview / buy / equip / close
  * reverts unbought previews), lazily rendered shop thumbnails
  * (`engine/thumbs.js`), Christmas outfits through the wardrobe data.
+ *
+ * Sprint 5 (module-contracts.md › Sprint 5 additions): save v5, growth +
+ * raised personality (`game/growth.js` fed from care / minigame / wardrobe /
+ * decor / conversation events), the minigame picker over the registry
+ * (`game/minigames/index.js`: snackRain, mimic, bubbles, hop; best per
+ * character per game, lastGame, favourites), and conversation (`game/talk.js`:
+ * one talk turn per mic press with Echo's listener / brain / babble, typed chat,
+ * talk-back fallback, mic mode sheet, one-time privacy notice).
  * @module main
  */
 import * as THREE from 'three';
@@ -36,7 +44,11 @@ import { createHeadControl } from './input/head.js';
 import { equipItem, buyItem, wearReaction } from './game/wardrobe.js';
 import { equipFurniture, revertPartial, decorView, findFurniture, isXmas } from './game/furniture.js';
 import { createThumbnails } from './engine/thumbs.js';
-import { createSnackRain, resolveConfig } from './game/minigames/snack-rain.js';
+import { resolveConfig } from './game/minigames/snack-rain.js';
+import * as MinigamesMod from './game/minigames/index.js';
+import { growthCfg } from './game/state.js';
+import { createGrowth } from './game/growth.js';
+import { createTalk } from './game/talk.js';
 import { createCharacter, CHARACTER_KEYS } from './characters/character.js';
 import * as RoomsMod from './rooms/index.js';
 import { createFoodMesh, FOOD_SIZE } from './props/foods.js';
@@ -117,11 +129,12 @@ function fallbackMesh(kind) {
 
 async function boot() {
   // 1. data
-  const [needs, foods, personas, wardrobe, minigames, furnitureCat, propMini] = await Promise.all([
+  const [needs, foods, personas, wardrobe, minigames, furnitureCat, propMini, growthJson, conversation] = await Promise.all([
     loadJSON('needs'), loadJSON('foods'), loadJSON('personas'), loadOptional('wardrobe'), loadOptional('minigames'),
-    loadOptional('furniture'), import('./props/minigame.js').catch(() => null),
+    loadOptional('furniture'), import('./props/minigame.js').catch(() => null), loadOptional('growth'), loadOptional('conversation'),
   ]);
-  const data = { needs, foods, personas, wardrobe, minigames, furniture: furnitureCat };
+  const data = { needs, foods, personas, wardrobe, minigames, furniture: furnitureCat, growth: growthJson, conversation };
+  const gcfg = growthCfg(data);
   const game = createGameState({ data, storage: safeLocalStorage(), roomIds: ROOM_IDS });
   const reduceMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
   const app = $('app');
@@ -131,7 +144,10 @@ async function boot() {
   const timers = createTimers();
 
   // 3. room manager (first room entered after everything is wired)
-  let hud, care, gestures, mood, hands = null, minigame = null;
+  let hud, care, gestures, mood, hands = null, minigame = null, growth = null, talkCtl = null;
+  /** Sheets that block a growth card (GDD 3.3): wardrobe, decor, picker, intro, select. */
+  const sheets = { wardrobe: false, picker: false, intro: false };
+  let gameId = 'snackRain', backToPicker = false;
   const rooms = createRoomManager({
     scene: stage.scene, createRoom, roomIds: ROOM_IDS, reduceMotion,
     getFurniture: (id) => game.furniture(id),
@@ -164,6 +180,7 @@ async function boot() {
     const spot = rooms.room?.petSpot;
     if (spot) pet.object3d.position.copy(spot);
     applyOutfit();
+    growth?.refreshLook(true);
   }
   /** Put the selected character's saved outfit on (Clay's setOutfit, optional). */
   function applyOutfit() {
@@ -178,21 +195,44 @@ async function boot() {
     key: k, name: personas[k].name,
     role: personas[k].role || ROSTER[k]?.role || '', mbti: personas[k].mbti || ROSTER[k]?.mbti || '',
     locked: personas[k].playable === false,
+    ...(growth?.info(k) || {}),   // { stage, stageLabel, progress, hint, trait, traitLabel } (growth GDD 3.6)
   }));
+  /** Chip: name + stage ring (Sprint 5). */
+  const chipInfo = (k = game.selected) => {
+    const i = growth?.info(k) || {};
+    return { key: k, name: personas[k]?.name || '', stage: i.stage, stageLabel: i.stageLabel, progress: i.progress };
+  };
   let pointer = null, talk = null;
   const handlers = {
     onRoom(dirOrId) { if (!minigame?.active) rooms.go(dirOrId); },
     onAction(id) {
       if (id === 'flush') care.flush();
-      else if (id === 'play') openMinigameIntro();
+      else if (id === 'play') openPicker();
     },
+    /** Picker card → that game's intro card (minigames-2 GDD 3.1 step 3). */
+    onMinigamePick(id) { pickGame(id); },
+    onMinigamePickerClose() { sheets.picker = false; hud.hideMinigamePicker?.(); },
+    /** Result card "เกมอื่น": leave the round, then the picker again. */
+    onMinigameOther() { if (minigame.active) { backToPicker = true; minigame.exit(); } else openPicker(); },
+    /** Intro "โหมดสบายๆ" switch, saved per game. */
+    onMinigameRelaxed(on) { game.setRelaxed(gameId, !!on); game.persist(); },
+    onMimicPad(id) { minigame.pad?.(id); },
+    onGrowthCardClose() { growth?.onCardClose(); hud.hideGrowthCard?.(); },
+    onWardrobeClose() { sheets.wardrobe = false; },
+    onMicLongPress() { talkCtl.openSheet(); },
+    onTalkMode(mode) { talkCtl.setMode(mode); hud.setTalkMode?.(mode === 'echo' ? 'echo' : 'talk'); },
+    onTalkNoticeOk() { talkCtl.noticeOk(); },
+    onTalkNoticeEcho() { talkCtl.noticeEcho(); },
+    onTalkNoticeClose() { hud.hideTalkNotice?.(); },
+    onTypeOpen() { talkCtl.openTypeBox(); },
+    onTypeSend(text) { return talkCtl.typed(text); },
     /** Lamp button: "ปิดไฟ" (dark) / "เปิดไฟ" (light), saved. */
     onThemeToggle() { setTheme(game.settings.theme === 'dark' ? 'light' : 'dark', true); },
     /** Intro card: control picked ('touch' | 'head'), saved. */
     onMinigameControl(id) { game.setSetting('minigameControl', id); game.persist(); },
     /** Intro card "เริ่มเลย". */
     onMinigameReady() { readyMinigame(); },
-    onMic() { toggleTalk(); },
+    onMic() { talkCtl.press(); },
     onCamera() { hands?.toggle(); },
     /** Camera view toggle "ซ่อนภาพกล้อง / แสดงภาพกล้อง"; no arg = flip. */
     onCameraView(hidden) { hands?.setView(typeof hidden === 'boolean' ? hidden : !hands.hidden); },
@@ -207,7 +247,7 @@ async function boot() {
     onDecorEquip(slot, id) { decorEquip(slot, id); },
     onDecorBuy(id) { decorBuy(id); },
     onDecorClose() { closeDecor(false); },
-    onMinigameExit() { if (headStarting) headCancel = true; minigame?.exit(); },
+    onMinigameExit() { if (headStarting) headCancel = true; sheets.intro = false; backToPicker = false; minigame?.exit(); },
     /** HUD countdown 3, 2, 1, then 0 = go. */
     onMinigameTick(n) { sfx.play(n > 0 ? 'tick' : 'go'); },
     onMinigameAgain() { minigame?.again(); },
@@ -227,7 +267,8 @@ async function boot() {
   hud.setFoods(foods.foods.map((f) => ({ id: f.id, name: f.name })));
   hud.setCamera('off', '');
   hud.setMic('off');
-  hud.setCharacter({ key: game.selected, name: personas[game.selected]?.name || '' });
+  hud.setCharacter(chipInfo());
+  hud.setTalkMode?.(game.settings.talkMode === 'echo' ? 'echo' : 'talk');
 
   // 6. audio
   let unlocked = false;
@@ -236,6 +277,7 @@ async function boot() {
   window.addEventListener('keydown', unlock, { once: true, capture: true });
   let talkState = 'off';
   talk = createTalkback({
+    getPitchOffset: () => sfx.getPitchOffset?.() || 0,
     onState(s) {
       if (talkState === 'playing' && s !== 'playing') mood.onTalkPhrase(stage.time);
       mood?.hold('talk', s === 'playing');
@@ -245,26 +287,20 @@ async function boot() {
     },
     onLevel(level) { pet?.setTalkLevel(level); },
   });
-  async function toggleTalk() {
-    unlock();
-    try {
-      if (talk.isOn()) talk.stop();
-      else await talk.start();
-    } catch (e) {
-      console.warn('talkback', e);
-      hud.setMic('off');
-      hud.toast(e && e.name === 'NotAllowedError' ? 'ยังไม่ได้อนุญาตให้ใช้ไมค์ ลองอนุญาตที่แถบที่อยู่ของเบราว์เซอร์' : 'เปิดไมค์ไม่ได้ในเบราว์เซอร์นี้', 3200);
-    }
-  }
 
   // 7. mood + care + input
-  mood = createMood({ data, game, hud, sfx, timers, getPet });
+  mood = createMood({
+    data, game, hud, sfx, timers, getPet,
+    onCare: (ev, amount) => growth?.care(ev, amount),
+    getVoice: () => growth?.voice() || null,
+  });
   let lastHudNeeds = -9;
   const pushNeeds = () => { const n = game.needs(); if (n) hud.setNeeds(n); };
   care = createCare({
     stage, data, game, hud, sfx, mood, timers, getPet,
     getRoom: () => rooms.room, getRoomId: () => rooms.id,
     createFoodMesh, onNeedsChanged: pushNeeds,
+    onCare: (ev) => growth?.care(ev),
     isPaused: () => !!minigame?.active,
     onToiletStage(st) { app.classList.toggle('toilet-sitting', st === 'sitting' || st === 'flushing'); },
   });
@@ -308,6 +344,7 @@ async function boot() {
     closeDecor();
     if (!hud.showWardrobe) { hud.toast('ตู้เสื้อผ้ากำลังมา', 2200); return; }
     if (!data.wardrobe) hud.toast('ยังโหลดรายการชุดไม่ได้ ลองรีเฟรชอีกครั้ง', 2600);
+    sheets.wardrobe = true;
     hud.showWardrobe(wardrobeView());
   }
   /** Equip (economy GDD 3.5). Tapping the item already worn empties the slot. */
@@ -317,6 +354,7 @@ async function boot() {
     if (!r.ok) { hud.updateWardrobe?.({ outfit: { ...game.outfit() } }); return false; }
     game.setOutfit(r.outfit);
     applyOutfit();
+    if (r.item) growth?.care('equip');
     sfx.play('equip');
     if (isXmas(r.item)) sfx.play('jingle');
     hud.updateWardrobe?.({ outfit: { ...r.outfit } });
@@ -343,6 +381,7 @@ async function boot() {
     }
     game.setPurse(r.coins, r.owned);
     hud.setCoins(r.coins);
+    growth?.care('buy');
     sfx.play('buy');
     mood.say('buy', true);
     hud.updateWardrobe?.({ owned: r.owned.slice(), coins: r.coins });
@@ -365,7 +404,7 @@ async function boot() {
     if (minigame?.active || rooms.moving) return;
     if (!hud.showDecor) { hud.toast('ร้านแต่งห้องกำลังมา', 2200); return; }
     if (!data.furniture) { hud.toast('ยังโหลดรายการของแต่งห้องไม่ได้ ลองรีเฟรชอีกครั้ง', 2600); return; }
-    hud.hideWardrobe?.();
+    hud.hideWardrobe?.(); sheets.wardrobe = false;
     const view = decorData();
     decorOpen = true;
     hud.showDecor(view);
@@ -405,6 +444,7 @@ async function boot() {
     }
     game.setFurniture(r.furniture);
     try { rooms.room?.setFurniture?.({ [slot]: r.furniture[rooms.id][slot] }); } catch (e) { console.error('[decor] equip', e); }
+    growth?.care('decorEquip');
     sfx.play('place');
     if (isXmas(r.item)) sfx.play('jingle');
     hud.updateDecor?.({ furniture: game.furniture(rooms.id) });
@@ -424,6 +464,7 @@ async function boot() {
     }
     game.setPurse(r.coins, r.owned);
     hud.setCoins(r.coins);
+    growth?.care('decorBuy');
     sfx.play('buy');
     mood.say('buy', true);
     hud.updateDecor?.({ owned: r.owned.slice(), coins: r.coins });
@@ -432,36 +473,91 @@ async function boot() {
     return true;
   }
 
-  // 7d. Snack Rain
+  // 7d. Minigames (Sprint 5): registry (game/minigames/index.js) behind one facade,
+  // so the rest of main keeps calling `minigame.active / exit / update …`.
+  const { MINIGAMES, gameOrder, gameInfo, favoriteOf } = MinigamesMod;
   const { cfg: snackCfg, missing } = resolveConfig(data.minigames?.snackRain);
   if (missing.length && data.minigames) console.warn('[snack-rain] minigames.json missing keys, defaults used:', missing.join(', '));
   const foodIds = foods.foods.map((f) => f.id);
   const ORIGIN = new THREE.Vector3();
   const sized = (mesh, native) => { mesh.scale.setScalar(snackCfg.itemSize / (native || snackCfg.itemSize)); mesh.userData.baseScale = mesh.scale.x; return mesh; };
-  minigame = createSnackRain({
-    stage, game, hud, sfx, mood, getPet, cfg: snackCfg, foodIds,
+  const instances = {};
+  let cur = null;   // instance of the current / last game
+  const viewOf = (id) => MINIGAMES[id]?.view || { extraWidth: MINIGAME_VIEW.extraWidth, hudReserve: HUD_RESERVE.minigame };
+  /** One ctx object for every game (index.js › ctx table). */
+  const mgCtx = {
+    stage, game, hud, sfx, get mood() { return mood; }, getPet, data: data.minigames, props: propMini,
     getHome: () => rooms.room?.petSpot || ORIGIN,
+    getCharKey: () => game.selected,
+    getPersona: () => personas[game.selected],
+    getControl: () => control,
+    get head() { return headCtl; },
     // head tilt is the camera control (Sprint 3 #3); hands are not a minigame control any more
     getControlX: () => (control === 'head' ? headCtl.clientX(stage.size.left, stage.size.w) : null),
-    getControl: () => control,
-    getPersona: () => personas[game.selected],
+    foodIds,
     isLiked: (foodId) => (foods.likes?.[game.selected] || []).includes(foodId),
+    makeFoodMesh: (foodId) => sized(createFoodMesh(foodId || 'onigiri'), FOOD_SIZE),
     makeMesh(kind, foodId) {
       if (kind === 'coin') return propMini?.createCoinMesh ? sized(propMini.createCoinMesh(), propMini.COIN_SIZE) : sized(fallbackMesh('coin'), 0.4);
       if (kind === 'demon') return propMini?.createDemonMesh ? sized(propMini.createDemonMesh(), propMini.DEMON_SIZE) : sized(fallbackMesh('demon'), 0.5);
       return sized(createFoodMesh(foodId || 'onigiri'), FOOD_SIZE);
     },
+    isFirstPlay: (id) => game.isFirstPlay(id),
+    relaxed: (id) => game.relaxed(id),
+    minigameMinScale: gcfg.minigameMinScale,
+    reduceMotion,
     onNeedsChanged: pushNeeds,
     onCoins(n) { hud.setCoins(n); },
-    onStateChange(active) {
-      frame.to = active ? MINIGAME_VIEW.extraWidth : 0; frame.from = frame.now; frame.t = 0;
-      stage.setHudReserve(active ? HUD_RESERVE.minigame : HUD_RESERVE.normal);
-      app.classList.toggle('minigame', active);
-      hands.setPassive(active);
-      gestures.reset();
-      if (active) care.clearCoach(); else { care.syncControls(); endHeadControl(); }
-    },
-  });
+    onStateChange(active) { onMinigameState(active); },
+    onEnd(result) { onMinigameEnd(result); },
+  };
+  function instanceFor(id) {
+    if (!MINIGAMES[id]) return null;
+    if (!instances[id]) {
+      try { instances[id] = MINIGAMES[id].create(mgCtx); } catch (e) { console.error(`[minigame] ${id} create`, e); return null; }
+    }
+    return instances[id];
+  }
+  const noop = () => {};
+  /** Facade over the current instance (idle when none exists yet). */
+  minigame = {
+    get id() { return cur ? gameId : null; },
+    get active() { return !!cur?.active; },
+    get phase() { return cur?.phase || 'idle'; },
+    get paused() { return !!cur?.paused; },
+    get lastResult() { return cur?.lastResult || null; },
+    get state() { return cur?.state || null; },
+    start() { return cur ? cur.start() : false; },
+    update(dt, t) { cur?.update(dt, t); },
+    exit() { cur?.exit(); },
+    again() { cur?.again(); },
+    setPaused(p, by = 'tab') { cur?.setPaused?.(p, by); },
+    pointerX(x) { (cur?.pointerX || noop)(x); },
+    pointerDown(x, y, id) { (cur?.pointerDown || noop).call(cur, x, y, id); },
+    pointerMove(x, y, id, pressed) { (cur?.pointerMove || noop).call(cur, x, y, id, pressed); },
+    pointerUp(id) { (cur?.pointerUp || noop).call(cur, id); },
+    pad(id) { (cur?.pad || noop).call(cur, id); },
+  };
+  function onMinigameState(active) {
+    const v = viewOf(gameId);
+    frame.to = active ? v.extraWidth : 0; frame.from = frame.now; frame.t = 0;
+    stage.setHudReserve(active ? (v.hudReserve || HUD_RESERVE.minigame) : HUD_RESERVE.normal);
+    app.classList.toggle('minigame', active);
+    hands.setPassive(active);
+    gestures.reset();
+    if (active) { care.clearCoach(); talkCtl?.cancel(); }
+    else { care.syncControls(); endHeadControl(); }
+    growth?.refreshLook(false);
+    growth?.care(active ? 'minigameStart' : 'minigameEnd');
+    if (!active && backToPicker) { backToPicker = false; openPicker(); }
+  }
+  function onMinigameEnd(result) {
+    const id = result?.id || gameId;
+    game.markPlayed(id);
+    game.setLastGame(id);
+    growth?.care('minigameEnd');
+    game.persist();
+  }
   const frame = { now: 0, from: 0, to: 0, t: 1 };
   /** Ease the camera framing toward `frame.to` (only while it changes). */
   function updateFrame(dt) {
@@ -473,14 +569,18 @@ async function boot() {
     if (spot) stage.setFocus(spot, frame.now);
   }
   const canStartMinigame = () => !minigame.active && rooms.id === 'living' && !rooms.moving && !care.carrying;
-  function startMinigame() {
+  function startMinigame(id = gameId) {
     if (!canStartMinigame()) return false;
-    hud.hideWardrobe?.();
+    const inst = instanceFor(id);
+    if (!inst) return false;
+    gameId = id; cur = inst;
+    hud.hideWardrobe?.(); sheets.wardrobe = false;
     closeDecor();
     gestures.reset();
     unlock();
     const ok = minigame.start();
     if (ok) {
+      game.setLastGame(id);
       hud.updateMinigame?.({ control });
       // calibrate from the very first countdown frame (trackPhase handles "again" / resume)
       if (control === 'head') headCtl.beginCalibration();
@@ -489,18 +589,51 @@ async function boot() {
     return ok;
   }
 
-  // 7e. Snack Rain control (intro card → touch or head tilt)
+  // 7e. Picker → intro → control (touch or head tilt) → round
   /** Active control of the current / next round: 'touch' | 'head'. */
   let control = 'touch', headStarting = false, headCancel = false;
   const headCtl = createHeadControl({ getTime: () => stage.now() });
-  /** "เล่น": the intro card with the saved choice (no intro card yet → touch round). */
-  function openMinigameIntro() {
-    if (!canStartMinigame() || headStarting) return;
-    hud.hideWardrobe?.();
-    closeDecor();
-    if (!hud.showMinigameIntro) { control = 'touch'; startMinigame(); return; }
-    hud.showMinigameIntro({ controls: MINIGAME_CONTROLS, selected: game.settings.minigameControl });
+  /** Picker view (minigames-2 GDD 3.1 step 2): best of this character, favourite, last played. */
+  function pickerGames() {
+    const fav = favoriteOf(game.selected, data.minigames);
+    const best = game.best();
+    return gameOrder(data.minigames).map((id) => gameInfo(id, data.minigames)).filter((g) => g && g.available).map((g) => ({
+      id: g.id, title: g.title, howTo: g.howTo, controls: g.controls, best: best[g.id] || 0,
+      favorite: g.id === fav, last: g.id === game.lastGame,
+    }));
   }
+  /** "เล่น": the picker (no picker in the HUD yet → Snack Rain intro, the Sprint 4 flow). */
+  function openPicker() {
+    if (!canStartMinigame() || headStarting) return false;
+    hud.hideWardrobe?.(); sheets.wardrobe = false;
+    closeDecor();
+    if (!hud.showMinigamePicker) { pickGame('snackRain'); return true; }
+    sheets.picker = true;
+    hud.showMinigamePicker({ games: pickerGames(), charName: personas[game.selected]?.name || '' });
+    mood.say(data.minigames?.picker?.lines?.open || 'pickGame', true);
+    return true;
+  }
+  /** A picker card: that game's intro card (control choice when the game has several, relaxed switch, first-play coach). */
+  function pickGame(id) {
+    if (!MINIGAMES[id] || !canStartMinigame() || headStarting) return false;
+    sheets.picker = false;
+    hud.hideMinigamePicker?.();
+    gameId = id;
+    const info = gameInfo(id, data.minigames);
+    const controls = MINIGAME_CONTROLS.filter((c) => info.controls.includes(c.id));
+    if (!hud.showMinigameIntro) { control = 'touch'; startMinigame(id); return true; }
+    const saved = game.settings.minigameControl;
+    sheets.intro = true;
+    hud.showMinigameIntro({
+      id, title: info.title, howTo: info.howTo, controls,
+      selected: controls.some((c) => c.id === saved) ? saved : 'touch',
+      coach: game.isFirstPlay(id) ? (data.minigames?.[id]?.coach || '') : '',
+      relaxed: id === 'snackRain' ? undefined : game.relaxed(id),
+    });
+    return true;
+  }
+  /** Sprint 3 name kept for tests: the intro of the current game. */
+  function openMinigameIntro() { return pickGame(gameId); }
   /**
    * "เริ่มเลย": touch starts at once; head opens the camera (or shares the hand
    * camera) and loads the model first, then the countdown calibrates neutral.
@@ -509,7 +642,9 @@ async function boot() {
   async function readyMinigame() {
     if (headStarting || minigame.active) return;
     unlock();
-    control = game.settings.minigameControl === 'head' ? 'head' : 'touch';
+    sheets.intro = false;
+    const allowed = gameInfo(gameId, data.minigames)?.controls || ['touch'];
+    control = game.settings.minigameControl === 'head' && allowed.includes('head') ? 'head' : 'touch';
     if (control === 'head') {
       headStarting = true; headCancel = false;
       hud.toast(MSG.headOpening, 2600);
@@ -526,7 +661,7 @@ async function boot() {
       }
     }
     hud.hideMinigameIntro?.();
-    if (!startMinigame()) endHeadControl();
+    if (!startMinigame(gameId)) endHeadControl();
   }
   /** After a round: release the camera unless the player had it on before (hand camera). */
   function endHeadControl() {
@@ -545,20 +680,67 @@ async function boot() {
     }
     lastPhase = ph;
   }
-  // drag / touch anywhere, or mouse move: the pet follows x (normal gestures are off)
-  window.addEventListener('pointerdown', (e) => { if (minigame.active && !hud.isHudPoint?.(e.clientX, e.clientY)) minigame.pointerX(e.clientX); }, { passive: true });
-  window.addEventListener('pointermove', (e) => { if (minigame.active && (e.pointerType === 'mouse' || e.buttons)) minigame.pointerX(e.clientX); }, { passive: true });
+  // pointer during a round (normal gestures are off): drag / touch anywhere, or mouse move
+  window.addEventListener('pointerdown', (e) => { if (minigame.active && !hud.isHudPoint?.(e.clientX, e.clientY)) minigame.pointerDown(e.clientX, e.clientY, e.pointerId); }, { passive: true });
+  window.addEventListener('pointermove', (e) => { if (minigame.active) minigame.pointerMove(e.clientX, e.clientY, e.pointerId, e.pointerType === 'mouse' || !!e.buttons); }, { passive: true });
+  window.addEventListener('pointerup', (e) => { if (minigame.active) minigame.pointerUp(e.pointerId); }, { passive: true });
+  window.addEventListener('pointercancel', (e) => { if (minigame.active) minigame.pointerUp(e.pointerId); }, { passive: true });
+
+  // 7f. growth (growth GDD 3.1–3.8)
+  growth = createGrowth({
+    cfg: gcfg, game, personas, getPet, hud, sfx, mood,
+    isBlocked: () => minigame.active || care.sitting || care.carrying || rooms.moving || decorOpen
+      || sheets.wardrobe || sheets.picker || sheets.intro || headStarting || app.classList.contains('selecting'),
+    getMinigame: () => ({ active: minigame.active, paused: minigame.paused, playing: minigame.phase === 'play', id: minigame.id }),
+    onChange() { hud.setCharacter(chipInfo()); },
+  });
+  growth.refreshLook(true);
+  hud.setCharacter(chipInfo());
+
+  // 7g. conversation (conversation GDD 3.1–3.11)
+  const ROOM_NAMES = { living: 'living', kitchen: 'kitchen', bathroom: 'bathroom' };
+  talkCtl = createTalk({
+    hud, game, mood, sfx, talkback: talk, getPet, personas, actions: needs.actions, needsData: needs,
+    foods, wardrobe: data.wardrobe,
+    getConv: () => data.conversation,
+    getVoice: () => growth.voice(),
+    getTime: () => stage.time,
+    unlock,
+    canTalk: () => !minigame.active,
+    onCare: (ev) => growth.care(ev),
+    onNeedsChanged: pushNeeds,
+    getContext() {
+      const o = game.outfit() || {};
+      const items = data.wardrobe?.items || [];
+      const worn = Object.values(o).filter(Boolean);
+      const v = growth.voice();
+      return {
+        charKey: game.selected, name: personas[game.selected]?.name || '', stage: v.stage, vocabLevel: v.vocabLevel, trait: v.trait,
+        needs: { ...(game.needs() || {}) }, expression: mood.expression || 'original', room: ROOM_NAMES[rooms.id] || 'living',
+        outfit: { head: o.head || null, eyes: o.eyes || null, body: o.body || null },
+        likedItemsWorn: worn.filter((id) => items.find((it) => it.id === id)?.likes?.includes(game.selected)),
+        xmasItemsVisible: worn.filter((id) => isXmas(items.find((it) => it.id === id))).length
+          + Object.values(game.furniture(rooms.id)).filter((id) => isXmas(findFurniture(data.furniture, id))).length,
+        sitting: !!care.sitting,
+        decorCustom: (() => { const d = RoomsMod.FURNITURE_DEFAULTS?.[rooms.id] || {}; return Object.entries(game.furniture(rooms.id) || {}).filter(([slot, id]) => id && d[slot] && id !== d[slot]).length; })(),
+        now: new Date(), awayMinutes: 0,
+      };
+    },
+  });
+  talkCtl.preload();
 
   function selectCharacter(key) {
     if (!personas[key] || personas[key].playable === false) return;
     if (minigame.active) minigame.exit();
+    talkCtl.cancel();   // E11: a running turn is dropped
     const changed = key !== game.selected || !pet;
+    if (changed) growth.beforeCharacterChange();   // growth edge 5: close the old character's bucket
     game.select(key);
-    if (changed) spawnPet(key);
+    if (changed) { spawnPet(key); growth.onCharacterChanged(key); }
     gestures.reset();
     care.onCharacterChanged();
     mood.setCharacter(key, stage.time, { greet: true });
-    hud.setCharacter({ key, name: personas[key].name });
+    hud.setCharacter(chipInfo(key));
     if (!changed) applyOutfit();
     hud.updateWardrobe?.({ outfit: { ...game.outfit() }, charKey: key });
     pushNeeds();
@@ -576,6 +758,10 @@ async function boot() {
   if (returning) mood.returnAfterAbsence(0);
   pushNeeds();
   if (!game.chosen) { app.classList.add('selecting'); hud.showSelect(selectList(), game.selected); }
+  // one-time coach after the v4 → v5 migration (growth GDD 3.9)
+  if (game.growthIntro && game.chosen) {
+    timers.after(4, () => { hud.toast(growth.introText(), 5200); game.clearGrowthIntro(); game.persist(); }, 'growth');
+  } else if (game.growthIntro) game.clearGrowthIntro();
 
   let needsT = 0, saveT = 0;
   stage.onTick((dt, time) => {
@@ -587,6 +773,7 @@ async function boot() {
     care.update(dt, time);
     updateFrame(dt);
     minigame.update(dt, time);
+    growth.update(dt, time);
     if (minigame.active || app.classList.contains('minigame')) mood.keepAwake?.(time);
     mood.update(dt, time);
     pet?.update(dt, time);
@@ -612,7 +799,8 @@ async function boot() {
 
   const flushSave = () => { game.tick(); game.persist(); };
   document.addEventListener('visibilitychange', () => {
-    minigame.setPaused(document.hidden);
+    minigame.setPaused(document.hidden, 'tab');
+    if (document.hidden) talkCtl.cancel();
     if (document.hidden) flushSave();
   });
   window.addEventListener('pagehide', flushSave);
@@ -623,6 +811,7 @@ async function boot() {
 
   if (new URLSearchParams(location.search).has('debug')) {
     window.__moldablePet = { data, game, stage, rooms, mood, care, gestures, hands, head: headCtl, hud, getPet, selectCharacter, minigame, startMinigame, openMinigameIntro, readyMinigame, setTheme, getControl: () => control, equip, buy, openWardrobe, snackCfg,
+      growth, talk: talkCtl, openPicker, pickGame, pickerGames, MINIGAMES, instances, getGameId: () => gameId,
       openDecor, closeDecor, decorPreview, decorEquip, decorBuy, thumbs, isDecorOpen: () => decorOpen };
   }
 }
