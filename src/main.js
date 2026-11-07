@@ -32,7 +32,7 @@
  */
 import * as THREE from 'three';
 import { createStage } from './engine/stage.js';
-import { createGameState, safeLocalStorage } from './game/state.js';
+import { createGameState, safeLocalStorage, SAVE_KEY } from './game/state.js';
 import { createRoomManager } from './game/rooms.js';
 import { createMood } from './game/mood.js';
 import { createCare } from './game/care.js';
@@ -49,6 +49,7 @@ import * as MinigamesMod from './game/minigames/index.js';
 import { growthCfg } from './game/state.js';
 import { createGrowth } from './game/growth.js';
 import { createTalk } from './game/talk.js';
+import { createCloud } from './game/cloud.js';
 import { createCharacter, CHARACTER_KEYS } from './characters/character.js';
 import * as RoomsMod from './rooms/index.js';
 import { createFoodMesh, FOOD_SIZE } from './props/foods.js';
@@ -129,13 +130,16 @@ function fallbackMesh(kind) {
 
 async function boot() {
   // 1. data
-  const [needs, foods, personas, wardrobe, minigames, furnitureCat, propMini, growthJson, conversation] = await Promise.all([
+  const [needs, foods, personas, wardrobe, minigames, furnitureCat, propMini, growthJson, conversation, cloudCfg] = await Promise.all([
     loadJSON('needs'), loadJSON('foods'), loadJSON('personas'), loadOptional('wardrobe'), loadOptional('minigames'),
-    loadOptional('furniture'), import('./props/minigame.js').catch(() => null), loadOptional('growth'), loadOptional('conversation'),
+    loadOptional('furniture'), import('./props/minigame.js').catch(() => null), loadOptional('growth'), loadOptional('conversation'), loadOptional('cloud'),
   ]);
   const data = { needs, foods, personas, wardrobe, minigames, furniture: furnitureCat, growth: growthJson, conversation };
   const gcfg = growthCfg(data);
   const game = createGameState({ data, storage: safeLocalStorage(), roomIds: ROOM_IDS });
+  let hudRef = null;
+  const cloud = createCloud({ cfg: cloudCfg || {}, storageKey: SAVE_KEY, getSave: () => game.save,
+    onChange: (st) => hudRef?.setAccount?.(st), toast: (m) => hudRef?.toast?.(m, 3200) });
   const reduceMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
   const app = $('app');
 
@@ -239,6 +243,8 @@ async function boot() {
     /** Character chip (avatar + name, top-left) opens the select screen. */
     onCharacterChip() { if (!minigame?.active) hud.showSelect(selectList(), game.selected); },
     onSelect(key) { selectCharacter(key); },
+    onCloudSignIn() { cloud.signIn(); },
+    onCloudSignOut() { cloud.signOut(); },
     onWardrobe() { openWardrobe(); },
     onEquip(slot, id) { equip(slot, id ?? null); },
     onBuy(id) { buy(id); },
@@ -262,6 +268,7 @@ async function boot() {
   const bootTheme = themeParam === 'dark' || themeParam === 'light' ? themeParam : game.settings.theme;
   document.documentElement.dataset.theme = bootTheme;
   hud = createHUD($('hud'), handlers);
+  hudRef = hud;
   hud.setCoins(game.coins);
   hud.setCameraView?.(!!game.settings.cameraHidden);
   hud.setFoods(foods.foods.map((f) => ({ id: f.id, name: f.name })));
@@ -757,6 +764,11 @@ async function boot() {
   mood.setCharacter(game.selected, 0, { greet: !returning && game.chosen });
   if (returning) mood.returnAfterAbsence(0);
   pushNeeds();
+  // Cloud save (Google sign-in) — hidden until assets/data/cloud.json is filled (docs/cloud-save.md).
+  const persistLocal = game.persist.bind(game);
+  game.persist = () => { const ok = persistLocal(); cloud.schedule(); return ok; };
+  hud.setAccount?.(cloud.state);
+  cloud.init();
   if (!game.chosen) { app.classList.add('selecting'); hud.showSelect(selectList(), game.selected); }
   // one-time coach after the v4 → v5 migration (growth GDD 3.9)
   if (game.growthIntro && game.chosen) {
@@ -808,6 +820,10 @@ async function boot() {
   stage.start();
   setLoading(null);
   document.documentElement.dataset.boot = 'ok';
+  // Installable web app + offline play (sw.js). Not under automation/debug, so tests stay deterministic.
+  if ('serviceWorker' in navigator && !navigator.webdriver && !new URLSearchParams(location.search).has('debug')) {
+    navigator.serviceWorker.register('sw.js').catch((e) => console.warn('[sw]', e));
+  }
 
   if (new URLSearchParams(location.search).has('debug')) {
     window.__moldablePet = { data, game, stage, rooms, mood, care, gestures, hands, head: headCtl, hud, getPet, selectCharacter, minigame, startMinigame, openMinigameIntro, readyMinigame, setTheme, getControl: () => control, equip, buy, openWardrobe, snackCfg,

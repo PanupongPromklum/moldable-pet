@@ -1,0 +1,19 @@
+{
+  "name": "Moldable Pet",
+  "short_name": "Moldable Pet",
+  "description": "เลี้ยงก้อนนุ่มของ Moldable ป้อนข้าว ลูบหัว คุยด้วย แต่งตัว แต่งห้อง และเล่นมินิเกม",
+  "lang": "th",
+  "start_url": "./?source=pwa",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#E7EFF8",
+  "theme_color": "#F5F5F5",
+  "categories": ["games", "entertainment"],
+  "icons": [
+    { "src": "assets/icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "assets/icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "assets/icons/icon-maskable-192.png", "sizes": "192x192", "type": "image/png", "purpose": "maskable" },
+    { "src": "assets/icons/icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}

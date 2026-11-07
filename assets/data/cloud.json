@@ -1,0 +1,9 @@
+{
+  "_meta": { "owner": "wire", "doc": "docs/cloud-save.md", "note": "Fill url + anonKey (Supabase › Project Settings › API) to turn on Google sign-in and cross-device saves. Empty = feature hidden." },
+  "provider": "supabase",
+  "url": "",
+  "anonKey": "",
+  "table": "pet_saves",
+  "pushDelaySec": 4,
+  "supabaseJs": "https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/+esm"
+}

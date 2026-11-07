@@ -91,6 +91,8 @@
  */
 import { icon, foodIcon, accessoryIcon, filledIcon } from './icons.js';
 import { installS5, HUD_S5_STRINGS } from './hud-s5.js';
+/** Google "G" for the sign-in button (Google sign-in branding guidelines). */
+const GOOGLE_G = '<svg class="mp-g" width="20" height="20" viewBox="0 0 48 48" aria-hidden="true" focusable="false"><path fill="#EA4335" d="M24 9.5c3.5 0 6.6 1.2 9.1 3.6l6.8-6.8C35.8 2.4 30.3 0 24 0 14.6 0 6.6 5.4 2.6 13.3l7.9 6.1C12.4 13.7 17.7 9.5 24 9.5z"/><path fill="#4285F4" d="M46.1 24.5c0-1.6-.1-3.1-.4-4.5H24v9h12.4c-.5 2.9-2.2 5.3-4.6 7l7.4 5.7c4.3-4 6.9-9.9 6.9-17.2z"/><path fill="#FBBC05" d="M10.5 28.6c-.5-1.4-.8-3-.8-4.6s.3-3.2.8-4.6l-7.9-6.1C1 16.6 0 20.2 0 24s1 7.4 2.6 10.7l7.9-6.1z"/><path fill="#34A853" d="M24 48c6.5 0 11.9-2.1 15.9-5.8l-7.4-5.7c-2.1 1.4-4.8 2.3-8.5 2.3-6.3 0-11.6-4.2-13.5-9.9l-7.9 6.1C6.6 42.6 14.6 48 24 48z"/></svg>';
 
 export {
   growthWords, selectHint, growthCardText, padColumns, mimicKeyIndex, shouldSendOnEnter, cleanTyped,
@@ -723,12 +725,25 @@ export function createHUD(root, handlers = {}, options = {}) {
         </div>
         <div class="mp-cards" role="radiogroup" aria-label="${esc(s.group)}">${cards}</div>
         <div class="mp-select-foot">
+          ${accountRow()}
           <button type="button" class="mp-btn-primary mp-select-go" ${chosen ? '' : 'disabled'}>${esc(chosen ? s.confirm(chosen.name) : s.confirm(''))}</button>
         </div>
       </div>`;
   }
 
+  /** Cloud account row (Google sign-in). Hidden unless the game set an account state with enabled: true. */
+  function accountRow() {
+    const a = state.account;
+    if (!a || !a.enabled) return '';
+    if (a.signedIn) {
+      return `<div class="mp-account is-in">${icon('shield', 18)}<span class="mp-account-text">บันทึกออนไลน์แล้ว<small>${a.label ? `${esc(a.label)} · ` : ''}เล่นต่อได้ทุกเครื่อง</small></span>`
+        + `<button type="button" class="mp-account-out">ออกจากระบบ</button></div>`;
+    }
+    return `<button type="button" class="mp-account mp-account-in">${GOOGLE_G}<span class="mp-account-text">เข้าสู่ระบบด้วย Google<small>เก็บข้อมูลไว้ เล่นต่อได้ทุกเครื่อง</small></span></button>`;
+  }
   function onSelectClick(ev) {
+    if (ev.target.closest('.mp-account-in')) { call('onCloudSignIn'); return; }
+    if (ev.target.closest('.mp-account-out')) { call('onCloudSignOut'); return; }
     const sel = state.select;
     if (!sel) return;
     if (ev.target.closest('.mp-select-x')) { api.hideSelect(); return; }
@@ -1491,6 +1506,11 @@ export function createHUD(root, handlers = {}, options = {}) {
      *          progress?:number, hint?:string, traitLabel?:string}[]} chars
      * @param {string} [currentKey] current character; when set, the overlay can be closed
      */
+    /** Cloud account state for the select sheet: { enabled, signedIn, label }. */
+    setAccount(a) {
+      state.account = a ? { ...a } : null;
+      if (state.select && !el.select.hidden) renderSelect(state.select.chars, state.select.current);
+    },
     showSelect(chars = [], currentKey) {
       if (s5) { s5.hooks.closeSheets(); s5.api.hideMinigamePicker(); }
       const firstOpen = !state.select;
