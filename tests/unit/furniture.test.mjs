@@ -144,7 +144,7 @@ test('migrateSave_v3_keepsEverything_andAddsDefaultFurniture', () => {
   const m = migrateSave(JSON.parse(JSON.stringify(v3)), DATA, T0, ROOMS);
   // Assert
   eq(m.version, SAVE_VERSION, 'version'); eq(m.selected, 'gumdrop', 'selected'); eq(m.room, 'bathroom', 'room'); eq(m.coins, 310, 'coins');
-  deepEq(m.settings, { ...v3.settings, talkMode: 'auto', talkNoticeSeen: false }, 'settings (v5 adds talk settings)');
+  deepEq(m.settings, { ...v3.settings, talkMode: 'auto', talkNoticeSeen: false, musicVol: 0.5, sfxVol: 0.8 }, 'settings (v5 adds talk settings)');
   deepEq(m.chars.gumdrop.needs, v3.chars.gumdrop.needs, 'needs'); eq(m.chars.gumdrop.tLast, T0 - 1000, 'tLast');
   deepEq(m.chars.gumdrop.outfit, v3.chars.gumdrop.outfit, 'outfit'); eq(m.chars.gumdrop.best.snackRain, 220, 'best');
   eq(m.chars.gumdrop.wearBonusAt, T0 - 5000, 'bonus');

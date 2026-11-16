@@ -965,8 +965,8 @@ export function installS5(ctx) {
         const dot = el.dots.find((d) => d.dataset.room === t.room);
         if (dot) nodes.push(dot);
       } else if (t.kind === 'ctx') nodes.push(el.ctx);
-      else if (t.kind === 'ward') nodes.push(el.wardBtn);
-      else if (t.kind === 'decor') nodes.push(state.room === 'kitchen' && !el.tray.hidden ? el.trayDecor : el.decorBtn);
+      else if (t.kind === 'ward') nodes.push(el.styleMenu && !el.styleMenu.hidden ? el.wardBtn : el.styleBtn || el.wardBtn);
+      else if (t.kind === 'decor') nodes.push(state.room === 'kitchen' && !el.tray.hidden ? el.trayDecor : (el.styleMenu && !el.styleMenu.hidden ? el.decorBtn : el.styleBtn || el.decorBtn));
       else if (t.kind === 'lamp') nodes.push(el.lamp);
       for (const node of nodes) {
         if (!node || node.hidden || node.closest('[hidden]')) continue;

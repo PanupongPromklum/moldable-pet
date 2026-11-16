@@ -1,0 +1,70 @@
+<!doctype html>
+<html lang="th"><head><meta charset="utf-8"><title>Render portraits</title>
+<!-- Renders each character from the live 3D model (transparent background, game lights) so the select
+     cards and avatars always match the current look. Driven by tools/render-portraits.py. -->
+<style>html,body{margin:0;background:transparent}canvas{display:block}</style>
+<script type="importmap">
+{ "imports": {
+  "three": "https://cdn.jsdelivr.net/npm/three@0.162.0/build/three.module.js",
+  "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.162.0/examples/jsm/"
+} }
+</script>
+</head><body>
+<script type="module">
+import * as THREE from 'three';
+import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
+import { createCharacter } from '../src/characters/character.js';
+
+const SIZE = 640;
+const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true, preserveDrawingBuffer: true });
+renderer.setPixelRatio(1); renderer.setSize(SIZE, SIZE, false);
+renderer.outputColorSpace = THREE.SRGBColorSpace; renderer.toneMapping = THREE.NeutralToneMapping;
+renderer.setClearColor(0x000000, 0);
+document.body.appendChild(renderer.domElement);
+const scene = new THREE.Scene();
+scene.environment = new THREE.PMREMGenerator(renderer).fromScene(new RoomEnvironment(), 0.04).texture;
+// the game stage's light-theme lights (src/engine/stage.js)
+const hemi = new THREE.HemisphereLight(0xffe1f2, 0x9cb0ea, 2.1);
+const key = new THREE.DirectionalLight(0xfff5fb, 1.5); key.position.set(1.4, 4.6, 4.2);
+const fill = new THREE.DirectionalLight(0xa8b8ff, 0.55); fill.position.set(-2.2, -1.4, 3.2);
+const rim = new THREE.DirectionalLight(0xffffff, 1.3); rim.position.set(-2.6, 2.6, -3.2);
+scene.add(hemi, key, fill, rim);
+const camera = new THREE.PerspectiveCamera(22, 1, 0.1, 60);
+
+/**
+ * Render one character. mode 'full' = whole body framed; 'face' = close-up for the round avatar
+ * (head and face fill the frame, the body runs out of the bottom).
+ * @returns {string} PNG data URL
+ */
+window.renderPortrait = (k, mode = 'full') => {
+  const pet = createCharacter(k, { idle: false, shadow: false, detail: 72 });
+  scene.add(pet.object3d);
+  pet.update?.(0, 0);
+  if (pet.lightTint) { hemi.color.copy(pet.lightTint.sky); hemi.groundColor.copy(pet.lightTint.ground); }
+  const box = new THREE.Box3().setFromObject(pet.object3d), c = box.getCenter(new THREE.Vector3()), s = box.getSize(new THREE.Vector3());
+  const fov = THREE.MathUtils.degToRad(camera.fov);
+  if (mode === 'face') {
+    // Figma avatar: top of the head ~12 % from the top of the circle, face a little below the middle,
+    // body filling the bottom of the circle.
+    const tall = THREE.MathUtils.clamp((s.y / s.x - 1) / .6, 0, 1);   // 0 wide … 1 tall (pill, diamond)
+    const span = s.x * THREE.MathUtils.lerp(.8, 1.32, tall);
+    const d = span / 2 / Math.tan(fov / 2);
+    // mouth at ~68 % down the circle (eyes just above the middle), as in the Figma avatars
+    const mouth = pet.getMouthWorld(new THREE.Vector3());
+    const ty = Math.min(mouth.y + span * .18, box.max.y - span * .36);
+    camera.position.set(c.x, ty + .15, c.z + d); camera.lookAt(c.x, ty, c.z);
+  } else {
+    const span = Math.max(s.x, s.y) * 1.14;
+    const d = span / 2 / Math.tan(fov / 2);
+    camera.position.set(c.x, c.y + .25, c.z + d); camera.lookAt(c.x, c.y, c.z);
+  }
+  camera.updateProjectionMatrix();
+  renderer.render(scene, camera);
+  const url = renderer.domElement.toDataURL('image/png');
+  scene.remove(pet.object3d); pet.dispose?.();
+  hemi.color.set(0xffe1f2); hemi.groundColor.set(0x9cb0ea);
+  return url;
+};
+window.ready = true;
+</script>
+</body></html>

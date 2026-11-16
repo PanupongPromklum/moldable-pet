@@ -43,3 +43,31 @@ export function accountInfo(user) {
   const avatar = [m.avatar_url, m.picture].find((u) => typeof u === 'string' && /^https:\/\//.test(u)) || '';
   return { name: m.full_name || m.name || '', email: user?.email || m.email || '', avatar };
 }
+
+/** The device save has real progress (the player picked a pet at least once). */
+export function hasProgress(save) { return !!(save && save.chosen); }
+
+/**
+ * What to do when an account is signed in (owner 2026-11-16: a signed-in player plays the account's
+ * save; when this device also has its own progress, ask which one to keep).
+ * @param {{ local: object|null, remote: {save: object, saved_at?: number}|null, linkedTo: string|null, userId: string }} p
+ *   linkedTo = the account this device save already belongs to (set after the first sync)
+ * @returns {'push'|'pull'|'same'|'ask'}
+ */
+export function syncDecision({ local, remote, linkedTo, userId }) {
+  const remoteOk = !!(remote && validSave(remote.save));
+  if (!remoteOk) return 'push';                       // new account: it adopts this device's progress
+  if (!hasProgress(local)) return 'pull';             // nothing to lose here: use the account
+  if (linkedTo && linkedTo === userId) return pickNewer(local, remote);   // same lineage: newest wins
+  return pickNewer(local, remote) === 'same' ? 'same' : 'ask';           // two different histories
+}
+
+/**
+ * Short facts for the "which save?" choice.
+ * @param {object} save @param {Record<string,string>} [names] character key → Thai name
+ * @returns {{ pet: string, coins: number, savedAt: number }}
+ */
+export function saveSummary(save, names = {}) {
+  const key = save?.selected;
+  return { pet: (key && names[key]) || '', coins: Math.max(0, Math.floor(Number(save?.coins) || 0)), savedAt: Number(save?.savedAt) || 0 };
+}
