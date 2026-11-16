@@ -245,6 +245,7 @@ async function boot() {
     onSelect(key) { selectCharacter(key); },
     onCloudSignIn() { cloud.signIn(); },
     onCloudSignOut() { cloud.signOut(); },
+    onCloudSync() { cloud.syncNow(); },
     onWardrobe() { openWardrobe(); },
     onEquip(slot, id) { equip(slot, id ?? null); },
     onBuy(id) { buy(id); },

@@ -33,3 +33,13 @@ export function accountLabel(user) {
   const m = user?.user_metadata || {};
   return m.full_name || m.name || (user?.email ? user.email.replace(/@.*/, '') : '');
 }
+
+/**
+ * Profile details for the HUD profile card (Google fills user_metadata).
+ * @returns {{name: string, email: string, avatar: string}} empty strings when signed out
+ */
+export function accountInfo(user) {
+  const m = user?.user_metadata || {};
+  const avatar = [m.avatar_url, m.picture].find((u) => typeof u === 'string' && /^https:\/\//.test(u)) || '';
+  return { name: m.full_name || m.name || '', email: user?.email || m.email || '', avatar };
+}
