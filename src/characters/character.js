@@ -134,7 +134,7 @@ export function createCharacter(key, opts = {}) {
   const decalBase = { transparent: true, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -4, polygonOffsetUnits: -4 };
   const eyeTex = [canvasTex(ETEX), canvasTex(ETEX)], mouthTex = canvasTex(TEX);
   // Clear lens eyes (owner 2026-11-16, "ฝัง + เลนส์ใส"): glossy clear-coat over the painted eye so it catches light.
-  const eyeMats = eyeTex.map(x => new THREE.MeshPhysicalMaterial({ map: x.t, roughness: .55, clearcoat: .35, clearcoatRoughness: .25, envMapIntensity: .18, ...decalBase }));
+  const eyeMats = eyeTex.map(x => new THREE.MeshPhysicalMaterial({ map: x.t, roughness: .7, clearcoat: .12, clearcoatRoughness: .4, envMapIntensity: .1, ...decalBase }));
   const mouthMat = new THREE.MeshStandardMaterial({ map: mouthTex.t, roughness: .7, ...decalBase });
   const blushTex = radialTex(128, 'rgba(246,150,190,.85)', 'rgba(246,150,190,0)');
   const blushMat = new THREE.MeshBasicMaterial({ map: blushTex, opacity: 0, ...decalBase });
@@ -218,12 +218,12 @@ export function createCharacter(key, opts = {}) {
     return E.pos.map(([x, y]) => [x + Math.sign(x - eyeMidX || 1) * w * (k - 1), y + h * (k - 1) * .5]);
   }
 
-  // rest geometry = flat body + eye sockets (the soft-body base; decals are projected onto it)
+  // rest geometry = flat body + very shallow eye sockets (owner 2026-11-16: eyes sit flush, not deep) (the soft-body base; decals are projected onto it)
   const restGeo = flatGeo.clone(), insetGeo = flatGeo.clone();
   const fpos = flatGeo.attributes.position, fnor = flatGeo.attributes.normal;
   function buildSockets(k, P) {
     const rp = restGeo.attributes.position, Sk = S * k;
-    const grow = 1.12, depth = .16 * Math.min(E.w, E.h) * Sk, pupOff = [E.pdx * E.w * Sk, E.pdy * E.h * Sk];
+    const grow = 1.12, depth = .02 * Math.min(E.w, E.h) * Sk, pupOff = [E.pdx * E.w * Sk, E.pdy * E.h * Sk];
     const cr = Math.cos(-E.rot), sr = Math.sin(-E.rot);
     for (let i = 0; i < fpos.count; i++) {
       let x = fpos.getX(i), y = fpos.getY(i), z = fpos.getZ(i);

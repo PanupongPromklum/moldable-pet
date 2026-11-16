@@ -80,23 +80,17 @@ export function drawEye(g, TEX, BOX, E, S, i, st) {
 }
 
 /**
- * Inset + clear lens (owner 2026-11-16): a soft socket shadow along the top inside edge so the eye
- * reads as set into the body, a faint cool rim, and a glossy crescent highlight at the upper right.
+ * Clear lens (owner 2026-11-16): a glossy highlight at the upper right of the eye. The eye stays flat
+ * and white (owner asked to drop the socket shadow so the eyes do not look deep).
  * Drawn in eye space (y up), clipped to the eye shape.
  */
 function drawLens(g, w, h, E) {
   g.save();
   superPath(g, w, h, E.p); g.clip();
-  const sh = g.createLinearGradient(0, h, 0, h * .15);
-  sh.addColorStop(0, 'rgba(92,84,150,.2)'); sh.addColorStop(1, 'rgba(92,84,150,0)');
-  g.fillStyle = sh; g.fillRect(-w * 1.2, -h * 1.2, w * 2.4, h * 2.4);
-  const rim = g.createRadialGradient(0, 0, Math.min(w, h) * .7, 0, 0, Math.max(w, h) * 1.05);
-  rim.addColorStop(0, 'rgba(160,170,220,0)'); rim.addColorStop(1, 'rgba(160,170,220,.2)');
-  g.fillStyle = rim; g.fillRect(-w * 1.2, -h * 1.2, w * 2.4, h * 2.4);
-  // crescent highlight hugging the upper-right rim, kept off the pupil
-  g.translate(w * .66, h * .5); g.rotate(-.7);
-  g.fillStyle = 'rgba(255,255,255,.95)';
-  g.beginPath(); g.ellipse(0, 0, w * .1, h * .26, 0, 0, Math.PI * 2); g.fill();
+  // small glossy highlight at the upper right (flat eye, no socket shadow — owner 2026-11-16)
+  g.translate(w * .62, h * .5); g.rotate(-.7);
+  g.fillStyle = 'rgba(255,255,255,.9)';
+  g.beginPath(); g.ellipse(0, 0, w * .09, h * .22, 0, 0, Math.PI * 2); g.fill();
   g.restore();
 }
 
