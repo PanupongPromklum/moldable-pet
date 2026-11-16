@@ -1,8 +1,10 @@
 /**
- * Profile button (top bar) + profile card for the Google cloud save (owner 2026-11-16:
- * "ไม่มีอะไรบอกว่า Login สำเร็จหรือเปล่า"). Shows at a glance whether the player is signed in,
- * and opens a small card with the account photo, name, email, save status and sign in / sign out.
- * Owner: glaze. Hidden entirely when cloud save is not configured.
+ * Account block of the profile sheet (owner 2026-11-16: profile and character choice live in one
+ * sheet, opened from the pet chip). Shows whether the Google cloud save is signed in: photo, name,
+ * email, save status, "บันทึกตอนนี้" and sign out; or the Google sign-in button. Also the
+ * "which save?" choice shown when this device and the account both have progress.
+ * Pure string builders; hud.js renders them and routes clicks by `data-act`.
+ * Owner: glaze.
  * @module ui/profile
  */
 
@@ -15,6 +17,14 @@ export const PROFILE_STRINGS = {
   title: 'โปรไฟล์',
   outTitle: 'ยังไม่ได้เข้าสู่ระบบ',
   outBody: 'ตอนนี้ข้อมูลเก็บไว้ในเครื่องนี้เท่านั้น เข้าสู่ระบบด้วย Google เพื่อเก็บไว้ออนไลน์ แล้วเล่นต่อได้ทุกเครื่อง',
+  outShort: 'ข้อมูลอยู่ในเครื่องนี้เท่านั้น',
+  googleShort: 'เข้าสู่ระบบ',
+  recommended: 'แนะนำ',
+  choiceTitle: 'จะใช้ข้อมูลชุดไหนดี',
+  choiceBody: 'เครื่องนี้มีข้อมูลการเล่นอยู่แล้ว และบัญชี Google ก็มีข้อมูลอีกชุด เลือกชุดที่จะเล่นต่อ',
+  choiceCloud: 'ใช้ข้อมูลจากบัญชี Google',
+  choiceDevice: 'ใช้ข้อมูลในเครื่องนี้',
+  choiceNote: 'ชุดที่ไม่ได้เลือกจะถูกแทนที่ด้วยชุดที่เลือก',
   google: 'เข้าสู่ระบบด้วย Google',
   saved: 'บันทึกออนไลน์แล้ว',
   saving: 'กำลังบันทึก…',
@@ -44,124 +54,67 @@ export function initialOf(name) {
 
 const PERSON = '<svg width="22" height="22" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><circle cx="12" cy="8.2" r="4.2" fill="currentColor"/><path d="M3.8 20.2c.9-4.1 4.2-6.4 8.2-6.4s7.3 2.3 8.2 6.4c.1.5-.3.9-.8.9H4.6c-.5 0-.9-.4-.8-.9z" fill="currentColor"/></svg>';
 
-/**
- * @param {{ root: HTMLElement, slot: HTMLElement, icon: Function, googleG: string, call: (name: string, ...a: any[]) => void,
- *   onOpen?: () => void, onClose?: () => void }} deps  slot = where the top-bar button goes
- */
-export function createProfile({ root, slot, icon, googleG, call, onOpen, onClose }) {
-  const S = PROFILE_STRINGS;
-  let acc = null, returnFocus = null, tick = 0;
-
-  const btn = document.createElement('button');
-  btn.type = 'button'; btn.className = 'mp-iconbtn mp-prof-btn mp-tip'; btn.hidden = true;
-  slot.prepend(btn);
-  const card = document.createElement('section');
-  card.className = 'mp-card5 mp-prof'; card.hidden = true;
-  card.setAttribute('role', 'dialog'); card.setAttribute('aria-modal', 'true'); card.setAttribute('aria-labelledby', 'mp-prof-title');
-  root.appendChild(card);
-
-  const photo = (a, size) => {
-    const letter = `<span class="mp-prof-letter" style="font-size:${Math.round(size * .42)}px">${esc(initialOf(a.name || a.label || a.email))}</span>`;
-    return a.avatar
-      ? `<img alt="" src="${esc(a.avatar)}" referrerpolicy="no-referrer" width="${size}" height="${size}" onerror="this.replaceWith(Object.assign(document.createElement('span'),{className:'mp-prof-letter',textContent:this.dataset.l,style:'font-size:${Math.round(size * .42)}px'}))" data-l="${esc(initialOf(a.name || a.label || a.email))}">`
-      : letter;
-  };
-
-  function renderBtn() {
-    const a = acc;
-    btn.hidden = !(a && a.enabled);
-    if (btn.hidden) return;
-    btn.dataset.state = a.signedIn ? (a.sync === 'error' ? 'error' : 'in') : 'out';
-    const label = a.signedIn ? S.btnIn(a.name || a.label || '') : S.btnOut;
-    btn.setAttribute('aria-label', label); btn.dataset.tip = a.signedIn ? (a.name || a.label || S.title) : S.google;
-    const badge = a.signedIn ? (a.sync === 'saving' ? '<span class="mp-prof-spin"></span>' : icon(a.sync === 'error' ? 'close' : 'check', 12)) : '';
-    const keyNow = `${a.signedIn}|${a.avatar}|${a.name}|${a.label}`;
-    if (keyNow === btn.dataset.key && a.signedIn) { const b = btn.querySelector('.mp-prof-badge'); if (b) b.innerHTML = badge; return; }
-    btn.dataset.key = keyNow;
-    btn.innerHTML = a.signedIn
-      ? `<span class="mp-prof-ava">${photo(a, 36)}</span><span class="mp-prof-badge" aria-hidden="true">${badge}</span>`
-      : `<span class="mp-prof-ava is-out">${PERSON}</span><span class="mp-prof-badge is-out" aria-hidden="true">${googleG}</span>`;
-  }
-
-  function statusLine(a) {
-    if (a.sync === 'saving') return `<span class="mp-prof-dot is-saving"></span>${esc(S.saving)}`;
-    if (a.sync === 'error') return `<span class="mp-prof-dot is-error"></span>${esc(S.error)}`;
-    const t = agoText(a.lastSync);
-    return `<span class="mp-prof-dot"></span>${esc(S.saved)}${t ? ` · ${esc(S.last(t))}` : ''}`;
-  }
-
-  function renderCard() {
-    const a = acc || {};
-    if (a.signedIn) {
-      card.innerHTML = `
-      <div class="mp-card5-in mp-prof-in">
-        <button type="button" class="mp-iconbtn mp-iconbtn--ghost mp-card5-x mp-prof-x" aria-label="${esc(S.close)}">${icon('close', 20)}</button>
-        <span class="mp-prof-big">${photo(a, 72)}<span class="mp-prof-badge mp-prof-badge--big" aria-hidden="true">${icon('check', 14)}</span></span>
-        <h2 class="mp-card5-title mp-prof-name" id="mp-prof-title">${esc(a.name || a.label || S.title)}</h2>
-        ${a.email ? `<p class="mp-prof-mail mp-num">${esc(a.email)}</p>` : ''}
-        <p class="mp-prof-status" role="status">${statusLine(a)}</p>
-        <p class="mp-prof-note">${icon('shield', 16)}<span>${esc(S.everywhere)}</span></p>
-        <div class="mp-prof-actions">
-          <button type="button" class="mp-btn-outline mp-prof-out">${esc(S.signOut)}</button>
-          <button type="button" class="mp-btn-primary mp-prof-sync" ${a.sync === 'saving' ? 'disabled' : ''}>${esc(S.syncNow)}</button>
-        </div>
-      </div>`;
-    } else {
-      card.innerHTML = `
-      <div class="mp-card5-in mp-prof-in">
-        <button type="button" class="mp-iconbtn mp-iconbtn--ghost mp-card5-x mp-prof-x" aria-label="${esc(S.close)}">${icon('close', 20)}</button>
-        <span class="mp-prof-big is-out">${PERSON}</span>
-        <h2 class="mp-card5-title" id="mp-prof-title">${esc(S.outTitle)}</h2>
-        <p class="mp-prof-body">${esc(S.outBody)}</p>
-        <button type="button" class="mp-prof-google">${googleG}<span>${esc(S.google)}</span></button>
-      </div>`;
-    }
-  }
-
-  function open() {
-    if (!acc || !acc.enabled) return;
-    returnFocus = card.hidden ? document.activeElement : returnFocus;
-    renderCard(); card.hidden = false; root.classList.add('is-prof');
-    onOpen?.();
-    clearInterval(tick); tick = setInterval(() => { if (!card.hidden && acc?.signedIn) { const p = card.querySelector('.mp-prof-status'); if (p) p.innerHTML = statusLine(acc); } }, 30000);
-    (card.querySelector('.mp-prof-google, .mp-prof-sync') || card.querySelector('button'))?.focus({ preventScroll: true });
-  }
-  function close() {
-    if (card.hidden) return;
-    card.hidden = true; card.innerHTML = ''; root.classList.remove('is-prof'); clearInterval(tick);
-    onClose?.();
-    try { returnFocus?.focus?.({ preventScroll: true }); } catch { /* gone */ }
-  }
-
-  btn.addEventListener('click', () => (card.hidden ? open() : close()));
-  card.addEventListener('click', (ev) => {
-    if (ev.target === card || ev.target.closest('.mp-prof-x')) { close(); return; }
-    if (ev.target.closest('.mp-prof-google')) { call('onCloudSignIn'); return; }
-    if (ev.target.closest('.mp-prof-sync')) { call('onCloudSync'); return; }
-    if (ev.target.closest('.mp-prof-out')) { close(); call('onCloudSignOut'); }
-  });
-  card.addEventListener('keydown', (ev) => {
-    if (ev.key === 'Escape') { ev.stopPropagation(); close(); return; }
-    if (ev.key === 'Tab') {
-      const f = [...card.querySelectorAll('button:not([disabled])')];
-      if (!f.length) return;
-      const i = f.indexOf(document.activeElement);
-      if (ev.shiftKey && i <= 0) { ev.preventDefault(); f[f.length - 1].focus(); }
-      else if (!ev.shiftKey && i === f.length - 1) { ev.preventDefault(); f[0].focus(); }
-    }
-  });
-
-  return {
-    /** @param {{enabled:boolean, signedIn:boolean, label?:string, name?:string, email?:string, avatar?:string, sync?:'idle'|'saving'|'saved'|'error', lastSync?:number}|null} a */
-    set(a) {
-      acc = a ? { ...a } : null;
-      renderBtn();
-      if (!card.hidden) {
-        if (!acc || !acc.enabled) close();
-        else { const focusSync = document.activeElement?.classList?.contains('mp-prof-sync'); renderCard(); if (focusSync) card.querySelector('.mp-prof-sync, .mp-prof-out')?.focus({ preventScroll: true }); }
-      }
-    },
-    open, close,
-    get isOpen() { return !card.hidden; },
-  };
+function photo(a, size) {
+  const l = esc(initialOf(a.name || a.label || a.email));
+  return a.avatar
+    ? `<img alt="" src="${esc(a.avatar)}" referrerpolicy="no-referrer" width="${size}" height="${size}" data-l="${l}" onerror="this.replaceWith(Object.assign(document.createElement('span'),{className:'mp-prof-letter',textContent:this.dataset.l}))">`
+    : `<span class="mp-prof-letter">${l}</span>`;
 }
+
+function statusLine(a) {
+  const S = PROFILE_STRINGS;
+  if (a.sync === 'saving') return `<span class="mp-prof-dot is-saving"></span>${esc(S.saving)}`;
+  if (a.sync === 'error') return `<span class="mp-prof-dot is-error"></span>${esc(S.error)}`;
+  const t = agoText(a.lastSync);
+  return `<span class="mp-prof-dot"></span>${esc(S.saved)}${t ? ` · ${esc(S.last(t))}` : ''}`;
+}
+
+/**
+ * Account block markup ('' when cloud save is off). Buttons carry data-act = signin | signout | sync.
+ * @param {{enabled:boolean, signedIn:boolean, label?:string, name?:string, email?:string, avatar?:string, sync?:string, lastSync?:number}|null} a
+ * @param {{ googleG: string }} deps
+ */
+export function accountBlock(a, { googleG }) {
+  const S = PROFILE_STRINGS;
+  if (!a || !a.enabled) return '';
+  if (!a.signedIn) {
+    return `<section class="mp-acct is-out" aria-label="${esc(S.title)}">
+      <span class="mp-acct-ava is-out" aria-hidden="true">${PERSON}</span>
+      <span class="mp-acct-text"><b>${esc(S.outTitle)}</b><small>${esc(S.outShort)}</small></span>
+      <button type="button" class="mp-acct-google" data-act="signin">${googleG}<span>${esc(S.googleShort)}</span></button>
+    </section>`;
+  }
+  return `<section class="mp-acct is-in" aria-label="${esc(S.title)}">
+    <span class="mp-acct-ava" aria-hidden="true">${photo(a, 44)}</span>
+    <span class="mp-acct-text"><b>${esc(a.name || a.label || '')}</b><small class="mp-num">${esc(a.email || '')}</small>
+      <span class="mp-acct-status" role="status">${statusLine(a)}</span></span>
+    <span class="mp-acct-btns">
+      <button type="button" class="mp-acct-link" data-act="sync" ${a.sync === 'saving' ? 'disabled' : ''}>${esc(S.syncNow)}</button>
+      <button type="button" class="mp-acct-link" data-act="signout">${esc(S.signOut)}</button>
+    </span>
+  </section>`;
+}
+
+/**
+ * "Which save?" card (cloud sync conflict). Buttons carry data-pick = cloud | device.
+ * @param {{ device: {pet:string, coins:number, savedAt:number}, cloud: {pet:string, coins:number, savedAt:number} }} c
+ * @param {{ googleG: string, coinDot: () => string }} deps
+ */
+export function saveChoiceCard(c, { googleG, coinDot }) {
+  const S = PROFILE_STRINGS;
+  const opt = (pick, title, sum, ico, rec) => `
+    <button type="button" class="mp-savepick${rec ? ' is-rec' : ''}" data-pick="${pick}">
+      <span class="mp-savepick-ico" aria-hidden="true">${ico}</span>
+      <span class="mp-savepick-text"><b>${esc(title)}</b>
+        <small>${esc(sum.pet || '—')} · ${coinDot()}<span class="mp-num">${Math.floor(sum.coins || 0)}</span>${sum.savedAt ? ` · ${esc(S.last(agoText(sum.savedAt)))}` : ''}</small></span>
+      ${rec ? `<span class="mp-savepick-rec">${esc(S.recommended)}</span>` : ''}
+    </button>`;
+  return `<div class="mp-card5-in mp-savechoice-in">
+    <h2 class="mp-card5-title" id="mp-savechoice-title">${esc(S.choiceTitle)}</h2>
+    <p class="mp-card5-line" id="mp-savechoice-body">${esc(S.choiceBody)}</p>
+    ${opt('cloud', S.choiceCloud, c.cloud, googleG, true)}
+    ${opt('device', S.choiceDevice, c.device, PHONE, false)}
+    <p class="mp-savechoice-note">${esc(S.choiceNote)}</p>
+  </div>`;
+}
+const PHONE = '<svg width="22" height="22" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><rect x="6" y="2.5" width="12" height="19" rx="3" fill="currentColor"/><rect x="10" y="17.6" width="4" height="1.6" rx=".8" fill="#fff"/></svg>';

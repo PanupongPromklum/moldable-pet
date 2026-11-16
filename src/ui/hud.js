@@ -91,7 +91,8 @@
  */
 import { icon, foodIcon, accessoryIcon, filledIcon } from './icons.js';
 import { installS5, HUD_S5_STRINGS } from './hud-s5.js';
-import { createProfile } from './profile.js';
+import { accountBlock, saveChoiceCard } from './profile.js';
+import { createSettings } from './settings.js';
 /** Google "G" for the sign-in button (Google sign-in branding guidelines). */
 const GOOGLE_G = '<svg class="mp-g" width="20" height="20" viewBox="0 0 48 48" aria-hidden="true" focusable="false"><path fill="#EA4335" d="M24 9.5c3.5 0 6.6 1.2 9.1 3.6l6.8-6.8C35.8 2.4 30.3 0 24 0 14.6 0 6.6 5.4 2.6 13.3l7.9 6.1C12.4 13.7 17.7 9.5 24 9.5z"/><path fill="#4285F4" d="M46.1 24.5c0-1.6-.1-3.1-.4-4.5H24v9h12.4c-.5 2.9-2.2 5.3-4.6 7l7.4 5.7c4.3-4 6.9-9.9 6.9-17.2z"/><path fill="#FBBC05" d="M10.5 28.6c-.5-1.4-.8-3-.8-4.6s.3-3.2.8-4.6l-7.9-6.1C1 16.6 0 20.2 0 24s1 7.4 2.6 10.7l7.9-6.1z"/><path fill="#34A853" d="M24 48c6.5 0 11.9-2.1 15.9-5.8l-7.4-5.7c-2.1 1.4-4.8 2.3-8.5 2.3-6.3 0-11.6-4.2-13.5-9.9l-7.9 6.1C6.6 42.6 14.6 48 24 48z"/></svg>';
 
@@ -123,6 +124,8 @@ const PORTRAITS = {
   splat: 'char_mai.png', pill: 'char_two.png', gumdrop: 'char_min.png',
   diamond: 'char_ack.png', cloud: 'char_fah.png', flower: 'char_pai.png',
 };
+/** Round avatars (Figma 9JQVk9nzZTidPDIQkeddkc node 4966:803), rendered by tools/render-portraits.py. */
+const AVATARS = Object.fromEntries(Object.entries(PORTRAITS).map(([k, f]) => [k, f.replace('char_', 'ava_')]));
 
 /**
  * All player-facing HUD copy (Thai). Override any key with `options.strings`.
@@ -144,6 +147,9 @@ export const HUD_STRINGS = {
   keyHint: 'เปลี่ยนห้อง',
   play: 'เล่น',
   wardrobe: 'แต่งตัว',
+  style: 'แต่ง',
+  styleMenu: 'เลือกสิ่งที่จะแต่ง',
+  signedIn: 'บันทึกออนไลน์แล้ว',
   tray: 'ถาดอาหาร',
   traySub: 'ลากไปที่ปาก',
   trayClose: 'ปิดถาดอาหาร',
@@ -166,6 +172,8 @@ export const HUD_STRINGS = {
   select: {
     brand: 'Moldable Pet',
     title: 'เลือกเพื่อนก้อนนุ่ม',
+    profile: 'โปรไฟล์',
+    pets: 'เพื่อนของฉัน',
     sub: 'เลือกได้ 1 ตัว เปลี่ยนทีหลังได้ที่มุมซ้ายบน',
     group: 'ตัวละคร',
     soon: 'เร็วๆ นี้',
@@ -372,6 +380,7 @@ export function createHUD(root, handlers = {}, options = {}) {
   const needLabel = (id) => (needCfg[id] && needCfg[id].label) || S.needs[id];
   const call = (name, ...args) => { try { handlers[name] && handlers[name](...args); } catch (err) { console.error('[hud]', name, err); } };
   const portrait = (key) => new URL(`../../assets/ui/characters/${PORTRAITS[key] || PORTRAITS.flower}`, import.meta.url).href;
+  const avatar = (key) => new URL(`../../assets/ui/characters/${AVATARS[key] || AVATARS.flower}`, import.meta.url).href;
   const mq = (q) => (typeof matchMedia === 'function' ? matchMedia(q) : { matches: false });
   const reducedMotion = mq('(prefers-reduced-motion: reduce)');
   const finePointer = mq('(hover: hover) and (pointer: fine)');
@@ -396,7 +405,7 @@ export function createHUD(root, handlers = {}, options = {}) {
     <div class="mp-top">
       <div class="mp-bar">
         <button type="button" class="mp-who mp-tip" data-tip="${esc(S.chipTip)}">
-          <span class="mp-who-ava"><img alt="" src="${portrait('flower')}"></span>
+          <span class="mp-who-ava"><img alt="" src="${avatar('flower')}"><span class="mp-who-acct" aria-hidden="true" hidden>${icon('check', 11)}</span></span>
           <span class="mp-who-name"></span>
           <span class="mp-who-more">${icon('chevron-down', 16)}</span>
         </button>
@@ -449,8 +458,11 @@ export function createHUD(root, handlers = {}, options = {}) {
       </div>
       <div class="mp-actions">
         <div class="mp-actions-start">
-          <button type="button" class="mp-ctx mp-ctx--outline mp-ward-btn" hidden>${filledIcon('shirt', 30)}<span>${esc(S.wardrobe)}</span></button>
-          <button type="button" class="mp-ctx mp-ctx--outline mp-decor-btn" hidden>${filledIcon('decor', 30)}<span>${esc(S.decorBtn)}</span></button>
+          <button type="button" class="mp-ctx mp-ctx--outline mp-style-btn" aria-haspopup="true" aria-expanded="false">${filledIcon('decor', 30)}<span>${esc(S.style)}</span></button>
+          <div class="mp-style-menu" role="group" aria-label="${esc(S.styleMenu)}" hidden>
+            <button type="button" class="mp-ctx mp-ctx--outline mp-ward-btn">${filledIcon('shirt', 30)}<span>${esc(S.wardrobe)}</span></button>
+            <button type="button" class="mp-ctx mp-ctx--outline mp-decor-btn">${filledIcon('decor', 30)}<span>${esc(S.decorBtn)}</span></button>
+          </div>
         </div>
         <div class="mp-mic-wrap">
           <button type="button" class="mp-mic" data-state="off">
@@ -514,7 +526,7 @@ export function createHUD(root, handlers = {}, options = {}) {
     flushRow: $('.mp-flush-row'), flush: $('.mp-flush'),
     prev: $('.mp-prev'), next: $('.mp-next'), dots: [...root.querySelectorAll('.mp-dot')],
     actions: $('.mp-actions'), mic: $('.mp-mic'), micIco: $('.mp-mic-ico'), micLabel: $('.mp-mic-label'),
-    ctx: $('.mp-ctx[data-ctx]'), wardBtn: $('.mp-ward-btn'), decorBtn: $('.mp-decor-btn'), trayDecor: $('.mp-tray-decor'),
+    ctx: $('.mp-ctx[data-ctx]'), wardBtn: $('.mp-ward-btn'), decorBtn: $('.mp-decor-btn'), styleBtn: $('.mp-style-btn'), styleMenu: $('.mp-style-menu'), whoAcct: $('.mp-who-acct'), trayDecor: $('.mp-tray-decor'),
     tray: $('.mp-tray'), trayGrid: $('.mp-tray-grid'), trayX: $('.mp-tray-x'),
     bubble: $('.mp-bubble'), bubbleText: $('.mp-bubble-text'), bubbleTail: $('.mp-bubble-tail'),
     ward: $('.mp-ward:not(.mp-decor)'), decor: $('.mp-decor'), decorInner: $('.mp-decor-inner'), decorLive: $('.mp-decor .mp-sr'),
@@ -541,8 +553,21 @@ export function createHUD(root, handlers = {}, options = {}) {
   el.mic.addEventListener('click', () => { if (!s5 || s5.hooks.micClickAllowed()) call('onMic'); });
   el.toastX.addEventListener('click', () => hideToast());
   el.flush.addEventListener('click', () => call('onAction', 'flush'));
-  el.wardBtn.addEventListener('click', () => call('onWardrobe'));
-  el.decorBtn.addEventListener('click', () => call('onDecor'));
+  el.wardBtn.addEventListener('click', () => { setStyleMenu(false); call('onWardrobe'); });
+  el.decorBtn.addEventListener('click', () => { setStyleMenu(false); call('onDecor'); });
+  el.styleBtn.addEventListener('click', () => {
+    const opts = [el.wardBtn, el.decorBtn].filter((b) => !b.hidden);
+    if (opts.length === 1) { opts[0].click(); return; }
+    setStyleMenu(el.styleMenu.hidden);
+  });
+  el.styleMenu.addEventListener('keydown', (ev) => { if (ev.key === 'Escape') { ev.stopPropagation(); setStyleMenu(false); el.styleBtn.focus({ preventScroll: true }); } });
+  document.addEventListener('pointerdown', (ev) => { if (!el.styleMenu.hidden && !ev.target.closest('.mp-actions-start')) setStyleMenu(false); }, true);
+  function setStyleMenu(on) {
+    el.styleMenu.hidden = !on;
+    el.styleBtn.setAttribute('aria-expanded', String(!!on));
+    el.styleBtn.classList.toggle('is-open', !!on);
+    if (on) el.styleMenu.querySelector('button:not([hidden])')?.focus({ preventScroll: true });
+  }
   el.trayDecor.addEventListener('click', () => call('onDecor'));
   el.trayX.addEventListener('click', () => { state.trayOpen = false; renderRoom(); el.ctx.focus({ preventScroll: true }); });
   el.ctx.addEventListener('click', () => {
@@ -594,6 +619,9 @@ export function createHUD(root, handlers = {}, options = {}) {
     el.wardBtn.hidden = room !== 'living';
     const decorOn = typeof handlers.onDecor === 'function';
     el.decorBtn.hidden = !decorOn || sitting;
+    // one "แต่ง" button (owner 2026-11-16 minimal layout): a two-item menu in the living room, else straight to decor
+    el.styleBtn.hidden = el.wardBtn.hidden && el.decorBtn.hidden;
+    setStyleMenu(false);
     el.trayDecor.hidden = !decorOn;
     let ctx = null;
     if (room === 'living') ctx = { id: 'play', ico: 'fun', text: S.play, kind: 'outline', filled: true };
@@ -703,8 +731,8 @@ export function createHUD(root, handlers = {}, options = {}) {
       const label = locked ? `${c.name} ${s.soon}` : `${g5.name} ${role} ${c.mbti || ''} ${g5.aria}${c.key === currentKey ? ' ' + s.current : ''}`;
       return `
       <button type="button" class="mp-card${on ? ' is-on' : ''}${locked ? ' is-locked' : ''}" role="radio" aria-checked="${on}" ${locked ? 'aria-disabled="true"' : ''} data-key="${esc(c.key)}" aria-label="${esc(label.trim())}">
-        <span class="mp-card-pic" style="background:var(--mp-tint-${esc(c.key)}, var(--mp-bg-light))">
-          <img alt="" src="${portrait(c.key)}">
+        <span class="mp-card-pic">
+          <img alt="" src="${avatar(c.key)}" width="84" height="84">
           ${locked ? `<span class="mp-card-soon">${icon('lock', 14)}${esc(s.soon)}</span>` : ''}
           ${on ? `<span class="mp-card-check" aria-hidden="true">${icon('check', 16)}</span>` : ''}
         </span>
@@ -719,32 +747,25 @@ export function createHUD(root, handlers = {}, options = {}) {
         <div class="mp-select-head">
           <div class="mp-select-titles">
             <span class="mp-select-brand mp-num">${esc(s.brand)}</span>
-            <h1 class="mp-select-title">${esc(s.title)}</h1>
-            <p class="mp-select-sub">${esc(s.sub)}</p>
+            <h1 class="mp-select-title">${esc(sel.closable ? s.profile : s.title)}</h1>
+            ${sel.closable ? '' : `<p class="mp-select-sub">${esc(s.sub)}</p>`}
           </div>
           ${sel.closable ? `<button type="button" class="mp-iconbtn mp-select-x" aria-label="${esc(s.close)}">${icon('close', 20)}</button>` : ''}
         </div>
+        ${accountBlock(state.account, { googleG: GOOGLE_G })}
+        ${sel.closable ? `<h2 class="mp-select-h2">${esc(s.pets)}</h2>` : ''}
         <div class="mp-cards" role="radiogroup" aria-label="${esc(s.group)}">${cards}</div>
         <div class="mp-select-foot">
-          ${accountRow()}
           <button type="button" class="mp-btn-primary mp-select-go" ${chosen ? '' : 'disabled'}>${esc(chosen ? s.confirm(chosen.name) : s.confirm(''))}</button>
         </div>
       </div>`;
   }
 
-  /** Cloud account row (Google sign-in). Hidden unless the game set an account state with enabled: true. */
-  function accountRow() {
-    const a = state.account;
-    if (!a || !a.enabled) return '';
-    if (a.signedIn) {
-      return `<div class="mp-account is-in">${icon('shield', 18)}<span class="mp-account-text">บันทึกออนไลน์แล้ว<small>${a.label ? `${esc(a.label)} · ` : ''}เล่นต่อได้ทุกเครื่อง</small></span>`
-        + `<button type="button" class="mp-account-out">ออกจากระบบ</button></div>`;
-    }
-    return `<button type="button" class="mp-account mp-account-in">${GOOGLE_G}<span class="mp-account-text">เข้าสู่ระบบด้วย Google<small>เก็บข้อมูลไว้ เล่นต่อได้ทุกเครื่อง</small></span></button>`;
-  }
   function onSelectClick(ev) {
-    if (ev.target.closest('.mp-account-in')) { call('onCloudSignIn'); return; }
-    if (ev.target.closest('.mp-account-out')) { call('onCloudSignOut'); return; }
+    const act = ev.target.closest('[data-act]')?.dataset.act;
+    if (act === 'signin') { call('onCloudSignIn'); return; }
+    if (act === 'signout') { call('onCloudSignOut'); return; }
+    if (act === 'sync') { call('onCloudSync'); return; }
     const sel = state.select;
     if (!sel) return;
     if (ev.target.closest('.mp-select-x')) { api.hideSelect(); return; }
@@ -757,10 +778,27 @@ export function createHUD(root, handlers = {}, options = {}) {
     if (again) again.focus({ preventScroll: true });
   }
   el.select.addEventListener('click', onSelectClick);
-  // Profile button + card (owner 2026-11-16): shows whether the Google cloud save is signed in.
-  const profile = createProfile({ root, slot: root.querySelector('.mp-bar-end'), icon, googleG: GOOGLE_G, call,
-    onOpen: () => { el.col.querySelector('.mp-bottom')?.setAttribute('aria-hidden', 'true'); },
-    onClose: () => { el.col.querySelector('.mp-bottom')?.removeAttribute('aria-hidden'); } });
+  // Settings sheet (gear): music + effects volume, hand play with the camera (owner 2026-11-16).
+  const settings = createSettings({ root, slot: root.querySelector('.mp-bar-end'), icon, call });
+  // "Which save?" choice (cloud sync conflict), a modal card that resolves a promise.
+  const choice = document.createElement('section');
+  choice.className = 'mp-card5 mp-savechoice'; choice.hidden = true;
+  choice.setAttribute('role', 'dialog'); choice.setAttribute('aria-modal', 'true');
+  choice.setAttribute('aria-labelledby', 'mp-savechoice-title'); choice.setAttribute('aria-describedby', 'mp-savechoice-body');
+  root.appendChild(choice);
+  let choiceDone = null;
+  choice.addEventListener('click', (ev) => {
+    const b = ev.target.closest('[data-pick]'); if (!b || !choiceDone) return;
+    const done = choiceDone; choiceDone = null;
+    choice.hidden = true; choice.innerHTML = ''; root.classList.remove('is-savechoice'); el.col.inert = !!state.select;
+    done(b.dataset.pick === 'device' ? 'device' : 'cloud');
+  });
+  choice.addEventListener('keydown', (ev) => {
+    if (ev.key !== 'Tab') return;
+    const f = [...choice.querySelectorAll('button')], i = f.indexOf(document.activeElement);
+    if (ev.shiftKey && i <= 0) { ev.preventDefault(); f[f.length - 1].focus(); }
+    else if (!ev.shiftKey && i === f.length - 1) { ev.preventDefault(); f[0].focus(); }
+  });
   el.select.addEventListener('keydown', (ev) => {
     if (ev.key === 'Escape' && state.select && state.select.closable) api.hideSelect();
   });
@@ -1331,8 +1369,8 @@ export function createHUD(root, handlers = {}, options = {}) {
         progress: c.progress ?? (sameChar ? state.char.progress : undefined),
       };
       el.name.textContent = state.char.name;
-      el.ava.src = portrait(state.char.key);
-      el.who.setAttribute('aria-label', S.chip(state.char.name));
+      el.ava.src = avatar(state.char.key);
+      el.who.setAttribute('aria-label', S.chip(state.char.name) + (state.account?.signedIn ? ` · ${S.signedIn}` : ''));
       if (s5) s5.hooks.chip(state.char);
       renderMic();
       if (state.ward) { state.ward.charKey = state.char.key; renderWardrobe(); }
@@ -1409,6 +1447,8 @@ export function createHUD(root, handlers = {}, options = {}) {
       el.cam.setAttribute('aria-pressed', String(state.camera === 'on'));
       el.cam.setAttribute('aria-busy', String(state.camera === 'loading'));
       el.cam.querySelector('.mp-ico').outerHTML = icon(state.camera === 'error' ? 'camera-off' : 'camera', 22);
+      el.cam.hidden = state.camera === 'off';   // shown on the bar only while hand play is on (switch lives in settings)
+      settings.set({ camera: state.camera });
       const msg = (state.game || state.intro) ? '' : (message ?? c.msg); // S3: no hand-play hint during the minigame
       setCamMsg(msg, state.camera === 'on' ? 4000 : state.camera === 'off' ? 2500 : 0);
       renderCamView();
@@ -1512,12 +1552,33 @@ export function createHUD(root, handlers = {}, options = {}) {
      * @param {string} [currentKey] current character; when set, the overlay can be closed
      */
     /** Cloud account state for the select sheet: { enabled, signedIn, label }. */
-    /** Open / close the profile card (cloud account). */
-    showProfile() { profile.open(); },
-    hideProfile() { profile.close(); },
+    /** Open the profile sheet (account + character choice). */
+    showProfile() { call('onCharacterChip'); },
+    /** Open / close the settings sheet. */
+    showSettings() { settings.open(); },
+    hideSettings() { settings.close(); },
+    /** Volumes shown by the settings sliders (0..1). @param {{musicVol?:number, sfxVol?:number, cameraAvailable?:boolean}} v */
+    setSettings(v) { settings.set(v || {}); },
+    /**
+     * Ask which save to keep (cloud sync conflict). Resolves 'cloud' or 'device'; the card cannot be
+     * dismissed without a choice.
+     * @param {{ device: object, cloud: object }} c summaries (cloud-rules saveSummary)
+     * @returns {Promise<'cloud'|'device'>}
+     */
+    askSaveChoice(c) {
+      return new Promise((resolve) => {
+        choiceDone = resolve;
+        choice.innerHTML = saveChoiceCard(c, { googleG: GOOGLE_G, coinDot });
+        choice.hidden = false; root.classList.add('is-savechoice'); el.col.inert = true;
+        choice.querySelector('[data-pick="cloud"]')?.focus({ preventScroll: true });
+      });
+    },
     setAccount(a) {
       state.account = a ? { ...a } : null;
-      profile.set(state.account);
+      const ac = state.account;
+      el.whoAcct.hidden = !(ac && ac.enabled && ac.signedIn);
+      el.who.dataset.acct = ac && ac.enabled ? (ac.signedIn ? 'in' : 'out') : 'off';
+      if (state.char) el.who.setAttribute('aria-label', S.chip(state.char.name) + (ac && ac.signedIn ? ` · ${S.signedIn}` : ''));
       if (state.select && !el.select.hidden) renderSelect(state.select.chars, state.select.current);
     },
     showSelect(chars = [], currentKey) {

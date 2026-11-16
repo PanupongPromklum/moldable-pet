@@ -18,7 +18,7 @@ test('new save is v5 with starter items owned, empty outfits, camera shown, ligh
   eq(s.version, SAVE_VERSION, 'version'); eq(SAVE_VERSION, 5, 'v5');
   deepEq(s.owned, ['bow-ribbon', 'glasses-round'], 'owned');
   deepEq(s.chars.flower.outfit, { head: null, eyes: null, body: null }, 'outfit');
-  deepEq(s.settings, { cameraHidden: false, theme: 'light', minigameControl: 'touch', talkMode: 'auto', talkNoticeSeen: false }, 'settings');
+  deepEq(s.settings, { cameraHidden: false, theme: 'light', minigameControl: 'touch', talkMode: 'auto', talkNoticeSeen: false, musicVol: 0.5, sfxVol: 0.8 }, 'settings');
   deepEq(s.chars.flower.best, { snackRain: 0 }, 'best per character');
   eq(s.coins, 0, 'no startCoins → 0');
 });
@@ -49,15 +49,15 @@ test('v2 save migrates to v4: camera choice kept, theme light, control touch', (
   const v2 = { ...newSave(DATA, T0), version: 2, settings: { cameraHidden: true } };
   const m = migrateSave(JSON.parse(JSON.stringify(v2)), DATA, T0);
   eq(m.version, SAVE_VERSION, 'version');
-  deepEq(m.settings, { cameraHidden: true, theme: 'light', minigameControl: 'touch', talkMode: 'auto', talkNoticeSeen: false }, 'settings');
+  deepEq(m.settings, { cameraHidden: true, theme: 'light', minigameControl: 'touch', talkMode: 'auto', talkNoticeSeen: false, musicVol: 0.5, sfxVol: 0.8 }, 'settings');
 });
 
 test('v3 settings round-trip; unknown theme or control falls back to the default', () => {
   const s = newSave(DATA, T0);
   s.settings.theme = 'dark'; s.settings.minigameControl = 'head';
-  deepEq(migrateSave(JSON.parse(JSON.stringify(s)), DATA, T0).settings, { cameraHidden: false, theme: 'dark', minigameControl: 'head', talkMode: 'auto', talkNoticeSeen: false }, 'kept');
-  deepEq(sanitizeSettings({ theme: 'auto', minigameControl: 'hand', cameraHidden: 1 }), { cameraHidden: true, theme: 'light', minigameControl: 'touch', talkMode: 'auto', talkNoticeSeen: false }, 'bad values');
-  deepEq(sanitizeSettings('x'), { cameraHidden: false, theme: 'light', minigameControl: 'touch', talkMode: 'auto', talkNoticeSeen: false }, 'not an object');
+  deepEq(migrateSave(JSON.parse(JSON.stringify(s)), DATA, T0).settings, { cameraHidden: false, theme: 'dark', minigameControl: 'head', talkMode: 'auto', talkNoticeSeen: false, musicVol: 0.5, sfxVol: 0.8 }, 'kept');
+  deepEq(sanitizeSettings({ theme: 'auto', minigameControl: 'hand', cameraHidden: 1 }), { cameraHidden: true, theme: 'light', minigameControl: 'touch', talkMode: 'auto', talkNoticeSeen: false, musicVol: 0.5, sfxVol: 0.8 }, 'bad values');
+  deepEq(sanitizeSettings('x'), { cameraHidden: false, theme: 'light', minigameControl: 'touch', talkMode: 'auto', talkNoticeSeen: false, musicVol: 0.5, sfxVol: 0.8 }, 'not an object');
 });
 
 test('v2 save round-trips outfit, owned, settings and best', () => {
@@ -110,7 +110,7 @@ test('v3 save migrates to v4: every field kept, furniture at defaults, defaults 
   const v3 = makeV3Save(T0);
   const m = migrateSave(JSON.parse(JSON.stringify(v3)), D, T0, ['living', 'kitchen', 'bathroom']);
   eq(m.version, SAVE_VERSION, 'version'); eq(m.coins, 310, 'coins'); eq(m.room, 'bathroom', 'room'); eq(m.selected, 'gumdrop', 'selected');
-  deepEq(m.settings, { ...v3.settings, talkMode: 'auto', talkNoticeSeen: false }, 'settings'); deepEq(m.chars.gumdrop.outfit, v3.chars.gumdrop.outfit, 'outfit');
+  deepEq(m.settings, { ...v3.settings, talkMode: 'auto', talkNoticeSeen: false, musicVol: 0.5, sfxVol: 0.8 }, 'settings'); deepEq(m.chars.gumdrop.outfit, v3.chars.gumdrop.outfit, 'outfit');
   deepEq(m.chars.gumdrop.needs, v3.chars.gumdrop.needs, 'needs'); eq(m.chars.gumdrop.best.snackRain, 220, 'best');
   deepEq(m.furniture, { living: { sofa: 'sofa-classic', corner: 'plant-pot' }, bathroom: { rug: 'mat-bath' } }, 'furniture');
   for (const id of ['bow-ribbon', 'glasses-round', 'scarf', 'sofa-classic', 'plant-pot', 'mat-bath']) assert(m.owned.includes(id), `owned ${id}`);
@@ -170,4 +170,11 @@ test('v5 tampered growth is sanitised and never shrinks', () => {
   eq(m.chars.flower.growth.trait, 'cheerful', 'unknown trait recomputed (tally 0 → cheerful)');
 });
 
+test('volumes: clamped 0..1, rounded, defaults when missing or bad', () => {
+  const v = sanitizeSettings({ musicVol: 1.7, sfxVol: -2 });
+  eq(v.musicVol, 1, 'music clamp high'); eq(v.sfxVol, 0, 'sfx clamp low');
+  eq(sanitizeSettings({ musicVol: 0.333 }).musicVol, 0.33, 'rounded');
+  eq(sanitizeSettings({ musicVol: 'loud' }).musicVol, 0.5, 'bad → default');
+  eq(sanitizeSettings({}).sfxVol, 0.8, 'missing → default');
+});
 done();

@@ -14,7 +14,8 @@
  *     theme: 'light'|'dark',                // manual lamp toggle (Sprint 3 #2), default light
  *     minigameControl: 'touch'|'head',      // Snack Rain control (Sprint 3 #3), default touch
  *     talkMode: 'auto'|'talk'|'echo',       // mic mode (conversation GDD 3.1), default auto
- *     talkNoticeSeen: bool },               // one-time recognition privacy notice (GDD 3.10)
+ *     talkNoticeSeen: bool,                 // one-time recognition privacy notice (GDD 3.10)
+ *     musicVol: 0..1, sfxVol: 0..1 },       // settings sheet volumes (owner 2026-11-16), defaults DEFAULT_VOLUMES
  *   chars: { <key>: { needs: {…}, tLast,
  *     outfit: { head, eyes, body },         // per character (S2-11)
  *     best: { snackRain, mimic?, bubbles?, hop? },   // best score per character per game (minigames-2 GDD 3.0)
@@ -48,7 +49,7 @@ export const GAME_IDS = Object.freeze(['snackRain', 'mimic', 'bubbles', 'hop']);
  * Valid settings object from anything (missing / unknown values → defaults).
  * The system colour scheme never decides the theme (Sprint 3 #2).
  * @param {any} s
- * @returns {{ cameraHidden: boolean, theme: 'light'|'dark', minigameControl: 'touch'|'head', talkMode: 'auto'|'talk'|'echo', talkNoticeSeen: boolean }}
+ * @returns {{ cameraHidden: boolean, theme: 'light'|'dark', minigameControl: 'touch'|'head', talkMode: 'auto'|'talk'|'echo', talkNoticeSeen: boolean, musicVol: number, sfxVol: number }}
  */
 export function sanitizeSettings(s) {
   const o = s && typeof s === 'object' ? s : {};
@@ -58,8 +59,13 @@ export function sanitizeSettings(s) {
     minigameControl: MINIGAME_CONTROLS.includes(o.minigameControl) ? o.minigameControl : MINIGAME_CONTROLS[0],
     talkMode: TALK_MODES.includes(o.talkMode) ? o.talkMode : TALK_MODES[0],
     talkNoticeSeen: !!o.talkNoticeSeen,
+    musicVol: vol01(o.musicVol, DEFAULT_VOLUMES.musicVol),
+    sfxVol: vol01(o.sfxVol, DEFAULT_VOLUMES.sfxVol),
   };
 }
+/** Default volumes (0..1) for the settings sheet sliders (owner 2026-11-16: music + effects). */
+export const DEFAULT_VOLUMES = Object.freeze({ musicVol: 0.5, sfxVol: 0.8 });
+const vol01 = (v, d) => (typeof v === 'number' && Number.isFinite(v) ? Math.min(1, Math.max(0, Math.round(v * 100) / 100)) : d);
 export const DEFAULT_CHARACTER = 'flower';
 export const DEFAULT_ROOM = 'living';
 

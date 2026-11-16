@@ -55,6 +55,8 @@ import * as RoomsMod from './rooms/index.js';
 import { createFoodMesh, FOOD_SIZE } from './props/foods.js';
 import { createHUD } from './ui/hud.js';
 import { sfx } from './audio/sfx.js';
+import { music } from './audio/music.js';
+import { setBusVolume } from './audio/context.js';
 import { createTalkback } from './audio/talkback.js';
 
 /** Select-screen roles and MBTI (design/narrative/character-bible.md), used when personas.json has none. */
@@ -139,7 +141,9 @@ async function boot() {
   const game = createGameState({ data, storage: safeLocalStorage(), roomIds: ROOM_IDS });
   let hudRef = null;
   const cloud = createCloud({ cfg: cloudCfg || {}, storageKey: SAVE_KEY, getSave: () => game.save,
-    onChange: (st) => hudRef?.setAccount?.(st), toast: (m) => hudRef?.toast?.(m, 3200) });
+    onChange: (st) => hudRef?.setAccount?.(st), toast: (m) => hudRef?.toast?.(m, 3200),
+    ask: (c) => (hudRef?.askSaveChoice ? hudRef.askSaveChoice(c) : Promise.resolve('cloud')),
+    names: Object.fromEntries(Object.entries(personas).map(([k, v]) => [k, v?.name || ''])) });
   const reduceMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
   const app = $('app');
 
@@ -246,6 +250,17 @@ async function boot() {
     onCloudSignIn() { cloud.signIn(); },
     onCloudSignOut() { cloud.signOut(); },
     onCloudSync() { cloud.syncNow(); },
+    // settings sheet (owner 2026-11-16): music + effects volume
+    onMusicVolume(v) {
+      game.setSetting('musicVol', v); setBusVolume('music', game.settings.musicVol);
+      if (game.settings.musicVol > 0 && unlocked) music.start(); else if (game.settings.musicVol <= 0) music.stop();
+      saveSoon();
+    },
+    onSfxVolume(v) {
+      game.setSetting('sfxVol', v); setBusVolume('sfx', game.settings.sfxVol); setBusVolume('voice', game.settings.sfxVol);
+      saveSoon();
+      sfx.play('tap');
+    },
     onWardrobe() { openWardrobe(); },
     onEquip(slot, id) { equip(slot, id ?? null); },
     onBuy(id) { buy(id); },
@@ -278,9 +293,23 @@ async function boot() {
   hud.setCharacter(chipInfo());
   hud.setTalkMode?.(game.settings.talkMode === 'echo' ? 'echo' : 'talk');
 
-  // 6. audio
+  // 6. audio (volumes from the settings sheet; home music starts with the first gesture)
+  setBusVolume('music', game.settings.musicVol);
+  setBusVolume('sfx', game.settings.sfxVol); setBusVolume('voice', game.settings.sfxVol);
+  hud.setSettings?.({ musicVol: game.settings.musicVol, sfxVol: game.settings.sfxVol });
+  let volSaveT = 0;
+  const saveSoon = () => { clearTimeout(volSaveT); volSaveT = setTimeout(() => game.persist(), 600); };
+  {   // the music never plays into the microphone, and rests while the page is hidden
+    const setMic0 = hud.setMic.bind(hud);
+    hud.setMic = (st, ...rest) => { music.pause('mic', st === 'listening' || st === 'recording'); return setMic0(st, ...rest); };
+    document.addEventListener('visibilitychange', () => music.pause('hidden', document.hidden));
+  }
   let unlocked = false;
-  const unlock = () => { if (unlocked) return; unlocked = true; try { sfx.unlock(); } catch { /* ignore */ } };
+  const unlock = () => {
+    if (unlocked) return; unlocked = true;
+    try { sfx.unlock(); } catch { /* ignore */ }
+    if (game.settings.musicVol > 0) music.start();
+  };
   window.addEventListener('pointerdown', unlock, { once: true, capture: true });
   window.addEventListener('keydown', unlock, { once: true, capture: true });
   let talkState = 'off';

@@ -74,6 +74,12 @@ def go_room(page, room):
 
 
 def click(page, sel):
+    # owner 2026-11-16 minimal layout: wardrobe / decor sit behind one "แต่ง" button (menu in the living room)
+    if sel in ('.mp-decor-btn', '.mp-ward-btn') and not page.locator(sel + ':visible').count():
+        page.locator('.mp-style-btn').first.click()
+        time.sleep(0.25)
+        if not page.locator(sel + ':visible').count():
+            return   # one option only: the style button already opened it
     page.locator(sel).first.click()
     time.sleep(0.25)
 
@@ -162,7 +168,7 @@ def run(pw, label, viewport, touch):
 
     # kitchen shop: preview then switch room → preview reverted, saved untouched
     go_room(page, 'kitchen')
-    click(page, '.mp-decor-btn') if page.locator('.mp-decor-btn:visible').count() else S(page, 'M.openDecor()')
+    click(page, '.mp-decor-btn') if page.locator('.mp-style-btn:visible, .mp-decor-btn:visible').count() else S(page, 'M.openDecor()')
     S(page, "M.decorPreview('fridge', 'fridge-gingerbread')")
     check('kitchen preview', S(page, "M.rooms.room.furniture.fridge === 'fridge-gingerbread'"))
     go_room(page, 'living')

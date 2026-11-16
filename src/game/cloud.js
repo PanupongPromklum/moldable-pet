@@ -3,16 +3,24 @@
  * Owner: wire. Setup: docs/cloud-save.md. Rules: cloud-rules.js.
  *
  * Off unless assets/data/cloud.json has url + anonKey. supabase-js loads lazily from jsDelivr only
- * when enabled. Newest save wins (save.savedAt). After a pull the page reloads once so every system
- * starts from the cloud save. Pushes are debounced and also sent when the page is hidden.
+ * when enabled. A signed-in player plays the account's save (owner 2026-11-16): the device save is
+ * linked to the account after the first sync, then the newest wins; when this device has its own
+ * progress that is not from this account, the player is asked which one to keep (syncDecision).
+ * After a pull the page reloads once so every system starts from the cloud save. Pushes are
+ * debounced and also sent when the page is hidden.
  * @module game/cloud
  */
-import { cloudEnabled, pickNewer, validSave, accountLabel, accountInfo } from './cloud-rules.js';
+import { cloudEnabled, validSave, accountLabel, accountInfo, syncDecision, saveSummary } from './cloud-rules.js';
 
 /**
- * @param {{ cfg: object, storageKey: string, getSave: () => object, onChange?: (state: object) => void, toast?: (msg: string) => void }} deps
+ * @param {{ cfg: object, storageKey: string, getSave: () => object, onChange?: (state: object) => void, toast?: (msg: string) => void,
+ *   ask?: (choice: { device: object, cloud: object }) => Promise<'cloud'|'device'>, names?: Record<string,string> }} deps
+ *   ask = show the "which save?" choice (summaries from saveSummary); without it the account save wins
  */
-export function createCloud({ cfg, storageKey, getSave, onChange, toast }) {
+export function createCloud({ cfg, storageKey, getSave, onChange, toast, ask, names }) {
+  const LINK = 'mp-cloud-link';   // id of the account this device save belongs to
+  const linkTo = (id) => { try { localStorage.setItem(LINK, id); } catch { /* private mode */ } };
+  const linked = () => { try { return localStorage.getItem(LINK); } catch { return null; } };
   const state = { enabled: cloudEnabled(cfg), ready: false, signedIn: false, label: '', name: '', email: '', avatar: '', sync: 'idle', lastSync: 0 };
   const SIGNING = 'mp-cloud-signing';
   let sb = null, user = null, pushT = null;
@@ -30,19 +38,27 @@ export function createCloud({ cfg, storageKey, getSave, onChange, toast }) {
     const { data, error } = await sb.from(cfg.table).select('save, saved_at').eq('user_id', user.id).maybeSingle();
     if (error) throw error;
     const local = getSave();
-    const what = pickNewer(local, data);
+    let what = syncDecision({ local, remote: data, linkedTo: linked(), userId: user.id });
+    if (what === 'ask') {
+      let pick = 'cloud';
+      try { if (ask) pick = await ask({ device: saveSummary(local, names), cloud: saveSummary(data.save, names) }); } catch { pick = 'cloud'; }
+      what = pick === 'device' ? 'push' : 'pull';
+    }
     if (what === 'pull' && validSave(data.save)) {
+      linkTo(user.id);
       localStorage.setItem(storageKey, JSON.stringify(data.save));
       sessionStorage.setItem('mp-cloud-pulled', '1');
       location.reload();
       return;
     }
-    if (what === 'push') await push();
+    if (what === 'push') await push(true);
+    linkTo(user.id);
     state.lastSync = Date.now(); state.sync = 'saved'; emit();
   }
 
-  async function push() {
+  async function push(force = false) {
     if (!user || !sb) return;
+    if (!force && linked() !== user.id) return;   // not synced yet: never overwrite the account save
     const save = getSave();
     if (!validSave(save)) return;
     state.sync = 'saving'; emit();

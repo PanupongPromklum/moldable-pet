@@ -19,6 +19,8 @@ const DUCK = { depth: 0.55, attack: 0.03, hold: 0.25, release: 0.4 };
 
 let ctx = null;
 let master = null;
+/** Player volume per bus (settings sliders), multiplied onto BUS_GAIN. */
+const userVol = { sfx: 1, voice: 1, music: 1 };
 const buses = {};
 let duckUntil = 0;
 
@@ -96,7 +98,7 @@ export function getBus(name) {
   if (!c || !m) return null;
   try {
     const g = c.createGain();
-    g.gain.value = BUS_GAIN[name] ?? 0.7;
+    g.gain.value = busDefaultGain(name);
     g.connect(m);
     buses[name] = g;
     return g;
@@ -111,7 +113,19 @@ export function getBus(name) {
 export function peekBus(name) { return buses[name] || null; }
 
 /** Default gain of a bus (linear). */
-export function busDefaultGain(name) { return BUS_GAIN[name] ?? 0.7; }
+export function busDefaultGain(name) { return (BUS_GAIN[name] ?? 0.7) * (userVol[name] ?? 1); }
+
+/**
+ * Player volume for a bus (settings sheet). 0 = silent, 1 = default level. Applies smoothly now
+ * (if the bus exists) and to buses created later. Never creates the AudioContext.
+ * @param {'sfx'|'voice'|'music'} name @param {number} v 0..1
+ */
+export function setBusVolume(name, v) {
+  userVol[name] = Math.min(1, Math.max(0, Number(v) || 0));
+  const g = buses[name];
+  if (!g) return;
+  try { g.gain.cancelScheduledValues(g.context.currentTime); g.gain.setTargetAtTime(busDefaultGain(name), g.context.currentTime, 0.05); } catch { /* ignore */ }
+}
 
 /**
  * Duck the music bus under an SFX or voice for `seconds` (plus hold/release).
@@ -122,7 +136,7 @@ export function duckMusic(seconds = 0) {
   const g = buses.music, c = ctx;
   if (!g || !c) return;
   try {
-    const t = c.currentTime, base = BUS_GAIN.music;
+    const t = c.currentTime, base = busDefaultGain('music');
     const end = Math.max(duckUntil, t + seconds + DUCK.hold);
     const p = g.gain;
     if (p.cancelAndHoldAtTime) p.cancelAndHoldAtTime(t); else { p.cancelScheduledValues(t); p.setValueAtTime(p.value, t); }
