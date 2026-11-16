@@ -1351,3 +1351,6 @@ button.mp-account:active { transform: scale(.98); }
 :is(.mp-card-check, .mp-opt.is-on .mp-opt-pic, .mp-result-badge, .mp-mic[data-state="playing"] .mp-mic-face, .mp-pill--trait, .mp-game-count) .mp-fico {
   filter: brightness(0) invert(1) drop-shadow(0 1px 1.5px rgba(37, 41, 65, .45));
 }
+
+/* owner 2026-11-17: re-rendered sheets do not replay the slide-in (no flicker while thumbnails load) */
+.mp-ward-panel.is-again { animation: none; }

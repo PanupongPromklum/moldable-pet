@@ -59,6 +59,9 @@ import { music } from './audio/music.js';
 import { setBusVolume } from './audio/context.js';
 import { createTalkback } from './audio/talkback.js';
 
+/** Typed chat button beside the mic (owner 2026-11-17: hidden until it is polished). */
+const TYPE_CHAT = false;
+
 /** Select-screen roles and MBTI (design/narrative/character-bible.md), used when personas.json has none. */
 const ROSTER = {
   splat: { role: 'CI / Branding', mbti: 'INFJ' },
@@ -183,7 +186,7 @@ async function boot() {
   const getPet = () => pet;
   function spawnPet(key) {
     if (pet) { stage.scene.remove(pet.object3d); pet.dispose(); }
-    pet = createCharacter(key);
+    pet = createCharacter(key, { shadow: false });   // owner 2026-11-17: no flat shadow plate (it showed in the air while carried)
     stage.scene.add(pet.object3d);
     const spot = rooms.room?.petSpot;
     if (spot) pet.object3d.position.copy(spot);
@@ -233,7 +236,8 @@ async function boot() {
     onTalkNoticeEcho() { talkCtl.noticeEcho(); },
     onTalkNoticeClose() { hud.hideTalkNotice?.(); },
     onTypeOpen() { talkCtl.openTypeBox(); },
-    onTypeSend(text) { return talkCtl.typed(text); },
+    // Typed chat is hidden for now (owner 2026-11-17); talkCtl.typed() stays for tests and a later return.
+    ...(TYPE_CHAT ? { onTypeSend(text) { return talkCtl.typed(text); } } : {}),
     /** Lamp button: "ปิดไฟ" (dark) / "เปิดไฟ" (light), saved. */
     onThemeToggle() { setTheme(game.settings.theme === 'dark' ? 'light' : 'dark', true); },
     /** Intro card: control picked ('touch' | 'head'), saved. */

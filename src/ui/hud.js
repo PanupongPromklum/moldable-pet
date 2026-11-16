@@ -877,8 +877,9 @@ export function createHUD(root, handlers = {}, options = {}) {
       body = `<div class="mp-items">${tiles.join('')}</div>${items.length ? '' : `<p class="mp-empty">${esc(S.themes.empty)}</p>`}`;
     }
 
+    const keepW = keepSheet(el.ward);
     el.ward.innerHTML = `
-      <div class="mp-ward-panel">
+      <div class="mp-ward-panel${keepW.again ? ' is-again' : ''}">
         <div class="mp-ward-head">
           <h2 class="mp-ward-title">${esc(s.title)}</h2>
           <span class="mp-ward-coins" aria-label="${esc(S.coins(fmt(int0(w.coins))))}">${coinDot()}<span class="mp-num">${fmt(int0(w.coins))}</span></span>
@@ -888,6 +889,7 @@ export function createHUD(root, handlers = {}, options = {}) {
         ${confirmItem ? '' : chipRow(chips, w.theme)}
         <div class="mp-ward-body" id="mp-ward-panel" role="tabpanel" aria-labelledby="mp-ward-tab-${esc(w.tab)}">${body}</div>
       </div>`;
+    keepW.restore();
     if (focusSel) {
       const f = el.ward.querySelector(focusSel);
       if (f) f.focus({ preventScroll: true });
@@ -976,6 +978,17 @@ export function createHUD(root, handlers = {}, options = {}) {
     ? `<img alt="" src="${esc(it.thumb)}" width="${size}" height="${size}" draggable="false">`
     : '<span class="mp-thumb-ph" aria-hidden="true"></span>');
 
+  /** Remember whether a sheet panel is already shown and its scroll positions, to restore after innerHTML. */
+  function keepSheet(host) {
+    const again = !!host.querySelector('.mp-ward-panel');
+    const sel = ['.mp-ward-body', '.mp-tabs-scroll', '.mp-chips', '.mp-items'];
+    const pos = sel.map((q) => { const n = host.querySelector(q); return n ? [n.scrollTop, n.scrollLeft] : null; });
+    return {
+      again,
+      restore() { if (!again) return; sel.forEach((q, i) => { const n = host.querySelector(q), p = pos[i]; if (n && p) { n.scrollTop = p[0]; n.scrollLeft = p[1]; } }); },
+    };
+  }
+
   function renderDecor(focusSel) {
     const d = state.decor;
     if (!d) return;
@@ -1045,8 +1058,11 @@ export function createHUD(root, handlers = {}, options = {}) {
       }
     }
 
+    // Re-renders (thumbnails arriving, preview, buy) must not replay the slide-in or jump the scroll
+    // (owner 2026-11-17: the shop flickered while thumbnails loaded).
+    const keep = keepSheet(el.decorInner);
     el.decorInner.innerHTML = `
-      <div class="mp-ward-panel mp-decor-panel${foot ? ' has-try' : ''}">
+      <div class="mp-ward-panel mp-decor-panel${foot ? ' has-try' : ''}${keep.again ? ' is-again' : ''}">
         <div class="mp-ward-head">
           <h2 class="mp-ward-title">${esc(s.title)}<span class="mp-decor-room">${esc(roomName)}</span></h2>
           <span class="mp-ward-coins" aria-label="${esc(S.coins(fmt(int0(d.coins))))}">${coinDot()}<span class="mp-num">${fmt(int0(d.coins))}</span></span>
@@ -1057,6 +1073,7 @@ export function createHUD(root, handlers = {}, options = {}) {
         <div class="mp-ward-body" id="mp-decor-panel" role="tabpanel" aria-labelledby="mp-decor-tab-${esc(d.tab)}">${body}</div>
         ${foot}
       </div>`;
+    keep.restore();
     const tabList = el.decorInner.querySelector('.mp-tabs-scroll');
     const onTab = tabList.querySelector('.mp-ward-tab.is-on');
     if (onTab) {
