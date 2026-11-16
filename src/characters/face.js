@@ -62,8 +62,13 @@ export function drawEye(g, TEX, BOX, E, S, i, st) {
     const pr = Math.min(E.pw * w, E.ph * h) * st.pupil;
     g.fillStyle = WHITE; g.beginPath(); g.arc(E.pw * w * st.pupil * .34, E.ph * h * st.pupil * .36, pr * .36 * st.glint, 0, Math.PI * 2); g.fill();
     g.globalAlpha = .85; g.beginPath(); g.arc(-E.pw * w * st.pupil * .3, -E.ph * h * st.pupil * .34, pr * .15 * st.glint, 0, Math.PI * 2); g.fill(); g.globalAlpha = 1;
+  } else {
+    // small soft catchlight on every pupil (clear-lens look)
+    const pr = Math.min(E.pw * w, E.ph * h) * st.pupil;
+    g.fillStyle = 'rgba(255,255,255,.55)'; g.beginPath(); g.arc(E.pw * w * st.pupil * .3, E.ph * h * st.pupil * .34, pr * .2, 0, Math.PI * 2); g.fill();
   }
   g.restore();
+  drawLens(g, w, h, E);
   if (E.clip) g.restore();
   g.restore();
   const W = Math.max(w, h) * 2.4, c = st.lidCurve;
@@ -72,6 +77,27 @@ export function drawEye(g, TEX, BOX, E, S, i, st) {
   if (lu > .005) { const y = h - lu * 2 * h; g.beginPath(); g.moveTo(-W, y + h * .12 * c); g.quadraticCurveTo(0, y - h * .14 * c, W, y + h * .12 * c); g.lineTo(W, h * 3); g.lineTo(-W, h * 3); g.closePath(); g.fill(); }
   if (ll > .005) { const y = -h + ll * 2 * h; g.beginPath(); g.moveTo(-W, y - h * .1 * c); g.quadraticCurveTo(0, y + h * .14 * c, W, y - h * .1 * c); g.lineTo(W, -h * 3); g.lineTo(-W, -h * 3); g.closePath(); g.fill(); }
   g.restore(); g.globalCompositeOperation = 'source-over';
+}
+
+/**
+ * Inset + clear lens (owner 2026-11-16): a soft socket shadow along the top inside edge so the eye
+ * reads as set into the body, a faint cool rim, and a glossy crescent highlight at the upper right.
+ * Drawn in eye space (y up), clipped to the eye shape.
+ */
+function drawLens(g, w, h, E) {
+  g.save();
+  superPath(g, w, h, E.p); g.clip();
+  const sh = g.createLinearGradient(0, h, 0, h * .15);
+  sh.addColorStop(0, 'rgba(92,84,150,.2)'); sh.addColorStop(1, 'rgba(92,84,150,0)');
+  g.fillStyle = sh; g.fillRect(-w * 1.2, -h * 1.2, w * 2.4, h * 2.4);
+  const rim = g.createRadialGradient(0, 0, Math.min(w, h) * .7, 0, 0, Math.max(w, h) * 1.05);
+  rim.addColorStop(0, 'rgba(160,170,220,0)'); rim.addColorStop(1, 'rgba(160,170,220,.2)');
+  g.fillStyle = rim; g.fillRect(-w * 1.2, -h * 1.2, w * 2.4, h * 2.4);
+  // crescent highlight hugging the upper-right rim, kept off the pupil
+  g.translate(w * .66, h * .5); g.rotate(-.7);
+  g.fillStyle = 'rgba(255,255,255,.95)';
+  g.beginPath(); g.ellipse(0, 0, w * .1, h * .26, 0, 0, Math.PI * 2); g.fill();
+  g.restore();
 }
 
 function edgeTop(m, x) {

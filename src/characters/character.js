@@ -128,10 +128,13 @@ export function createCharacter(key, opts = {}) {
   const frame = resetFrame({});
 
   /* ---------- materials & textures (owned) ---------- */
-  const bodyMat = new THREE.MeshPhysicalMaterial({ color: 0xdcd9f3, roughness: .9, sheen: 1, sheenRoughness: .42, sheenColor: new THREE.Color(0xf7efff), envMapIntensity: .35 });
+  // Owner 2026-11-16: brighter, smoother skin like the brand book — a soft top→bottom gradient in vertex
+  // colours (see "body gradient" below), a smoother satin finish and a light sheen rim.
+  const bodyMat = new THREE.MeshPhysicalMaterial({ color: 0xffffff, vertexColors: true, roughness: .78, sheen: 1, sheenRoughness: .55, sheenColor: new THREE.Color(0xf7efff), envMapIntensity: .45, clearcoat: .18, clearcoatRoughness: .55 });
   const decalBase = { transparent: true, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -4, polygonOffsetUnits: -4 };
   const eyeTex = [canvasTex(ETEX), canvasTex(ETEX)], mouthTex = canvasTex(TEX);
-  const eyeMats = eyeTex.map(x => new THREE.MeshStandardMaterial({ map: x.t, roughness: .75, envMapIntensity: .4, ...decalBase }));
+  // Clear lens eyes (owner 2026-11-16, "ฝัง + เลนส์ใส"): glossy clear-coat over the painted eye so it catches light.
+  const eyeMats = eyeTex.map(x => new THREE.MeshPhysicalMaterial({ map: x.t, roughness: .55, clearcoat: .35, clearcoatRoughness: .25, envMapIntensity: .18, ...decalBase }));
   const mouthMat = new THREE.MeshStandardMaterial({ map: mouthTex.t, roughness: .7, ...decalBase });
   const blushTex = radialTex(128, 'rgba(246,150,190,.85)', 'rgba(246,150,190,0)');
   const blushMat = new THREE.MeshBasicMaterial({ map: blushTex, opacity: 0, ...decalBase });
@@ -140,8 +143,20 @@ export function createCharacter(key, opts = {}) {
 
   // colours (prototype applyColours); the stage may copy lightTint into its hemisphere light
   const top = new THREE.Color(C.colors.top), mid = new THREE.Color(C.colors.mid), bot = new THREE.Color(C.colors.bottom), hsl = {};
-  bodyMat.color.copy(mid).lerp(new THREE.Color(1, 1, 1), .35);
-  top.getHSL(hsl); bodyMat.sheenColor.setHSL(hsl.h, .5, .96);
+  // body gradient stops: the brand-book colours, a touch brighter and more saturated (vivid but still pastel)
+  const vivid = (c, lift, sat) => { const h = {}; c.getHSL(h); return new THREE.Color().setHSL(h.h, Math.min(1, h.s * sat), Math.min(.95, h.l + lift)); };
+  const gTop = vivid(top, .04, 1.1), gMid = vivid(mid, .04, 1.05), gBot = vivid(bot, .05, 1);
+  // Soft brand-book glow: a little of the skin colour is added as self light so the shaded lower half
+  // stays pastel, and the silhouette fades toward white like the feathered edges in the brand book.
+  bodyMat.onBeforeCompile = (sh) => {
+    sh.fragmentShader = sh.fragmentShader.replace('#include <emissivemap_fragment>', `#include <emissivemap_fragment>
+      #ifdef USE_COLOR
+        float mpFr = pow(1.0 - clamp(abs(dot(normalize(vViewPosition), normal)), 0.0, 1.0), 2.2);
+        totalEmissiveRadiance += vColor.rgb * 0.22 + vec3(0.30) * mpFr;
+      #endif`);
+  };
+  bodyMat.customProgramCacheKey = () => 'mp-body-glow';
+  top.getHSL(hsl); bodyMat.sheenColor.setHSL(hsl.h, .55, .97);
   const lightTint = { sky: new THREE.Color(), ground: new THREE.Color() };
   lightTint.sky.setHSL(hsl.h, Math.min(1, hsl.s * 1.6 + .08), Math.max(hsl.l, .9));
   bot.getHSL(hsl); lightTint.ground.setHSL(hsl.h, Math.min(1, hsl.s * 1.5), hsl.l * .8);
@@ -179,6 +194,16 @@ export function createCharacter(key, opts = {}) {
   }
   pos.needsUpdate = true; flatGeo.computeVertexNormals(); flatGeo.computeBoundingBox();
   const bb = flatGeo.boundingBox, floorY = bb.min.y, bodyW = bb.max.x - bb.min.x;
+  { // body gradient (vertex colours ride along with the soft-body deformation)
+    const col = new Float32Array(pos.count * 3), c = new THREE.Color(), span = Math.max(1e-6, bb.max.y - bb.min.y);
+    for (let i = 0; i < pos.count; i++) {
+      const t = (pos.getY(i) - bb.min.y) / span;                       // 0 feet … 1 top
+      if (t > .5) c.copy(gMid).lerp(gTop, Math.pow((t - .5) / .5, 1.2)); else c.copy(gBot).lerp(gMid, Math.pow(t / .5, .8));
+      const z = pos.getZ(i); if (z < 0) c.lerp(gMid, .25);              // back side a little flatter
+      col[i * 3] = c.r; col[i * 3 + 1] = c.g; col[i * 3 + 2] = c.b;
+    }
+    flatGeo.setAttribute('color', new THREE.BufferAttribute(col, 3));
+  }
   const centreH = -floorY, topH = bb.max.y - floorY;            // heights above the feet
   turn.position.y = centreH;
   hang.position.y = topH; hangIn.position.y = -topH;

@@ -1,6 +1,7 @@
 // Cloud save rules (docs/cloud-save.md). Run: node tests/unit/cloud.test.mjs
 import { test, assert, eq, done } from './_harness.mjs';
-import { cloudEnabled, pickNewer, validSave, accountLabel } from '../../src/game/cloud-rules.js';
+import { cloudEnabled, pickNewer, validSave, accountLabel, accountInfo } from '../../src/game/cloud-rules.js';
+import { agoText, initialOf } from '../../src/ui/profile.js';
 
 console.log('cloud rules');
 const KEY = 'sb_publishable_' + 'x'.repeat(30);
@@ -28,5 +29,19 @@ test('account label: name, else email local part', () => {
   eq(accountLabel({ user_metadata: { full_name: 'Panupong' }, email: 'p@x.com' }), 'Panupong', 'name');
   eq(accountLabel({ email: 'pet.lover@gmail.com' }), 'pet.lover', 'email');
   eq(accountLabel(null), '', 'none');
+});
+test('accountInfo: Google photo + name + email; only https photos; empty when signed out', () => {
+  const u = { email: 'p@x.com', user_metadata: { full_name: 'Panupong P', avatar_url: 'https://lh3.googleusercontent.com/a/x' } };
+  eq(JSON.stringify(accountInfo(u)), JSON.stringify({ name: 'Panupong P', email: 'p@x.com', avatar: 'https://lh3.googleusercontent.com/a/x' }), 'full');
+  eq(accountInfo({ user_metadata: { picture: 'javascript:alert(1)' } }).avatar, '', 'unsafe photo dropped');
+  eq(JSON.stringify(accountInfo(null)), JSON.stringify({ name: '', email: '', avatar: '' }), 'signed out');
+});
+test('profile: "last saved" text and the photo fallback letter', () => {
+  const now = 1_000_000_000;
+  eq(agoText(now - 20_000, now), 'เมื่อสักครู่', 'seconds');
+  eq(agoText(now - 3 * 60_000, now), '3 นาทีที่แล้ว', 'minutes');
+  eq(agoText(now - 2 * 3_600_000, now), '2 ชั่วโมงที่แล้ว', 'hours');
+  eq(agoText(0, now), '', 'never');
+  eq(initialOf('panupong'), 'P', 'latin'); eq(initialOf(''), '?', 'empty');
 });
 done();

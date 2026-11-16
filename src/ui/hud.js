@@ -91,6 +91,7 @@
  */
 import { icon, foodIcon, accessoryIcon, filledIcon } from './icons.js';
 import { installS5, HUD_S5_STRINGS } from './hud-s5.js';
+import { createProfile } from './profile.js';
 /** Google "G" for the sign-in button (Google sign-in branding guidelines). */
 const GOOGLE_G = '<svg class="mp-g" width="20" height="20" viewBox="0 0 48 48" aria-hidden="true" focusable="false"><path fill="#EA4335" d="M24 9.5c3.5 0 6.6 1.2 9.1 3.6l6.8-6.8C35.8 2.4 30.3 0 24 0 14.6 0 6.6 5.4 2.6 13.3l7.9 6.1C12.4 13.7 17.7 9.5 24 9.5z"/><path fill="#4285F4" d="M46.1 24.5c0-1.6-.1-3.1-.4-4.5H24v9h12.4c-.5 2.9-2.2 5.3-4.6 7l7.4 5.7c4.3-4 6.9-9.9 6.9-17.2z"/><path fill="#FBBC05" d="M10.5 28.6c-.5-1.4-.8-3-.8-4.6s.3-3.2.8-4.6l-7.9-6.1C1 16.6 0 20.2 0 24s1 7.4 2.6 10.7l7.9-6.1z"/><path fill="#34A853" d="M24 48c6.5 0 11.9-2.1 15.9-5.8l-7.4-5.7c-2.1 1.4-4.8 2.3-8.5 2.3-6.3 0-11.6-4.2-13.5-9.9l-7.9 6.1C6.6 42.6 14.6 48 24 48z"/></svg>';
 
@@ -756,6 +757,10 @@ export function createHUD(root, handlers = {}, options = {}) {
     if (again) again.focus({ preventScroll: true });
   }
   el.select.addEventListener('click', onSelectClick);
+  // Profile button + card (owner 2026-11-16): shows whether the Google cloud save is signed in.
+  const profile = createProfile({ root, slot: root.querySelector('.mp-bar-end'), icon, googleG: GOOGLE_G, call,
+    onOpen: () => { el.col.querySelector('.mp-bottom')?.setAttribute('aria-hidden', 'true'); },
+    onClose: () => { el.col.querySelector('.mp-bottom')?.removeAttribute('aria-hidden'); } });
   el.select.addEventListener('keydown', (ev) => {
     if (ev.key === 'Escape' && state.select && state.select.closable) api.hideSelect();
   });
@@ -1507,8 +1512,12 @@ export function createHUD(root, handlers = {}, options = {}) {
      * @param {string} [currentKey] current character; when set, the overlay can be closed
      */
     /** Cloud account state for the select sheet: { enabled, signedIn, label }. */
+    /** Open / close the profile card (cloud account). */
+    showProfile() { profile.open(); },
+    hideProfile() { profile.close(); },
     setAccount(a) {
       state.account = a ? { ...a } : null;
+      profile.set(state.account);
       if (state.select && !el.select.hidden) renderSelect(state.select.chars, state.select.current);
     },
     showSelect(chars = [], currentKey) {
