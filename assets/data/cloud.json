@@ -1,8 +1,12 @@
 {
-  "_meta": { "owner": "wire", "doc": "docs/cloud-save.md", "note": "Fill url + anonKey (Supabase › Project Settings › API) to turn on Google sign-in and cross-device saves. Empty = feature hidden." },
+  "_meta": {
+    "owner": "wire",
+    "doc": "docs/cloud-save.md",
+    "note": "Fill url + anonKey (Supabase › Project Settings › API) to turn on Google sign-in and cross-device saves. Empty = feature hidden."
+  },
   "provider": "supabase",
-  "url": "",
-  "anonKey": "",
+  "url": "https://ikwswnsabfsfuerhnehu.supabase.co",
+  "anonKey": "sb_publishable_P3cRxvDPccR6Ve_Y2riDMw_wDs7jRJp",
   "table": "pet_saves",
   "pushDelaySec": 4,
   "supabaseJs": "https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/+esm"
