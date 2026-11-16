@@ -77,6 +77,19 @@ const BOX_MARGIN = 1.2;          // eye decal box headroom for the eye growing /
 const ETEX = Math.round(TEX * BOX_MARGIN / 8) * 8;   // eye canvas size: same px per unit as before
 const MARK_ORDER = 3;            // trait marks draw after blush / eyes
 const SHAPE = { thick: .85, eye: 1.1 };
+/** Body roundness: sphere → pillow exponent (1 = plain ellipsoid; lower = flatter front, tighter rim). */
+const BODY_EX = .93;
+/** Gaussian sigma (in outline samples) for the silhouette low-pass. */
+const PROFILE_SMOOTH = 5;
+/** Circular Gaussian blur of a closed outline (radius samples). Pure. */
+export function smoothRing(a, sigma) {
+  const n = a.length; if (!n || !(sigma > 0)) return a.slice();
+  const R = Math.ceil(sigma * 3), w = []; let ws = 0;
+  for (let k = -R; k <= R; k++) { const v = Math.exp(-(k * k) / (2 * sigma * sigma)); w.push(v); ws += v; }
+  const out = new Array(n);
+  for (let i = 0; i < n; i++) { let s = 0; for (let k = -R; k <= R; k++) s += a[((i + k) % n + n) % n] * w[k + R]; out[i] = s / ws; }
+  return out;
+}
 const DEF_K = 150, DEF_D = 7.5;  // dent / stretch spring (prototype clay wobble)
 const MAX_DEFS = 7;
 
@@ -109,7 +122,7 @@ const easeInOut = (t) => t * t * t * (t * (t * 6 - 15) + 10);
  * Create one character.
  * @param {string} key one of CHARACTER_KEYS
  * @param {{ detail?: number, idle?: boolean, shadow?: boolean, growth?: object, trait?: string|null }} [opts]
- *   detail = icosahedron detail (default 40 on touch devices, 56 otherwise); idle = breathing/saccades
+ *   detail = icosahedron detail (default 50 on touch devices, 72 otherwise); idle = breathing/saccades
  *   (default: off when the user prefers reduced motion); shadow = soft floor blob (default true);
  *   growth = initial `setGrowth` values (applied instantly); trait = initial `setTraitMark` id.
  * @returns {object} character API (see module contract)
@@ -118,7 +131,7 @@ export function createCharacter(key, opts = {}) {
   const C = SHAPES[key];
   if (!C) throw new Error(`createCharacter: unknown key "${key}"`);
   const E = C.eye, S = SHAPE.eye;
-  const detail = opts.detail ?? (isCoarse() ? 40 : 56);
+  const detail = opts.detail ?? (isCoarse() ? 50 : 72);
   let idle = opts.idle ?? !prefersReducedMotion();
   const mScale = clamp(Math.sqrt(E.w * E.h) / Math.sqrt(.1003 * .0826), .72, 1.1);
 
@@ -180,11 +193,13 @@ export function createCharacter(key, opts = {}) {
   const ico = new THREE.IcosahedronGeometry(1, detail); ico.deleteAttribute('normal'); ico.deleteAttribute('uv');
   const flatGeo = mergeVertices(ico); ico.dispose();
   const dirs = flatGeo.attributes.position.array.slice();
-  const prof = C.profile, N = prof.length;
+  // Owner 2026-11-16 "smooth และโค้งมน": the traced silhouette carries small tracing wobbles that read as
+  // wrinkles in the shading, so it is low-passed once (circular Gaussian, ~1.5 % of the outline).
+  const prof = smoothRing(C.profile, PROFILE_SMOOTH), N = prof.length;
   let mean = 0; for (const v of prof) mean += v; mean /= N;
   const profR = (t) => { const u = ((t / (Math.PI * 2)) % 1 + 1) % 1 * N, i = Math.floor(u), f = u - i; return prof[i % N] * (1 - f) + prof[(i + 1) % N] * f; };
   const geo = { top: profR(Math.PI / 2), bot: profR(-Math.PI / 2), sideR: profR(0), sideL: profR(Math.PI) };
-  const pos = flatGeo.attributes.position, ex = .86;
+  const pos = flatGeo.attributes.position, ex = BODY_EX;
   const dFront = SHAPE.thick * C.req, dBack = dFront * .8;
   for (let i = 0; i < pos.count; i++) {
     const x = dirs[i * 3], y = dirs[i * 3 + 1], z = dirs[i * 3 + 2], c = Math.hypot(x, y);
