@@ -6,11 +6,15 @@
  * when enabled. A signed-in player plays the account's save (owner 2026-11-16): the device save is
  * linked to the account after the first sync, then the newest wins; when this device has its own
  * progress that is not from this account, the player is asked which one to keep (syncDecision).
- * After a pull the page reloads once so every system starts from the cloud save. Pushes are
- * debounced and also sent when the page is hidden.
+ * Several devices (owner 2026-11-17): each device keeps `mp-cloud-base` = the cloud stamp it last
+ * synced. An upload first checks the cloud stamp; if another device saved since, this device
+ * downloads instead of overwriting. The check also runs when the game comes back to the screen.
+ * After a pull the page reloads once so every system starts from the cloud save; while that happens
+ * `locked` is true and the game must not write its old in-memory save (main.js persist wrapper).
+ * Pushes are debounced and also sent when the page is hidden.
  * @module game/cloud
  */
-import { cloudEnabled, validSave, accountLabel, accountInfo, syncDecision, saveSummary } from './cloud-rules.js';
+import { cloudEnabled, validSave, accountLabel, accountInfo, syncDecision, pushDecision, rowStamp, saveSummary } from './cloud-rules.js';
 
 /**
  * @param {{ cfg: object, storageKey: string, getSave: () => object, onChange?: (state: object) => void, toast?: (msg: string) => void,
@@ -21,6 +25,11 @@ export function createCloud({ cfg, storageKey, getSave, onChange, toast, ask, na
   const LINK = 'mp-cloud-link';   // id of the account this device save belongs to
   const linkTo = (id) => { try { localStorage.setItem(LINK, id); } catch { /* private mode */ } };
   const linked = () => { try { return localStorage.getItem(LINK); } catch { return null; } };
+  const BASE = 'mp-cloud-base';   // cloud `saved_at` this device last downloaded or uploaded
+  const setBase = (n) => { try { localStorage.setItem(BASE, String(Math.round(Number(n) || 0))); } catch { /* private mode */ } };
+  const base = () => { try { return Number(localStorage.getItem(BASE)) || 0; } catch { return 0; } };
+  let locked = false;             // a cloud save is being loaded: keep the old one off the disk
+  let edits = 0, sent = 0;        // player changes (schedule calls) vs. the count already uploaded
   const state = { enabled: cloudEnabled(cfg), ready: false, signedIn: false, label: '', name: '', email: '', avatar: '', sync: 'idle', lastSync: 0 };
   const SIGNING = 'mp-cloud-signing';
   let sb = null, user = null, pushT = null;
@@ -33,38 +42,65 @@ export function createCloud({ cfg, storageKey, getSave, onChange, toast, ask, na
     return sb;
   }
 
-  async function pull() {
-    if (!user) return;
-    const { data, error } = await sb.from(cfg.table).select('save, saved_at').eq('user_id', user.id).maybeSingle();
+  /** Use the account save on this device: write it locally and reload once. */
+  function adopt(row) {
+    locked = true; clearTimeout(pushT); pushT = null;
+    linkTo(user.id); setBase(rowStamp(row));
+    localStorage.setItem(storageKey, JSON.stringify(row.save));
+    sessionStorage.setItem('mp-cloud-pulled', '1');
+    location.reload();
+  }
+
+  async function fetchRow(cols = 'save, saved_at') {
+    const { data, error } = await sb.from(cfg.table).select(cols).eq('user_id', user.id).maybeSingle();
     if (error) throw error;
+    return data;
+  }
+
+  async function pull() {
+    if (!user || locked) return;
+    const data = await fetchRow();
     const local = getSave();
-    let what = syncDecision({ local, remote: data, linkedTo: linked(), userId: user.id });
+    let what = syncDecision({ local, remote: data, linkedTo: linked(), userId: user.id, base: base() });
     if (what === 'ask') {
       let pick = 'cloud';
       try { if (ask) pick = await ask({ device: saveSummary(local, names), cloud: saveSummary(data.save, names) }); } catch { pick = 'cloud'; }
-      what = pick === 'device' ? 'push' : 'pull';
+      what = pick === 'device' ? 'force' : 'pull';
     }
-    if (what === 'pull' && validSave(data.save)) {
-      linkTo(user.id);
-      localStorage.setItem(storageKey, JSON.stringify(data.save));
-      sessionStorage.setItem('mp-cloud-pulled', '1');
-      location.reload();
-      return;
-    }
-    if (what === 'push') await push(true);
+    if (what === 'pull' && validSave(data?.save)) { adopt(data); return; }
     linkTo(user.id);
+    if (what === 'same') setBase(rowStamp(data));
+    if (what === 'push' || what === 'force') await push(true);   // decision already checked the cloud
     state.lastSync = Date.now(); state.sync = 'saved'; emit();
   }
 
   async function push(force = false) {
-    if (!user || !sb) return;
+    if (!user || !sb || locked) return;
     if (!force && linked() !== user.id) return;   // not synced yet: never overwrite the account save
-    const save = getSave();
+    if (!force && edits === sent) return;           // only the timer autosave ran: nothing the player did
+    const save = getSave(), mark = edits;
     if (!validSave(save)) return;
     state.sync = 'saving'; emit();
-    const { error } = await sb.from(cfg.table).upsert({ user_id: user.id, save, saved_at: Math.round(save.savedAt || Date.now()), updated_at: new Date().toISOString() });
-    if (error) { state.sync = 'error'; emit(); throw error; }
+    try {
+      if (!force) {   // another device saved since our last sync → take theirs, do not overwrite
+        const row = await fetchRow('save, saved_at');
+        if (pushDecision({ remoteStamp: rowStamp(row), hasRow: !!row, base: base(), force }) === 'pull' && validSave(row?.save)) { adopt(row); return; }
+      }
+      const stamp = Math.round(save.savedAt || Date.now());
+      const { error } = await sb.from(cfg.table).upsert({ user_id: user.id, save, saved_at: stamp, updated_at: new Date().toISOString() });
+      if (error) throw error;
+      linkTo(user.id); setBase(stamp); sent = mark;
+    } catch (e) { state.sync = 'error'; emit(); throw e; }
     state.lastSync = Date.now(); state.sync = 'saved'; emit();
+  }
+
+  /** Back on screen: if another device saved meanwhile, load it. */
+  async function checkRemote() {
+    if (!user || !sb || locked || linked() !== user.id) return;
+    try {
+      const row = await fetchRow('save, saved_at');
+      if (row && validSave(row.save) && rowStamp(row) !== base()) adopt(row);
+    } catch (e) { console.warn('[cloud] check', e); }
   }
 
   function setUser(u) {
@@ -78,6 +114,8 @@ export function createCloud({ cfg, storageKey, getSave, onChange, toast, ask, na
 
   const api = {
     get state() { return { ...state }; },
+    /** True while an account save is being loaded (the page is about to reload): do not write the local save. */
+    get locked() { return locked; },
     /** Restore the session (and finish the Google redirect), then sync once. */
     async init() {
       if (!state.enabled) { emit(); return; }
@@ -95,7 +133,7 @@ export function createCloud({ cfg, storageKey, getSave, onChange, toast, ask, na
         sessionStorage.removeItem(SIGNING);
         if (state.signedIn) {
           const pulled = sessionStorage.getItem('mp-cloud-pulled');
-          if (pulled) { sessionStorage.removeItem('mp-cloud-pulled'); state.lastSync = Date.now(); state.sync = 'saved'; }
+          if (pulled) { sessionStorage.removeItem('mp-cloud-pulled'); state.lastSync = Date.now(); state.sync = 'saved'; checkRemote(); }
           else {
             if (justIn) sessionStorage.setItem('mp-cloud-hello', '1');
             await pull().catch((e) => { state.sync = 'error'; console.warn('[cloud] pull', e); });
@@ -106,7 +144,7 @@ export function createCloud({ cfg, storageKey, getSave, onChange, toast, ask, na
         }
       } catch (e) { console.warn('[cloud] init', e); }
       state.ready = true; emit();
-      document.addEventListener('visibilitychange', () => { if (document.hidden) api.flush(); });
+      document.addEventListener('visibilitychange', () => { if (document.hidden) api.flush(); else checkRemote(); });
     },
     async signIn() {
       if (!state.enabled) return;
@@ -123,8 +161,9 @@ export function createCloud({ cfg, storageKey, getSave, onChange, toast, ask, na
       try { await api.flush(); await sb.auth.signOut(); toast?.('ออกจากระบบแล้ว ข้อมูลยังอยู่ในเครื่องนี้'); } catch (e) { console.warn('[cloud] sign out', e); }
       setUser(null);
     },
-    /** Called after every local persist: upload a little later (debounced). */
+    /** Called after a local save the player caused: upload a little later (debounced). */
     schedule() {
+      edits++;
       if (!user) return;
       clearTimeout(pushT);
       pushT = setTimeout(() => push().catch((e) => console.warn('[cloud] push', e)), (cfg.pushDelaySec ?? 4) * 1000);
