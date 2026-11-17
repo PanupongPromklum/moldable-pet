@@ -1,6 +1,6 @@
 // Cloud save rules (docs/cloud-save.md). Run: node tests/unit/cloud.test.mjs
 import { test, assert, eq, done } from './_harness.mjs';
-import { cloudEnabled, pickNewer, validSave, accountLabel, accountInfo, syncDecision, saveSummary, hasProgress } from '../../src/game/cloud-rules.js';
+import { cloudEnabled, pickNewer, validSave, accountLabel, accountInfo, syncDecision, pushDecision, rowStamp, saveSummary, hasProgress } from '../../src/game/cloud-rules.js';
 import { agoText, initialOf } from '../../src/ui/profile.js';
 
 console.log('cloud rules');
@@ -52,10 +52,23 @@ test('sign-in sync: account save is used; ask only when both sides have their ow
   eq(syncDecision({ local: fresh, remote, linkedTo: null, userId: 'u1' }), 'pull', 'fresh device → account save, even if newer');
   eq(syncDecision({ local: played, remote, linkedTo: null, userId: 'u1' }), 'ask', 'two histories → ask');
   eq(syncDecision({ local: played, remote, linkedTo: 'u2', userId: 'u1' }), 'ask', 'device belongs to another account → ask');
-  eq(syncDecision({ local: played, remote, linkedTo: 'u1', userId: 'u1' }), 'push', 'same account, device newer → upload');
-  eq(syncDecision({ local: played, remote: { ...remote, saved_at: 9000 }, linkedTo: 'u1', userId: 'u1' }), 'pull', 'same account, cloud newer → download');
+  eq(syncDecision({ local: played, remote, linkedTo: 'u1', userId: 'u1', base: 1000 }), 'push', 'same account, cloud unchanged since our sync → upload ours');
+  eq(syncDecision({ local: played, remote: { ...remote, saved_at: 9000 }, linkedTo: 'u1', userId: 'u1', base: 1000 }), 'pull', 'same account, another device saved → download');
   eq(syncDecision({ local: { ...played, savedAt: 1200 }, remote, linkedTo: null, userId: 'u1' }), 'same', 'identical saves → nothing to ask');
   assert(!hasProgress(null) && hasProgress(played), 'progress = picked a pet');
+});
+test('several devices: the boot save on this device never beats the account (owner 2026-11-17)', () => {
+  const remote = { save: { version: 5, chars: {}, savedAt: 50_000 }, saved_at: 50_000 };   // phone saved at 50 s
+  const booted = { version: 5, chars: {}, chosen: true, savedAt: 99_000 };                 // tablet wrote on boot at 99 s
+  eq(syncDecision({ local: booted, remote, linkedTo: 'u1', userId: 'u1', base: 20_000 }), 'pull', 'tablet last synced at 20 s → take the phone save');
+  eq(syncDecision({ local: booted, remote, linkedTo: 'u1', userId: 'u1', base: null }), 'pull', 'linked before this fix (no base) → account wins');
+  eq(syncDecision({ local: booted, remote: { ...remote, saved_at: 120_000 }, linkedTo: 'u1', userId: 'u1', base: 120_000 }), 'push', 'clock skew does not matter: same stamp → ours continues');
+  eq(pushDecision({ remoteStamp: 50_000, hasRow: true, base: 20_000 }), 'pull', 'upload refused: another device saved since');
+  eq(pushDecision({ remoteStamp: 50_000, hasRow: true, base: 50_000 }), 'push', 'upload ok: nobody else saved');
+  eq(pushDecision({ remoteStamp: 0, hasRow: false, base: 0 }), 'push', 'no row yet');
+  eq(pushDecision({ remoteStamp: 50_000, hasRow: true, base: 1, force: true }), 'push', 'player chose this device');
+  eq(rowStamp({ saved_at: '50000' }), 50_000, 'stamp from a string');
+  eq(rowStamp(null), 0, 'no row');
 });
 test('saveSummary: pet name, whole coins, time', () => {
   eq(JSON.stringify(saveSummary({ selected: 'flower', coins: 12.7, savedAt: 3 }, { flower: 'ไผ่' })), JSON.stringify({ pet: 'ไผ่', coins: 12, savedAt: 3 }), 'summary');

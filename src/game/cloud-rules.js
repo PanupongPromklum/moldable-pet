@@ -47,19 +47,38 @@ export function accountInfo(user) {
 /** The device save has real progress (the player picked a pet at least once). */
 export function hasProgress(save) { return !!(save && save.chosen); }
 
+/** The cloud row's version stamp (`saved_at`), as a number (0 when missing). */
+export const rowStamp = (row) => Number(row?.saved_at ?? row?.save?.savedAt) || 0;
+
 /**
  * What to do when an account is signed in (owner 2026-11-16: a signed-in player plays the account's
  * save; when this device also has its own progress, ask which one to keep).
- * @param {{ local: object|null, remote: {save: object, saved_at?: number}|null, linkedTo: string|null, userId: string }} p
- *   linkedTo = the account this device save already belongs to (set after the first sync)
+ * Owner 2026-11-17 (several devices): a device never decides by its own clock, because the game
+ * writes the local save on boot before the cloud answers. It remembers `base` = the cloud stamp it
+ * last downloaded or uploaded; when the cloud stamp is anything else, another device wrote since → pull.
+ * @param {{ local: object|null, remote: {save: object, saved_at?: number}|null, linkedTo: string|null, userId: string, base?: number|null }} p
+ *   linkedTo = the account this device save already belongs to; base = cloud stamp this device last synced
  * @returns {'push'|'pull'|'same'|'ask'}
  */
-export function syncDecision({ local, remote, linkedTo, userId }) {
+export function syncDecision({ local, remote, linkedTo, userId, base = null }) {
   const remoteOk = !!(remote && validSave(remote.save));
   if (!remoteOk) return 'push';                       // new account: it adopts this device's progress
   if (!hasProgress(local)) return 'pull';             // nothing to lose here: use the account
-  if (linkedTo && linkedTo === userId) return pickNewer(local, remote);   // same lineage: newest wins
+  if (linkedTo && linkedTo === userId) {              // same account: the account save is the truth
+    const b = Number(base) || 0;
+    return b && b === rowStamp(remote) ? 'push' : 'pull';   // unchanged since our last sync → ours is the continuation
+  }
   return pickNewer(local, remote) === 'same' ? 'same' : 'ask';           // two different histories
+}
+
+/**
+ * Before an upload: may this device write over the account save?
+ * @param {{ remoteStamp: number, hasRow: boolean, base?: number|null, force?: boolean }} p
+ * @returns {'push'|'pull'} pull = another device saved since this one last synced
+ */
+export function pushDecision({ remoteStamp, hasRow, base = null, force = false }) {
+  if (force || !hasRow) return 'push';
+  return (Number(base) || 0) === (Number(remoteStamp) || 0) ? 'push' : 'pull';
 }
 
 /**

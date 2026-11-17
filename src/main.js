@@ -800,7 +800,7 @@ async function boot() {
   pushNeeds();
   // Cloud save (Google sign-in) — hidden until assets/data/cloud.json is filled (docs/cloud-save.md).
   const persistLocal = game.persist.bind(game);
-  game.persist = () => { const ok = persistLocal(); cloud.schedule(); return ok; };
+  game.persist = () => { if (cloud.locked) return false; const ok = persistLocal(); cloud.schedule(); return ok; };   // locked: an account save is loading
   hud.setAccount?.(cloud.state);
   cloud.init();
   if (!game.chosen) { app.classList.add('selecting'); hud.showSelect(selectList(), game.selected); }
@@ -830,7 +830,7 @@ async function boot() {
       if (info.gapMs >= backMs && game.chosen) mood.returnAfterAbsence(time);
     }
     if (time - lastHudNeeds >= TIMING.hudNeedsSeconds) { lastHudNeeds = time; pushNeeds(); }
-    if (time - saveT >= TIMING.saveSeconds) { saveT = time; game.persist(); }
+    if (time - saveT >= TIMING.saveSeconds) { saveT = time; if (!cloud.locked) persistLocal(); }   // timer save stays on this device (no upload)
   });
   const head = { x: 0, y: 0 };
   let headV = null;
@@ -843,7 +843,7 @@ async function boot() {
     hud.placeBubble(head.x, head.y);
   });
 
-  const flushSave = () => { game.tick(); game.persist(); };
+  const flushSave = () => { game.tick(); if (!cloud.locked) persistLocal(); };   // cloud.flush uploads only player changes
   document.addEventListener('visibilitychange', () => {
     minigame.setPaused(document.hidden, 'tab');
     if (document.hidden) talkCtl.cancel();
