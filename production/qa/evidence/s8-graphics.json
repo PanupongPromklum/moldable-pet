@@ -1,9 +1,9 @@
 {
   "high": {
-    "fps": 4.6,
-    "frameMs": 215.7,
-    "renderMs": 4.6,
-    "petUpdateMs": 7.93,
+    "fps": 4.5,
+    "frameMs": 220,
+    "renderMs": 5.3,
+    "petUpdateMs": 9.02,
     "buffer": [
       682,
       1477
@@ -15,10 +15,10 @@
     "dpr": 1.75
   },
   "low": {
-    "fps": 15.2,
-    "frameMs": 66,
-    "renderMs": 1.7,
-    "petUpdateMs": 3.11,
+    "fps": 14.8,
+    "frameMs": 67.4,
+    "renderMs": 1.9,
+    "petUpdateMs": 3.27,
     "buffer": [
       390,
       844

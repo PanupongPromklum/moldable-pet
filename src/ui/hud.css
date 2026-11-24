@@ -1318,7 +1318,8 @@ button.mp-account:active { transform: scale(.98); }
 .mp-set-switchrow[data-state="error"] .mp-set-text small { color: var(--mp-text-warn); }
 .mp-hud:is(.is-settings, .is-savechoice) .mp-bottom { visibility: hidden; }
 /* graphics high / low (owner 2026-11-24) */
-.mp-set-gfx { padding-top: 4px; }
+.mp-set-seg { padding-top: 4px; }
+.mp-seg-opt.mp-num { font-family: var(--mp-font-en); font-size: var(--mp-fs-sm); }
 .mp-seg { display: inline-flex; padding: 4px; gap: 4px; border-radius: var(--mp-r-full); background: var(--mp-bg-primary-light); }
 .mp-seg-opt {
   min-width: 64px; min-height: 40px; padding: 0 16px; border: none; border-radius: var(--mp-r-full); background: transparent;

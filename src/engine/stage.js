@@ -14,6 +14,7 @@
 import * as THREE from 'three';
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
 import { createBake } from './bake.js';
+import { frameDue } from './graphics.js';
 
 /** Presentation constants (not gameplay numbers). */
 const VIEW = {
@@ -178,15 +179,15 @@ export function createStage({ container, overlay, hudReserve = { top: 120, botto
   // ---- loop ----
   const ticks = [];
   const clock = new THREE.Clock(false);
-  let running = false, frameMs = 0, nextMs = 0;
+  let running = false, frameMs = 0, lastDrawMs = -1e9;
   function loop(now) {
     if (!running) return;
     requestAnimationFrame(loop);
-    // frame cap: skip refreshes until the next slot (half a refresh of slack so 60 Hz → 30 fps stays even)
+    // frame cap (graphics.js frameDue: measured from the last drawn frame, 4 ms of slack)
     if (quality.fps > 0) {
-      const t = typeof now === 'number' ? now : performance.now(), step = 1000 / quality.fps;
-      if (t < nextMs - 4) return;
-      nextMs = Math.max(nextMs + step, t + step * 0.5);
+      const t = typeof now === 'number' ? now : performance.now();
+      if (!frameDue(t, lastDrawMs, quality.fps)) return;
+      lastDrawMs = t;
     }
     frameMs = performance.now();
     const dt = Math.min(clock.getDelta(), VIEW.maxDt);
@@ -219,7 +220,7 @@ export function createStage({ container, overlay, hudReserve = { top: 120, botto
     setQuality(partial = {}) {
       for (const k of Object.keys(QUALITY_DEFAULT)) if (k in partial) quality[k] = partial[k];
       bake.setEnabled(quality.bake);
-      nextMs = 0;
+      lastDrawMs = -1e9;
       resize();
     },
     /** Overlay 2D context (hand skeletons), or null. */

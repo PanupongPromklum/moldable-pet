@@ -32,7 +32,7 @@
  */
 import * as THREE from 'three';
 import { createStage } from './engine/stage.js';
-import { GRAPHICS_KEY, GRAPHICS_LEVELS, GRAPHICS_PRESETS, SLOW, bootLevel, readGraphics, writeGraphics, isSlow, richMaterials } from './engine/graphics.js';
+import { GRAPHICS_KEY, GRAPHICS_LEVELS, GRAPHICS_PRESETS, SLOW, bootLevel, readGraphics, writeGraphics, fpsChoice, isSlow, richMaterials } from './engine/graphics.js';
 import { createGameState, safeLocalStorage, SAVE_KEY } from './game/state.js';
 import { createRoomManager } from './game/rooms.js';
 import { createMood } from './game/mood.js';
@@ -160,7 +160,8 @@ async function boot() {
     automated: !!navigator.webdriver,
   });
   const gfxPreset = () => GRAPHICS_PRESETS[gfx.level];
-  const stage = createStage({ container: $('stage'), overlay: $('ov'), hudReserve: HUD_RESERVE.normal, quality: gfxPreset() });
+  const gfxQuality = () => ({ ...gfxPreset(), fps: gfx.fps });   // level knobs + the separate 60 / 30 choice
+  const stage = createStage({ container: $('stage'), overlay: $('ov'), hudReserve: HUD_RESERVE.normal, quality: gfxQuality() });
   const timers = createTimers();
 
   // 3. room manager (first room entered after everything is wired)
@@ -273,6 +274,7 @@ async function boot() {
       saveSoon();
     },
     onGraphics(level) { setGraphics(level, 'player'); },
+    onFps(n) { setFps(n); },
     onSfxVolume(v) {
       game.setSetting('sfxVol', v); setBusVolume('sfx', game.settings.sfxVol); setBusVolume('voice', game.settings.sfxVol);
       saveSoon();
@@ -313,7 +315,7 @@ async function boot() {
   // 6. audio (volumes from the settings sheet; home music starts with the first gesture)
   setBusVolume('music', game.settings.musicVol);
   setBusVolume('sfx', game.settings.sfxVol); setBusVolume('voice', game.settings.sfxVol);
-  hud.setSettings?.({ musicVol: game.settings.musicVol, sfxVol: game.settings.sfxVol, graphics: gfx.level });
+  hud.setSettings?.({ musicVol: game.settings.musicVol, sfxVol: game.settings.sfxVol, graphics: gfx.level, fps: gfx.fps });
   let volSaveT = 0;
   const saveSoon = () => { clearTimeout(volSaveT); volSaveT = setTimeout(() => game.persist(), 600); };
   {   // the music never plays into the microphone, and rests while the page is hidden
@@ -828,14 +830,21 @@ async function boot() {
   function setGraphics(level, by) {
     if (!GRAPHICS_LEVELS.includes(level)) return;
     gfx.level = level; gfx.by = by;
-    gfxStore.setItem(GRAPHICS_KEY, writeGraphics(level, by === 'player' ? 'player' : 'auto'));
-    stage.setQuality(gfxPreset());
+    gfxStore.setItem(GRAPHICS_KEY, writeGraphics(level, by === 'player' ? 'player' : 'auto', gfx.fps));
+    stage.setQuality(gfxQuality());
     if (by === 'player' && gfxPreset().petDetail !== petDetail && !minigame.active) {
       spawnPet(game.selected); gestures.reset(); care.onCharacterChanged();
     }
     if (pet) richMaterials(pet.object3d, gfxPreset().rich);
     hud.setSettings?.({ graphics: level });
     slowCheck.on = false;
+  }
+  /** Frame rate 60 / 30 (owner 2026-11-24), its own choice on either graphics level. */
+  function setFps(n) {
+    gfx.fps = fpsChoice(n);
+    gfxStore.setItem(GRAPHICS_KEY, writeGraphics(gfx.level, gfx.by === 'player' ? 'player' : 'auto', gfx.fps));
+    stage.setQuality({ fps: gfx.fps });
+    hud.setSettings?.({ fps: gfx.fps });
   }
   // first visits without a choice: step down to low once if the game runs slow (SLOW in graphics.js)
   const slowCheck = { on: gfx.level === 'high' && (gfx.by === 'guess' || gfx.by === 'auto'), start: 0, last: 0, list: [] };
@@ -906,7 +915,7 @@ async function boot() {
   }
 
   if (new URLSearchParams(location.search).has('debug')) {
-    window.__moldablePet = { data, game, stage, gfx, setGraphics, rooms, mood, care, gestures, hands, head: headCtl, hud, getPet, selectCharacter, minigame, startMinigame, openMinigameIntro, readyMinigame, setTheme, getControl: () => control, equip, buy, openWardrobe, snackCfg,
+    window.__moldablePet = { data, game, stage, gfx, setGraphics, setFps, rooms, mood, care, gestures, hands, head: headCtl, hud, getPet, selectCharacter, minigame, startMinigame, openMinigameIntro, readyMinigame, setTheme, getControl: () => control, equip, buy, openWardrobe, snackCfg,
       growth, talk: talkCtl, openPicker, pickGame, pickerGames, MINIGAMES, instances, getGameId: () => gameId,
       openDecor, closeDecor, decorPreview, decorEquip, decorBuy, thumbs, isDecorOpen: () => decorOpen };
   }

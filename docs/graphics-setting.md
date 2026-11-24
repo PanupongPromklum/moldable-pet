@@ -1,7 +1,8 @@
 # Graphics setting (high / low)
 
 Owner 2026-11-24: a low-spec Android phone stuttered badly. Settings now has
-**กราฟิก: สูง / ต่ำ**. Code: `src/engine/graphics.js` (levels, rules),
+**กราฟิก: สูง / ต่ำ** and, as its own choice, **ความลื่น: 60 / 30 FPS** (owner: "30fps มันต่ำไป",
+so low no longer forces 30). Code: `src/engine/graphics.js` (levels, rules),
 `src/engine/stage.js` (`setQuality`), `src/main.js` (`setGraphics`), `src/ui/settings.js` (the row).
 
 ## What low changes (all live, no reload)
@@ -9,17 +10,28 @@ Owner 2026-11-24: a low-spec Android phone stuttered badly. Settings now has
 | Knob | High | Low | Why it helps |
 |---|---|---|---|
 | Pixel ratio cap (touch / mouse) | 1.75 / 2 | 1 / 1 | A weak phone is limited by how many pixels it paints. A 1080p phone at 1.75× paints ~3× the pixels of 1×. |
-| Frame cap | screen rate (60) | 30 fps | Half the work per second; less heat, so the phone does not throttle itself after a few minutes. |
 | Pet body detail | 50 (touch) / 72 | 28 | The soft body is re-shaped on the CPU every frame it squishes (every vertex + normals, then sent to the GPU). ~⅓ of the vertices. |
 | Pet sheen + clear coat | on | off | The two extra light layers are the most expensive pixel shader in the scene. Colour and shape stay. |
 | Room bake | on | on | Both levels draw the room once and reuse it as a picture (Sprint 4). |
 
+Frame rate (either level): **60** (default) or **30**. Both are caps, so a 120 Hz phone draws 60, not 120.
+30 halves the work per second and the heat. The cap is measured from the last drawn frame
+(`frameDue` in graphics.js), so a 60.5 Hz screen never drifts into a dropped frame.
+
+## What is still drawn every frame
+
+Everything in a room that never moves (walls, floor, sofa, shelves, window, rug, …, ~70–80 k triangles)
+is already drawn once into a picture and reused (engine/bake.js). Only what moves is drawn each frame:
+the pet (the main cost, ~59 k triangles on high, ~16 k on low), and small animated bits: the toy ball,
+swaying plant leaves, kitchen steam, bath bubbles, the duck and the toilet (~0.2–2 k triangles each).
+Baking those would freeze them and save almost nothing.
+
 Measured (`tests/visual/s8_graphics.py`, software GL, relative numbers only, phone 390×844 @3×):
-high 4.6 fps / pet update 7.9 ms, low 15.2 fps / 3.1 ms; pixels 1.0 M → 0.33 M; pet vertices 46 k → 15.5 k.
+high 4.5 fps / pet update 9.0 ms, low 14.8 fps / 3.3 ms; pixels 1.0 M → 0.33 M; pet vertices 46 k → 15.5 k.
 
 ## Rules
 
-- The level belongs to the **device**: `localStorage['mp-graphics'] = {"level","by"}`. It is not in the
+- The level belongs to the **device**: `localStorage['mp-graphics'] = {"level","by","fps"}`. It is not in the
   save, so cloud sync never carries a phone's "low" to a desktop.
 - Boot order: `?gfx=high|low` → saved level → under automation (`navigator.webdriver`) high → a guess:
   touch device with ≤ 3 GB memory or ≤ 4 cores starts on low.

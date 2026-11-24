@@ -1,10 +1,12 @@
 /**
  * Graphics level (owner 2026-11-24: "ตั้งค่า Graphic ให้ swap ไป Low High" — a slow
  * Android phone stuttered). Two levels; everything they change applies live, no reload.
+ * The frame rate is its own choice, 60 or 30 (owner 2026-11-24: "30fps มันต่ำไป"), on either level.
  *
  *  - pixel ratio cap: the biggest cost on a weak phone is the number of pixels drawn
  *    (a 1080p phone at 1.75× draws ~3× the pixels of 1×).
- *  - frame cap: 30 fps on low halves the work per second (and the heat / battery).
+ *  - frame rate (separate choice): 60 by default; 30 halves the work per second
+ *    (and the heat / battery). 60 is a cap too, so a 120 Hz phone does not draw 120.
  *  - pet body detail: the soft body is re-shaped on the CPU every frame it squishes
  *    (positions + normals of every vertex, then uploaded); low uses ~⅓ of the vertices.
  *  - rich materials: the pet's satin sheen + clear coat are the most expensive pixel
@@ -28,13 +30,24 @@ export const GRAPHICS_KEY = 'mp-graphics';
 
 /**
  * Presentation knobs per level (not gameplay numbers).
- * `dprTouch` / `dprMouse`: devicePixelRatio caps. `fps`: frame cap, 0 = the screen's rate.
+ * `dprTouch` / `dprMouse`: devicePixelRatio caps.
  * `petDetail`: pet body icosahedron detail, null = character.js default. `rich`: sheen + clear coat.
  */
 export const GRAPHICS_PRESETS = Object.freeze({
-  high: Object.freeze({ bake: true, dprTouch: 1.75, dprMouse: 2, fps: 0, petDetail: null, rich: true }),
-  low: Object.freeze({ bake: true, dprTouch: 1, dprMouse: 1, fps: 30, petDetail: 28, rich: false }),
+  high: Object.freeze({ bake: true, dprTouch: 1.75, dprMouse: 2, petDetail: null, rich: true }),
+  low: Object.freeze({ bake: true, dprTouch: 1, dprMouse: 1, petDetail: 28, rich: false }),
 });
+
+/** Frame-rate choices (frame cap in fps), default first. */
+export const FPS_CHOICES = Object.freeze([60, 30]);
+
+/**
+ * Frame cap: draw this screen refresh? Measured from the last drawn frame (not fixed slots), so a
+ * 60.5 Hz screen never drifts into a dropped frame; 4 ms of slack absorbs vsync jitter.
+ * 60 Hz screen → 60 / 30, 120 Hz → 60 / 30. `fps` 0 = draw every refresh.
+ * @param {number} now ms @param {number} lastDraw ms of the last drawn frame @param {number} fps
+ */
+export const frameDue = (now, lastDraw, fps) => !(fps > 0) || now - lastDraw >= 1000 / fps - 4;
 
 /** Auto step-down: average fps below `fps` over `seconds`, after `warmup` seconds on screen. */
 export const SLOW = Object.freeze({ fps: 24, seconds: 4, warmup: 3 });
@@ -53,33 +66,37 @@ export function guessLevel(d = {}) {
   return 'high';
 }
 
+/** Valid frame-rate choice (anything else → 60). @returns {60|30} */
+export const fpsChoice = (v) => (FPS_CHOICES.includes(Number(v)) ? Number(v) : FPS_CHOICES[0]);
+
 /**
  * Saved level of this device.
  * @param {string|null} raw value of localStorage[GRAPHICS_KEY]
- * @returns {{ level: 'high'|'low', by: 'player'|'auto' }|null} null = nothing saved yet
+ * @returns {{ level: 'high'|'low', by: 'player'|'auto', fps: 60|30 }|null} null = nothing saved yet
  */
 export function readGraphics(raw) {
   if (raw == null || raw === '') return null;
   let o = null;
   try { o = JSON.parse(raw); } catch { o = { level: raw }; }   // tolerate a bare "low"
   if (!o || !GRAPHICS_LEVELS.includes(o.level)) return null;
-  return { level: o.level, by: o.by === 'player' ? 'player' : 'auto' };
+  return { level: o.level, by: o.by === 'player' ? 'player' : 'auto', fps: fpsChoice(o.fps) };
 }
 
-/** @param {'high'|'low'} level @param {'player'|'auto'} by @returns {string} */
-export const writeGraphics = (level, by) => JSON.stringify({ level, by });
+/** @param {'high'|'low'} level @param {'player'|'auto'} by @param {number} [fps] @returns {string} */
+export const writeGraphics = (level, by, fps = FPS_CHOICES[0]) => JSON.stringify({ level, by, fps: fpsChoice(fps) });
 
 /**
  * Pick the level to boot with.
  * @param {{ param?: string|null, saved?: {level:string, by:string}|null, device?: object, automated?: boolean }} o
  *   param = `?gfx=` URL value; automated = browser driven by tests (keeps the default high)
- * @returns {{ level: 'high'|'low', by: 'url'|'player'|'auto'|'guess'|'default' }}
+ * @returns {{ level: 'high'|'low', by: 'url'|'player'|'auto'|'guess'|'default', fps: 60|30 }} fps = saved choice or 60
  */
 export function bootLevel({ param = null, saved = null, device = {}, automated = false } = {}) {
-  if (GRAPHICS_LEVELS.includes(param)) return { level: param, by: 'url' };
-  if (saved && GRAPHICS_LEVELS.includes(saved.level)) return { level: saved.level, by: saved.by };
-  if (automated) return { level: 'high', by: 'default' };
-  return { level: guessLevel(device), by: 'guess' };
+  const fps = fpsChoice(saved?.fps);
+  if (GRAPHICS_LEVELS.includes(param)) return { level: param, by: 'url', fps };
+  if (saved && GRAPHICS_LEVELS.includes(saved.level)) return { level: saved.level, by: saved.by, fps };
+  if (automated) return { level: 'high', by: 'default', fps };
+  return { level: guessLevel(device), by: 'guess', fps };
 }
 
 /**
