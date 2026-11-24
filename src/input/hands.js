@@ -67,6 +67,8 @@ const clamp = (v, a, b) => (v < a ? a : v > b ? b : v);
 export function createHands({ video, overlay, app, picker, stage, hud, gestures, mood, rooms, getTime, cameraHidden = false, onView }) {
   const ctx = overlay ? overlay.getContext('2d') : null;
   let landmarker = null, stream = null, on = false, starting = false, lastVT = -1, drew = false;
+  // camera budget (graphics.js `camera`): most detections a second (0 = every camera frame) and the video width asked for
+  let detectGap = 0, lastDetect = -1e9, videoW = 960;
   let hidden = !!cameraHidden, passive = false, suspended = false, theme = 'light';
   const hands = new Map();
   const palms = [0, 1, 2, 3].map(() => ({ x: 0, y: 0, petX: 0, feetY: 0, headY: 0, hw: 1 }));
@@ -160,6 +162,9 @@ export function createHands({ video, overlay, app, picker, stage, hud, gestures,
   function update() {
     const t = getTime();
     if (!on || suspended || !landmarker || video.readyState < 2 || video.currentTime === lastVT) return;
+    const nowMs = performance.now();
+    if (detectGap && nowMs - lastDetect < detectGap) return;   // weak phone: detect less often (the hand keeps its last pose in between)
+    lastDetect = nowMs;
     lastVT = video.currentTime;
     let res;
     try { res = landmarker.detectForVideo(video, performance.now()); } catch { return; }
@@ -294,7 +299,8 @@ export function createHands({ video, overlay, app, picker, stage, hud, gestures,
 
   async function openStream() {
     const id = picker && !picker.hidden ? picker.value : '';
-    const video0 = id ? { deviceId: { exact: id }, width: 960, height: 720 } : { facingMode: 'user', width: 960, height: 720 };
+    const vh = Math.round(videoW * 3 / 4);
+    const video0 = id ? { deviceId: { exact: id }, width: videoW, height: vh } : { facingMode: 'user', width: videoW, height: vh };
     stream = await navigator.mediaDevices.getUserMedia({ audio: false, video: video0 });
     video.srcObject = stream;
     try { await video.play(); } catch { /* autoplay muted ok */ }
@@ -388,6 +394,15 @@ export function createHands({ video, overlay, app, picker, stage, hud, gestures,
     setSuspended(s) {
       suspended = !!s;
       if (suspended) { for (const st of hands.values()) releaseHand(st); hands.clear(); gestures.setHandSquish(0, 0); }
+    },
+    /**
+     * Camera cost on a weak phone (graphics level): `hz` = most hand detections a second (0 = every camera
+     * frame), `width` = video width asked for (applies the next time the camera starts).
+     * @param {{ hz?: number, width?: number }} b
+     */
+    setBudget({ hz, width } = {}) {
+      if (hz != null) detectGap = hz > 0 ? 1000 / hz - 4 : 0;
+      if (width > 0) videoW = Math.round(width);
     },
     /** The camera video element (shared with head control while the camera is on). */
     get video() { return video; },

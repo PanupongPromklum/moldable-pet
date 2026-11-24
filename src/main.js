@@ -161,7 +161,7 @@ async function boot() {
   });
   const gfxPreset = () => GRAPHICS_PRESETS[gfx.level];
   const gfxQuality = () => ({ ...gfxPreset(), fps: gfx.fps });   // level knobs + the separate 60 / 30 choice
-  const stage = createStage({ container: $('stage'), overlay: $('ov'), hudReserve: HUD_RESERVE.normal, quality: gfxQuality() });
+  const stage = createStage({ container: $('stage'), overlay: $('ov'), hudReserve: HUD_RESERVE.normal, quality: { ...gfxQuality(), aa: gfxPreset().aa } });
   const timers = createTimers();
 
   // 3. room manager (first room entered after everything is wired)
@@ -196,8 +196,8 @@ async function boot() {
   const getPet = () => pet;
   function spawnPet(key) {
     if (pet) { stage.scene.remove(pet.object3d); pet.dispose(); }
-    pet = createCharacter(key, { shadow: false, detail: gfxPreset().petDetail });   // owner 2026-11-17: no flat shadow plate (it showed in the air while carried)
-    petDetail = gfxPreset().petDetail;
+    pet = createCharacter(key, { shadow: false, detail: gfxPreset().petDetail, faceScale: gfxPreset().faceScale, faceHz: gfxPreset().faceHz });   // owner 2026-11-17: no flat shadow plate (it showed in the air while carried)
+    petDetail = gfxPreset().petDetail; petFace = gfxPreset().faceScale;
     stage.scene.add(pet.object3d);
     const spot = rooms.room?.petSpot;
     if (spot) pet.object3d.position.copy(spot);
@@ -205,7 +205,7 @@ async function boot() {
     growth?.refreshLook(true);
     richMaterials(pet.object3d, gfxPreset().rich);
   }
-  let petDetail = null;
+  let petDetail = null, petFace = 1;
   /** Put the selected character's saved outfit on (Clay's setOutfit, optional). */
   function applyOutfit() {
     const o = game.outfit();
@@ -367,6 +367,7 @@ async function boot() {
     cameraHidden: !!game.settings.cameraHidden,
     onView(hidden) { game.setSetting('cameraHidden', hidden); game.persist(); hud.setCameraView?.(hidden); },
   });
+  hands.setBudget(gfxPreset().camera);
 
   // 7b. theme (Sprint 3 #2): manual lamp, saved in settings.theme (default light).
   // The system colour scheme never decides; ?theme=light|dark pins one for tests (not saved).
@@ -832,12 +833,20 @@ async function boot() {
     gfx.level = level; gfx.by = by;
     gfxStore.setItem(GRAPHICS_KEY, writeGraphics(level, by === 'player' ? 'player' : 'auto', gfx.fps));
     stage.setQuality(gfxQuality());
-    if (by === 'player' && gfxPreset().petDetail !== petDetail && !minigame.active) {
+    hands?.setBudget(gfxPreset().camera);
+    if (by === 'player' && (gfxPreset().petDetail !== petDetail || gfxPreset().faceScale !== petFace) && !minigame.active) {
       spawnPet(game.selected); gestures.reset(); care.onCharacterChanged();
     }
     if (pet) richMaterials(pet.object3d, gfxPreset().rich);
     hud.setSettings?.({ graphics: level });
     slowCheck.on = false;
+    // edge smoothing belongs to the GL context: a level the player picks that needs the other one restarts the
+    // game (saved first). The automatic step-down waits for the next visit instead of reloading under the player.
+    if (by === 'player' && gfxPreset().aa !== stage.aa) {
+      hud.toast('กำลังเริ่มเกมใหม่เพื่อปรับกราฟิก…', 2000);
+      game.persist(); flushSave();
+      setTimeout(() => location.reload(), 500);
+    }
   }
   /** Frame rate 60 / 30 (owner 2026-11-24), its own choice on either graphics level. */
   function setFps(n) {
@@ -906,6 +915,9 @@ async function boot() {
   });
   window.addEventListener('pagehide', flushSave);
 
+  // build the other rooms and their shaders now, behind the loading screen, so a room change never freezes a weak phone
+  setLoading('กำลังเตรียมห้อง…');
+  await rooms.warmAll({ compile: (r) => stage.renderer.compile(r.group, stage.camera, stage.scene) });
   stage.start();
   setLoading(null);
   document.documentElement.dataset.boot = 'ok';

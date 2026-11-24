@@ -9,6 +9,8 @@ test('low draws fewer pixels and lightens the pet; frame rate is not part of the
   assert(!('fps' in l) && !('fps' in h), 'no fps in the level (owner 2026-11-24: 60 on low too)');
   assert(l.petDetail > 0 && h.petDetail == null, 'low pet detail');
   eq(l.rich, false, 'low drops sheen + clear coat'); eq(h.rich, true, 'high keeps them');
+  eq(l.aa, false, 'low has no edge smoothing (half the frame time on a weak GPU)'); eq(h.aa, true, 'high keeps it');
+  assert(l.faceScale < h.faceScale && l.faceHz > 0 && h.faceHz === 0, 'low redraws the face smaller and less often');
 });
 test('guess: weak touch devices start on low, desktops on high', () => {
   eq(guessLevel({ coarse: true, deviceMemory: 2, hardwareConcurrency: 8 }), 'low', '2 GB phone');

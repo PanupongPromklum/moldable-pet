@@ -54,9 +54,10 @@ export const STAGE_LIGHTS = Object.freeze({
 export function createStage({ container, overlay, hudReserve = { top: 120, bottom: 160 }, quality: q0 = {} }) {
   const coarse = matchMedia('(pointer: coarse)').matches;
   const params = new URLSearchParams(location.search);
-  const quality = { ...QUALITY_DEFAULT, ...q0 };
+  const quality = { ...QUALITY_DEFAULT };
+  for (const k of Object.keys(QUALITY_DEFAULT)) if (k in q0) quality[k] = q0[k];   // `aa` is read once, below: it is a property of the GL context
   if (params.has('nobake')) quality.bake = false;
-  const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true, powerPreference: 'high-performance' });
+  const renderer = new THREE.WebGLRenderer({ antialias: q0.aa !== false, alpha: true, powerPreference: 'high-performance' });
   const pixelRatio = () => Math.min(window.devicePixelRatio || 1, coarse ? quality.dprTouch : quality.dprMouse);
   renderer.setPixelRatio(pixelRatio());
   renderer.outputColorSpace = THREE.SRGBColorSpace;
@@ -109,7 +110,7 @@ export function createStage({ container, overlay, hudReserve = { top: 120, botto
     if (renderer.getPixelRatio() !== pr) renderer.setPixelRatio(pr);   // DPR change (zoom, monitor move)
     renderer.setSize(size.w, size.h, false);
     if (overlay) {
-      const dpr = Math.min(window.devicePixelRatio || 1, 2);
+      const dpr = Math.min(window.devicePixelRatio || 1, 2, coarse ? Math.max(1, quality.dprTouch) : quality.dprMouse);   // hand skeleton layer follows the graphics level
       overlay.width = Math.round(size.w * dpr); overlay.height = Math.round(size.h * dpr);
     }
     frame();
@@ -202,6 +203,8 @@ export function createStage({ container, overlay, hudReserve = { top: 120, botto
 
   return {
     renderer, scene, camera, canvas, coarse, size,
+    /** Edge smoothing (MSAA) this GL context was created with; cannot change without a new context. */
+    aa: q0.aa !== false,
     /** The stage lights, for Prop's `applyStageLights(theme, lights)`. */
     lights: { hemi, key, fill, rim },
     /** Bake state: `stats()`, `invalidate()`, `enabled`, `supported` (engine/bake.js). */

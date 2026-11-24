@@ -32,10 +32,16 @@ export const GRAPHICS_KEY = 'mp-graphics';
  * Presentation knobs per level (not gameplay numbers).
  * `dprTouch` / `dprMouse`: devicePixelRatio caps.
  * `petDetail`: pet body icosahedron detail, null = character.js default. `rich`: sheen + clear coat.
+ * `faceScale`: eye / mouth canvas size (1 = 512 px). `faceHz`: most face redraws a second (0 = every frame).
+ * Both are redone and uploaded to the GPU while the pet is touched (the eyes follow the finger).
+ * `camera`: hand-tracking budget `{ hz, width }` (most detections a second, 0 = every camera frame; video width).
+ * `aa`: edge smoothing (MSAA) of the screen and of the room picture. The biggest single cost on a weak GPU
+ * (about half the frame time in the software-GL test) and the only knob that cannot change live: it is a
+ * property of the GL context, so it applies at the next start (the settings sheet restarts the game).
  */
 export const GRAPHICS_PRESETS = Object.freeze({
-  high: Object.freeze({ bake: true, dprTouch: 1.75, dprMouse: 2, petDetail: null, rich: true }),
-  low: Object.freeze({ bake: true, dprTouch: 1, dprMouse: 1, petDetail: 28, rich: false }),
+  high: Object.freeze({ bake: true, dprTouch: 1.75, dprMouse: 2, petDetail: null, rich: true, faceScale: 1, faceHz: 0, aa: true, camera: Object.freeze({ hz: 0, width: 960 }) }),
+  low: Object.freeze({ bake: true, dprTouch: 1, dprMouse: 1, petDetail: 28, rich: false, faceScale: 0.5, faceHz: 20, aa: false, camera: Object.freeze({ hz: 15, width: 640 }) }),
 });
 
 /** Frame-rate choices (frame cap in fps), default first. */

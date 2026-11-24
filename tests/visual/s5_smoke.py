@@ -65,6 +65,8 @@ def open_page(pw, label, vp, touch, stub=True):
     ctx = b.new_context(viewport=vp, device_scale_factor=2 if touch else 1, has_touch=touch, is_mobile=touch)
     if stub:
         ctx.add_init_script(STUB_SR)
+    else:   # no recogniser from the first script on (the game reads it while it boots; deleting it after boot raced the boot time)
+        ctx.add_init_script('delete window.SpeechRecognition; delete window.webkitSpeechRecognition')
     page = ctx.new_page()
     page.on('pageerror', lambda e: errors.append(f'{label} pageerror: {e}'))
     page.on('console', lambda m: errors.append(f'{label} console: {m.text}') if m.type == 'error' and 'ERR_FAILED' not in m.text else None)

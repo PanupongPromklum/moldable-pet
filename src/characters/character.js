@@ -121,8 +121,12 @@ const easeInOut = (t) => t * t * t * (t * (t * 6 - 15) + 10);
 /**
  * Create one character.
  * @param {string} key one of CHARACTER_KEYS
- * @param {{ detail?: number, idle?: boolean, shadow?: boolean, growth?: object, trait?: string|null }} [opts]
- *   detail = icosahedron detail (default 50 on touch devices, 72 otherwise); idle = breathing/saccades
+ * @param {{ detail?: number, idle?: boolean, shadow?: boolean, growth?: object, trait?: string|null, faceScale?: number, faceHz?: number }} [opts]
+ *   detail = icosahedron detail (default 50 on touch devices, 72 otherwise);
+ *   faceScale = size of the eye / mouth canvases (1 = 512 px; 0.5 on low graphics: they are redrawn and
+ *   uploaded to the GPU while the pet is touched, which is the slowest thing on a weak phone);
+ *   faceHz = most face redraws per second (0 = every frame; the eyes still follow, just in steps);
+ *   idle = breathing/saccades
  *   (default: off when the user prefers reduced motion); shadow = soft floor blob (default true);
  *   growth = initial `setGrowth` values (applied instantly); trait = initial `setTraitMark` id.
  * @returns {object} character API (see module contract)
@@ -145,7 +149,10 @@ export function createCharacter(key, opts = {}) {
   // colours (see "body gradient" below), a smoother satin finish and a light sheen rim.
   const bodyMat = new THREE.MeshPhysicalMaterial({ color: 0xffffff, vertexColors: true, roughness: .78, sheen: 1, sheenRoughness: .55, sheenColor: new THREE.Color(0xf7efff), envMapIntensity: .45, clearcoat: .18, clearcoatRoughness: .55 });
   const decalBase = { transparent: true, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -4, polygonOffsetUnits: -4 };
-  const eyeTex = [canvasTex(ETEX), canvasTex(ETEX)], mouthTex = canvasTex(TEX);
+  const fScale = clamp(opts.faceScale ?? 1, .25, 1), eTex = Math.round(ETEX * fScale / 8) * 8, mTex = Math.round(TEX * fScale / 8) * 8;
+  const faceGap = opts.faceHz > 0 ? 1 / opts.faceHz : 0;
+  let faceAt = -1e9;   // time of the last face redraw
+  const eyeTex = [canvasTex(eTex), canvasTex(eTex)], mouthTex = canvasTex(mTex);
   // Clear lens eyes (owner 2026-11-16, "ฝัง + เลนส์ใส"): glossy clear-coat over the painted eye so it catches light.
   const eyeMats = eyeTex.map(x => new THREE.MeshPhysicalMaterial({ map: x.t, roughness: .7, clearcoat: .12, clearcoatRoughness: .4, envMapIntensity: .1, ...decalBase }));
   const mouthMat = new THREE.MeshStandardMaterial({ map: mouthTex.t, roughness: .7, ...decalBase });
@@ -444,6 +451,7 @@ export function createCharacter(key, opts = {}) {
   const mFinal = { ...cur.mouth };
   const st = { eye: 1, pupil: 1, lidCurve: 1, lidU: [0, 0], lidL: [0, 0], tilt: [0, 0], arc: [1, 1], blink: 0, lx: 0, ly: 0, glint: 0, off: [[0, 0], [0, 0]] };
   const NQ = 17, prevEye = new Int32Array(NQ).fill(-1e9), prevMouth = new Int32Array(8).fill(-1e9);
+  let eyeDirty = false, mouthDirty = false, faceDrew = false;   // a face change waiting for its redraw slot (faceHz)
   const eyeQ = new Int32Array(NQ), mouthQ = new Int32Array(8);
   const MOUTH_FIELDS = ['w', 'up', 'down', 'curve', 't', 'tongue', 'q', 'skew'];
 
@@ -643,8 +651,13 @@ export function createCharacter(key, opts = {}) {
     eyeQ[14] = Math.round(st.glint * 1000); eyeQ[15] = Math.round(kNow * 1000); eyeQ[16] = Math.round(faceK * 1000);
     let eyeChanged = false;
     for (let j = 0; j < NQ; j++) if (eyeQ[j] !== prevEye[j]) { eyeChanged = true; prevEye[j] = eyeQ[j]; }
-    if (eyeChanged) {
-      for (let i = 0; i < 2; i++) { drawEye(eyeTex[i].g, ETEX, BOX, E, S, i, st); eyeTex[i].t.needsUpdate = true; }
+    // face redraw budget (opts.faceHz): a change that comes too soon is kept (prevEye was updated, so it
+    // is drawn at the next slot with the then-current values)
+    const faceDue = faceGap === 0 || time - faceAt >= faceGap;
+    if (eyeChanged) eyeDirty = true;
+    if (eyeDirty && faceDue) {
+      for (let i = 0; i < 2; i++) { drawEye(eyeTex[i].g, eTex, BOX, E, S, i, st); eyeTex[i].t.needsUpdate = true; }
+      eyeDirty = false; faceDrew = true;
     }
 
     // mouth: expression shape blended toward "open" by override / talk / action
@@ -662,7 +675,9 @@ export function createCharacter(key, opts = {}) {
       mFinal[f] = v; mouthQ[j] = Math.round(v * 10000);
       if (mouthQ[j] !== prevMouth[j]) { mouthChanged = true; prevMouth[j] = mouthQ[j]; }
     }
-    if (mouthChanged) { drawMouth(mouthTex.g, TEX, MBOX, mFinal); mouthTex.t.needsUpdate = true; }
+    if (mouthChanged) mouthDirty = true;
+    if (mouthDirty && faceDue) { drawMouth(mouthTex.g, mTex, MBOX, mFinal); mouthTex.t.needsUpdate = true; mouthDirty = false; faceDrew = true; }
+    if (faceDrew) { faceAt = time; faceDrew = false; }
     blushMat.opacity = Math.max(cur.blush, markId === 'cheerful' ? .55 : 0) * .9;
 
     // cheek puff (spring with a small overshoot)

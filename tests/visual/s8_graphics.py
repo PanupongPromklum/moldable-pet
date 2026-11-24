@@ -49,12 +49,28 @@ def phone(pw, url, label, storage=None):
     page = ctx.new_page()
     page.on('pageerror', lambda e: s.errors.append(f'{label} pageerror: {e}'))
     page.route('**/*', s.route)
+    if os.environ.get('NAV'):
+        page.on('framenavigated', lambda f: print('   nav', label, f.url[-50:]) if f == page.main_frame else None)
     page.goto(url)
     page.wait_for_function('document.documentElement.dataset.boot', timeout=120000)
     s.wait(page, 'M && M.getPet()')
     page.evaluate("window.__moldablePet.selectCharacter('flower')")
     page.wait_for_timeout(2500)
     return b, page
+
+
+def until(page, expr, timeout=120):
+    """Wait for `expr` (with M = the debug handle) through page restarts: a navigation in between is not a failure."""
+    import time
+    end = time.time() + timeout
+    while time.time() < end:
+        try:
+            if page.evaluate(f'(() => {{ const M = window.__moldablePet; return !!(M && ({expr})); }})()'):
+                return True
+        except Exception:
+            pass
+        page.wait_for_timeout(400)
+    return False
 
 
 def measure(page, secs=6):
@@ -80,6 +96,7 @@ if __name__ == '__main__':
         check('low pet has fewer vertices', l['petVerts'] < h['petVerts'] * 0.5, f"{l['petVerts']} vs {h['petVerts']}")
         check('low pet has no sheen / clear coat', l['richMaterials'] == 0 and h['richMaterials'] > 0, f"{l['richMaterials']} vs {h['richMaterials']}")
         check('low is not capped at 30 (frame rate is its own choice)', page_q_low['fps'] == 60, str(page_q_low))
+        check('low draws at least 2x the frames of high (software GL)', l['fps'] >= h['fps'] * 2, f"{l['fps']} vs {h['fps']} fps")
         check('low renders a frame faster', l['renderMs'] < h['renderMs'], f"{l['renderMs']} vs {h['renderMs']} ms")
 
         # 2. the settings sheet switches live and the choice stays on this device
@@ -87,17 +104,31 @@ if __name__ == '__main__':
         check('tests boot on high (no guess under automation)', page.evaluate('window.__moldablePet.gfx.level') == 'high')
         page.click('.mp-gear'); page.wait_for_timeout(600)
         check('sheet shows high checked', page.get_attribute('.mp-set-seg[data-group="gfx"] .mp-seg-opt[data-v="high"]', 'aria-checked') == 'true')
+        check('sheet shows 60 FPS checked', page.get_attribute('.mp-set-seg[data-group="fps"] .mp-seg-opt[data-v="60"]', 'aria-checked') == 'true')
+        check('high: edge smoothing on', page.evaluate('window.__moldablePet.stage.aa') is True and page.evaluate('window.__moldablePet.stage.renderer.getContextAttributes().antialias') is True)
         page.screenshot(path=os.path.join(EVID, 's8-graphics-sheet-high.png'), timeout=180000)
         v0 = page.evaluate('(() => { let n = 0; window.__moldablePet.getPet().object3d.traverse((o) => { if (o.isMesh) n += o.geometry.attributes.position.count; }); return n; })()')
-        check('sheet shows 60 FPS checked', page.get_attribute('.mp-set-seg[data-group="fps"] .mp-seg-opt[data-v="60"]', 'aria-checked') == 'true')
-        page.click('.mp-set-seg[data-group="gfx"] .mp-seg-opt[data-v="low"]'); page.wait_for_timeout(1200)
-        check('tap low: level low', page.evaluate('window.__moldablePet.gfx.level') == 'low')
-        check('tap low: pixel ratio 1', page.evaluate('window.__moldablePet.stage.renderer.getPixelRatio()') == 1)
+        # room change must not rebuild a room (rooms are built behind the loading screen and kept)
+        go = page.evaluate("(() => { const M = window.__moldablePet; const t = performance.now(); M.rooms.go('kitchen'); return performance.now() - t; })()")
+        check('room change is instant (room already built)', go < 40, f'{go:.1f} ms')
+        page.wait_for_timeout(1500)
+        go2 = page.evaluate("(() => { const M = window.__moldablePet; const t = performance.now(); M.rooms.go('living'); return performance.now() - t; })()")
+        check('back to a left room: instant too', go2 < 40, f'{go2:.1f} ms')
+        page.wait_for_timeout(1500)
+        page.click('.mp-set-seg[data-group="gfx"] .mp-seg-opt[data-v="low"]')
+        # edge smoothing is a GL-context property: choosing low restarts the game once (saved first)
+        until(page, "M.gfx.level === 'low' && M.stage.renderer.getContextAttributes().antialias === false && document.documentElement.dataset.boot === 'ok'")
+        page.wait_for_timeout(1500)
+        check('tap low: game restarted on low', page.evaluate('window.__moldablePet.gfx.level') == 'low')
+        check('low: edge smoothing off', page.evaluate('window.__moldablePet.stage.renderer.getContextAttributes().antialias') is False)
+        check('low: pixel ratio 1', page.evaluate('window.__moldablePet.stage.renderer.getPixelRatio()') == 1)
         v1 = page.evaluate('(() => { let n = 0; window.__moldablePet.getPet().object3d.traverse((o) => { if (o.isMesh) n += o.geometry.attributes.position.count; }); return n; })()')
-        check('tap low: pet rebuilt lighter', v1 < v0 * 0.5, f'{v1} vs {v0}')
+        check('low: pet lighter', v1 < v0 * 0.5, f'{v1} vs {v0}')
         st = page.evaluate("localStorage.getItem('mp-graphics')")
         check('stored per device as a player choice', json.loads(st or '{}') == {'level': 'low', 'by': 'player', 'fps': 60}, st)
         check('not in the game save', 'graphics' not in (page.evaluate("localStorage.getItem('moldable-pet:v1')") or ''))
+        page.click('.mp-gear'); page.wait_for_timeout(600)
+        check('sheet shows low checked after restart', page.get_attribute('.mp-set-seg[data-group="gfx"] .mp-seg-opt[data-v="low"]', 'aria-checked') == 'true')
         check('hint follows the level', 'เบาลง' in page.inner_text('.mp-set-seg[data-group="gfx"] .mp-set-hint'))
         check('low keeps 60 fps', page.evaluate('window.__moldablePet.stage.quality.fps') == 60)
         page.click('.mp-set-seg[data-group="fps"] .mp-seg-opt[data-v="30"]'); page.wait_for_timeout(800)
@@ -114,7 +145,9 @@ if __name__ == '__main__':
         check('reopen: still 30 FPS', page.evaluate('window.__moldablePet.stage.quality.fps') == 30)
         page.evaluate("window.__moldablePet.setFps(60)")
         check('back to 60', page.evaluate('window.__moldablePet.stage.quality.fps') == 60)
-        page.evaluate("window.__moldablePet.setGraphics('high', 'player')"); page.wait_for_timeout(1200)
+        page.evaluate("window.__moldablePet.setGraphics('high', 'player')")
+        until(page, "M.gfx.level === 'high' && M.stage.renderer.getContextAttributes().antialias === true && document.documentElement.dataset.boot === 'ok'"); page.wait_for_timeout(1200)
+        check('back to high: restarted with edge smoothing', page.evaluate('window.__moldablePet.stage.renderer.getContextAttributes().antialias') is True)
         check('back to high: pet rich again', page.evaluate('(() => { let r = 0; window.__moldablePet.getPet().object3d.traverse((o) => { const m = o.material; if (m?.isMeshPhysicalMaterial && m.sheen > 0) r++; }); return r; })()') > 0)
         b.close()
 
