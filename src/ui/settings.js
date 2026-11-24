@@ -1,7 +1,8 @@
 /**
  * Settings sheet (owner 2026-11-16: music, sound effect volumes; things that do not need a button of
  * their own on the top bar live here). Opened by the gear on the top bar. Owner: glaze.
- * Display only: every change goes out through handlers (onMusicVolume, onSfxVolume, onCamera).
+ * Display only: every change goes out through handlers (onMusicVolume, onSfxVolume, onCamera, onGraphics).
+ * Graphics high / low (owner 2026-11-24): a two-option radio group; the level itself lives in engine/graphics.js.
  * @module ui/settings
  */
 
@@ -18,6 +19,9 @@ export const SETTINGS_STRINGS = {
   camera: 'เล่นด้วยมือผ่านกล้อง',
   cameraHint: 'โบกมือหน้ากล้องเพื่อเล่นกับเพื่อน',
   cameraState: { off: 'ปิดอยู่', loading: 'กำลังเปิด…', on: 'เปิดอยู่', error: 'เปิดไม่ได้' },
+  graphics: 'กราฟิก',
+  graphicsLevel: { high: 'สูง', low: 'ต่ำ' },
+  graphicsHint: { high: 'ภาพละเอียด สวยที่สุด', low: 'เล่นลื่นขึ้น ประหยัดแบต เหมาะกับเครื่องรุ่นเก่า' },
 };
 
 /** Slider value 0..1 → whole percent text. Pure. */
@@ -29,7 +33,7 @@ export const pct = (v) => `${Math.round(Math.min(1, Math.max(0, Number(v) || 0))
  */
 export function createSettings({ root, slot, icon, call }) {
   const S = SETTINGS_STRINGS;
-  const st = { musicVol: 0.5, sfxVol: 0.8, camera: 'off', cameraAvailable: true };
+  const st = { musicVol: 0.5, sfxVol: 0.8, camera: 'off', cameraAvailable: true, graphics: 'high' };
   let returnFocus = null;
 
   const btn = document.createElement('button');
@@ -51,6 +55,29 @@ export function createSettings({ root, slot, icon, call }) {
         style="--v:${Math.round(v * 100)}%" aria-valuetext="${v <= 0 ? esc(S.off) : pct(v)}">
     </div>`;
 
+  const graphicsRow = () => `
+    <div class="mp-set-row mp-set-gfx">
+      <span class="mp-set-label" id="mp-set-gfx-l"><span class="mp-set-ico" aria-hidden="true">${icon('star', 20)}</span>${esc(S.graphics)}</span>
+      <div class="mp-seg" role="radiogroup" aria-labelledby="mp-set-gfx-l">
+        ${['high', 'low'].map((k) => `<button type="button" class="mp-seg-opt" role="radio" data-gfx="${k}" aria-checked="${st.graphics === k}" tabindex="${st.graphics === k ? 0 : -1}">${esc(S.graphicsLevel[k])}</button>`).join('')}
+      </div>
+      <small class="mp-set-hint">${esc(S.graphicsHint[st.graphics] || '')}</small>
+    </div>`;
+  /** Show a level without re-rendering the sheet (keeps focus on the pressed option). */
+  function paintGraphics() {
+    for (const b of card.querySelectorAll('.mp-seg-opt')) {
+      const on = b.dataset.gfx === st.graphics;
+      b.setAttribute('aria-checked', String(on)); b.tabIndex = on ? 0 : -1;
+    }
+    const h = card.querySelector('.mp-set-gfx .mp-set-hint'); if (h) h.textContent = S.graphicsHint[st.graphics] || '';
+  }
+  function pickGraphics(k) {
+    if (k !== 'high' && k !== 'low') return;
+    const changed = k !== st.graphics;
+    st.graphics = k; paintGraphics();
+    if (changed) call('onGraphics', k);
+  }
+
   function render() {
     const camOn = st.camera === 'on' || st.camera === 'loading';
     card.innerHTML = `
@@ -59,6 +86,7 @@ export function createSettings({ root, slot, icon, call }) {
         <h2 class="mp-card5-title" id="mp-set-title">${esc(S.title)}</h2>
         ${slider('music', S.music, icon('wave', 20), st.musicVol)}
         ${slider('sfx', S.sfx, icon('sparkle', 20), st.sfxVol)}
+        ${graphicsRow()}
         ${st.cameraAvailable ? `
         <button type="button" class="mp-set-switchrow" role="switch" aria-checked="${camOn}" data-state="${esc(st.camera)}">
           <span class="mp-set-ico" aria-hidden="true">${icon(st.camera === 'error' ? 'camera-off' : 'camera', 20)}</span>
@@ -92,9 +120,16 @@ export function createSettings({ root, slot, icon, call }) {
   card.addEventListener('click', (ev) => {
     if (ev.target === card || ev.target.closest('.mp-set-x')) { close(); return; }
     if (ev.target.closest('.mp-set-switchrow')) call('onCamera');
+    const g = ev.target.closest('.mp-seg-opt'); if (g) pickGraphics(g.dataset.gfx);
   });
   card.addEventListener('keydown', (ev) => {
     if (ev.key === 'Escape') { ev.stopPropagation(); close(); return; }
+    if (ev.target.closest?.('.mp-seg-opt') && ['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown'].includes(ev.key)) {
+      ev.preventDefault();
+      pickGraphics(st.graphics === 'high' ? 'low' : 'high');
+      card.querySelector(`.mp-seg-opt[data-gfx="${st.graphics}"]`)?.focus({ preventScroll: true });
+      return;
+    }
     if (ev.key === 'Tab') {
       const f = [...card.querySelectorAll('button, input')];
       const i = f.indexOf(document.activeElement);
@@ -104,10 +139,11 @@ export function createSettings({ root, slot, icon, call }) {
   });
 
   return {
-    /** @param {{musicVol?:number, sfxVol?:number, camera?:string, cameraAvailable?:boolean}} o */
+    /** @param {{musicVol?:number, sfxVol?:number, camera?:string, cameraAvailable?:boolean, graphics?:'high'|'low'}} o */
     set(o = {}) {
       Object.assign(st, o);
       if (!card.hidden) {
+        if ('graphics' in o) paintGraphics();
         const sw = card.querySelector('.mp-set-switchrow');
         if (sw && ('camera' in o)) {    // keep focus on the switch while the camera starts
           const had = document.activeElement === sw;

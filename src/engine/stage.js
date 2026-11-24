@@ -7,7 +7,8 @@
  * Sprint 4: the active room's static scenery is baked (engine/bake.js) and
  * composited as the background; `setBakeSource` tells the stage which room to
  * bake. `?nobake` renders everything live. One `quality` hook (`setQuality`)
- * holds the knobs a later graphics setting will drive (bake on/off, pixel ratio caps).
+ * holds the knobs the graphics setting drives (engine/graphics.js: bake on/off,
+ * pixel ratio caps, frame cap).
  * @module engine/stage
  */
 import * as THREE from 'three';
@@ -28,11 +29,12 @@ const VIEW = {
 };
 
 /**
- * Default quality (presentation, not gameplay). A graphics setting UI comes
- * later (owner, Sprint 4); it should only call `stage.setQuality(partial)`.
+ * Default quality (presentation, not gameplay) = the "high" graphics level. The
+ * graphics setting (engine/graphics.js) only calls `stage.setQuality(partial)`.
  * `bake`: static scenery rendered once. `dprTouch` / `dprMouse`: devicePixelRatio caps.
+ * `fps`: frame cap, 0 = every screen refresh.
  */
-export const QUALITY_DEFAULT = Object.freeze({ bake: true, dprTouch: 1.75, dprMouse: 2 });
+export const QUALITY_DEFAULT = Object.freeze({ bake: true, dprTouch: 1.75, dprMouse: 2, fps: 0 });
 
 /**
  * Stage light presets per theme (presentation, not gameplay). Light = the
@@ -176,10 +178,16 @@ export function createStage({ container, overlay, hudReserve = { top: 120, botto
   // ---- loop ----
   const ticks = [];
   const clock = new THREE.Clock(false);
-  let running = false, frameMs = 0;
-  function loop() {
+  let running = false, frameMs = 0, nextMs = 0;
+  function loop(now) {
     if (!running) return;
     requestAnimationFrame(loop);
+    // frame cap: skip refreshes until the next slot (half a refresh of slack so 60 Hz → 30 fps stays even)
+    if (quality.fps > 0) {
+      const t = typeof now === 'number' ? now : performance.now(), step = 1000 / quality.fps;
+      if (t < nextMs - 4) return;
+      nextMs = Math.max(nextMs + step, t + step * 0.5);
+    }
     frameMs = performance.now();
     const dt = Math.min(clock.getDelta(), VIEW.maxDt);
     const time = clock.elapsedTime;
@@ -205,12 +213,13 @@ export function createStage({ container, overlay, hudReserve = { top: 120, botto
     /** Current quality knobs (copy). */
     get quality() { return { ...quality }; },
     /**
-     * Quality hook for a later graphics setting: `{ bake?, dprTouch?, dprMouse? }`.
+     * Quality hook for the graphics setting: `{ bake?, dprTouch?, dprMouse?, fps? }`.
      * Pixel ratio changes resize the drawing buffer (and re-bake).
      */
     setQuality(partial = {}) {
       for (const k of Object.keys(QUALITY_DEFAULT)) if (k in partial) quality[k] = partial[k];
       bake.setEnabled(quality.bake);
+      nextMs = 0;
       resize();
     },
     /** Overlay 2D context (hand skeletons), or null. */

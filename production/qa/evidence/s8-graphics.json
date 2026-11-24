@@ -1,0 +1,32 @@
+{
+  "high": {
+    "fps": 4.6,
+    "frameMs": 215.7,
+    "renderMs": 4.6,
+    "petUpdateMs": 7.93,
+    "buffer": [
+      682,
+      1477
+    ],
+    "pixels": 1007314,
+    "petVerts": 46005,
+    "physMaterials": 3,
+    "richMaterials": 3,
+    "dpr": 1.75
+  },
+  "low": {
+    "fps": 15.2,
+    "frameMs": 66,
+    "renderMs": 1.7,
+    "petUpdateMs": 3.11,
+    "buffer": [
+      390,
+      844
+    ],
+    "pixels": 329160,
+    "petVerts": 15532,
+    "physMaterials": 3,
+    "richMaterials": 0,
+    "dpr": 1
+  }
+}

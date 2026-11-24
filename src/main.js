@@ -32,6 +32,7 @@
  */
 import * as THREE from 'three';
 import { createStage } from './engine/stage.js';
+import { GRAPHICS_KEY, GRAPHICS_LEVELS, GRAPHICS_PRESETS, SLOW, bootLevel, readGraphics, writeGraphics, isSlow, richMaterials } from './engine/graphics.js';
 import { createGameState, safeLocalStorage, SAVE_KEY } from './game/state.js';
 import { createRoomManager } from './game/rooms.js';
 import { createMood } from './game/mood.js';
@@ -150,8 +151,16 @@ async function boot() {
   const reduceMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
   const app = $('app');
 
-  // 2. stage
-  const stage = createStage({ container: $('stage'), overlay: $('ov'), hudReserve: HUD_RESERVE.normal });
+  // 2. stage — graphics level of THIS device (engine/graphics.js, owner 2026-11-24); not in the save
+  const gfxStore = safeLocalStorage();
+  const gfx = bootLevel({
+    param: new URLSearchParams(location.search).get('gfx'),
+    saved: readGraphics(gfxStore.getItem(GRAPHICS_KEY)),
+    device: { deviceMemory: navigator.deviceMemory, hardwareConcurrency: navigator.hardwareConcurrency, coarse: matchMedia('(pointer: coarse)').matches },
+    automated: !!navigator.webdriver,
+  });
+  const gfxPreset = () => GRAPHICS_PRESETS[gfx.level];
+  const stage = createStage({ container: $('stage'), overlay: $('ov'), hudReserve: HUD_RESERVE.normal, quality: gfxPreset() });
   const timers = createTimers();
 
   // 3. room manager (first room entered after everything is wired)
@@ -186,13 +195,16 @@ async function boot() {
   const getPet = () => pet;
   function spawnPet(key) {
     if (pet) { stage.scene.remove(pet.object3d); pet.dispose(); }
-    pet = createCharacter(key, { shadow: false });   // owner 2026-11-17: no flat shadow plate (it showed in the air while carried)
+    pet = createCharacter(key, { shadow: false, detail: gfxPreset().petDetail });   // owner 2026-11-17: no flat shadow plate (it showed in the air while carried)
+    petDetail = gfxPreset().petDetail;
     stage.scene.add(pet.object3d);
     const spot = rooms.room?.petSpot;
     if (spot) pet.object3d.position.copy(spot);
     applyOutfit();
     growth?.refreshLook(true);
+    richMaterials(pet.object3d, gfxPreset().rich);
   }
+  let petDetail = null;
   /** Put the selected character's saved outfit on (Clay's setOutfit, optional). */
   function applyOutfit() {
     const o = game.outfit();
@@ -260,6 +272,7 @@ async function boot() {
       if (game.settings.musicVol > 0 && unlocked) music.start(); else if (game.settings.musicVol <= 0) music.stop();
       saveSoon();
     },
+    onGraphics(level) { setGraphics(level, 'player'); },
     onSfxVolume(v) {
       game.setSetting('sfxVol', v); setBusVolume('sfx', game.settings.sfxVol); setBusVolume('voice', game.settings.sfxVol);
       saveSoon();
@@ -300,7 +313,7 @@ async function boot() {
   // 6. audio (volumes from the settings sheet; home music starts with the first gesture)
   setBusVolume('music', game.settings.musicVol);
   setBusVolume('sfx', game.settings.sfxVol); setBusVolume('voice', game.settings.sfxVol);
-  hud.setSettings?.({ musicVol: game.settings.musicVol, sfxVol: game.settings.sfxVol });
+  hud.setSettings?.({ musicVol: game.settings.musicVol, sfxVol: game.settings.sfxVol, graphics: gfx.level });
   let volSaveT = 0;
   const saveSoon = () => { clearTimeout(volSaveT); volSaveT = setTimeout(() => game.persist(), 600); };
   {   // the music never plays into the microphone, and rests while the page is hidden
@@ -809,8 +822,41 @@ async function boot() {
     timers.after(4, () => { hud.toast(growth.introText(), 5200); game.clearGrowthIntro(); game.persist(); }, 'growth');
   } else if (game.growthIntro) game.clearGrowthIntro();
 
-  let needsT = 0, saveT = 0;
+  // Graphics level (engine/graphics.js). A changed pet body detail rebuilds the pet at once when the
+  // player picks it in settings; the automatic step-down leaves the pet alone (it may be in a hand) and
+  // the lighter body comes with the next character change or the next visit.
+  function setGraphics(level, by) {
+    if (!GRAPHICS_LEVELS.includes(level)) return;
+    gfx.level = level; gfx.by = by;
+    gfxStore.setItem(GRAPHICS_KEY, writeGraphics(level, by === 'player' ? 'player' : 'auto'));
+    stage.setQuality(gfxPreset());
+    if (by === 'player' && gfxPreset().petDetail !== petDetail && !minigame.active) {
+      spawnPet(game.selected); gestures.reset(); care.onCharacterChanged();
+    }
+    if (pet) richMaterials(pet.object3d, gfxPreset().rich);
+    hud.setSettings?.({ graphics: level });
+    slowCheck.on = false;
+  }
+  // first visits without a choice: step down to low once if the game runs slow (SLOW in graphics.js)
+  const slowCheck = { on: gfx.level === 'high' && (gfx.by === 'guess' || gfx.by === 'auto'), start: 0, last: 0, list: [] };
+  stage.onAfterRender(() => {
+    if (!slowCheck.on) return;
+    const t = performance.now(), d = t - slowCheck.last;
+    slowCheck.last = t;
+    if (!slowCheck.start) { slowCheck.start = t; return; }
+    if (t - slowCheck.start < SLOW.warmup * 1000) return;
+    if (d > 500 || document.hidden) { slowCheck.list.length = 0; return; }   // tab was hidden: start over
+    slowCheck.list.push(d);
+    let sum = 0; for (const v of slowCheck.list) sum += v;
+    if (sum < SLOW.seconds * 1000) return;
+    slowCheck.on = false;
+    if (isSlow(slowCheck.list)) { setGraphics('low', 'auto'); hud.toast('ปรับกราฟิกเป็น "ต่ำ" ให้เล่นลื่นขึ้นแล้ว เปลี่ยนได้ที่ตั้งค่า', 5200); }
+  });
+
+  let needsT = 0, saveT = 0, richT = 0;
   stage.onTick((dt, time) => {
+    // low graphics: outfits put on later get the lighter material too (cheap: the pet only, twice a second)
+    if (!gfxPreset().rich && pet && time - richT >= 0.5) { richT = time; richMaterials(pet.object3d, false); }
     timers.update(time);
     hands.update(time);
     if (headCtl.on) headCtl.update();
@@ -860,7 +906,7 @@ async function boot() {
   }
 
   if (new URLSearchParams(location.search).has('debug')) {
-    window.__moldablePet = { data, game, stage, rooms, mood, care, gestures, hands, head: headCtl, hud, getPet, selectCharacter, minigame, startMinigame, openMinigameIntro, readyMinigame, setTheme, getControl: () => control, equip, buy, openWardrobe, snackCfg,
+    window.__moldablePet = { data, game, stage, gfx, setGraphics, rooms, mood, care, gestures, hands, head: headCtl, hud, getPet, selectCharacter, minigame, startMinigame, openMinigameIntro, readyMinigame, setTheme, getControl: () => control, equip, buy, openWardrobe, snackCfg,
       growth, talk: talkCtl, openPicker, pickGame, pickerGames, MINIGAMES, instances, getGameId: () => gameId,
       openDecor, closeDecor, decorPreview, decorEquip, decorBuy, thumbs, isDecorOpen: () => decorOpen };
   }
